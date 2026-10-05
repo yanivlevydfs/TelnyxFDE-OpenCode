@@ -51,8 +51,26 @@ Read the tests first: they define the exact function names, classes, variables a
   (`telnyx.NotFoundError` = missing key). Webhook signatures: `client.webhooks.unwrap(body, headers=...)`.
   It raises a `ValueError` subclass on a bad/stale signature — check the signature BEFORE parsing JSON.
 - Edge Python contract: `function/func.py` exposes `new()` returning an object with
-  `async handle(scope, receive, send)` (ASGI). Dependencies in `pyproject.toml` (hatchling).
-  Manifest `func.toml` with `[telnyx]` binding (injects `TELNYX_API_KEY`) and `[env_vars]`.
+  `async handle(scope, receive, send)` (ASGI). Dependencies in `pyproject.toml` (hatchling,
+  `[project] name = "function"` as the `telnyx-edge new-func -l python` scaffold does).
+- `func.toml` official format (docs: /docs/edge-compute/configuration). There are NO `name`,
+  `runtime` or `entry` keys:
+
+  ```toml
+  [edge_compute]
+  func_id = "<uuid written by telnyx-edge new-func>"
+  func_name = "<name>"
+  [telnyx]
+  binding = "TELNYX"        # string handle; injects TELNYX_API_KEY
+  [env_vars]                # non-secret strings only; secrets via `telnyx-edge secrets add`
+  ```
+
+- Registered functions: `fde-webhook` func_id `e5907143-e572-4e86-8880-0de76f057561`,
+  `fde-mcp` func_id `bc3393fa-a5f2-4470-b7af-137f3d9c831d`. The actor service uses
+  `telnyx.toml` (umbrella: `name`, `main`, `compatibility_date`, `[[actors]]`) and needs no func_id.
+- Webhook ↔ actor contract: `recordCall` must return the full profile
+  (`callCount`, `savedCount`, `lastSaved`), because the webhook builds `saved_count` and
+  `last_saved_deal` ("welcome back, you saved …") from that one response.
 - MCP: official `mcp` SDK 2.x (`mcp.server.mcpserver.MCPServer`, `ToolError`). Edge has no ASGI
   lifespan → create a `StreamableHTTPSessionManager(app=server._lowlevel_server, stateless=True,
   json_response=True)` per request. Telnyx sends the conversation id in `params._meta.telnyx_conversation_id`.

@@ -16,18 +16,17 @@
 | 12 | Expression edges for feature flags, degraded backend, timeout; LLM edges for intent | LLM edges everywhere | Deterministic facts must not depend on model judgement and are evaluated before the model turn. |
 | 13 | Deals read aloud are stored in the actor (`setLastResults`); `save_deal` picks from them | LLM passes deal details to save | The model can only save a deal it was actually given — no invented prices or URLs. |
 | 14 | **Everything uses Telnyx** — no local stand-ins for KV or the actor | Local KV file + local Node actor for offline demos (built, then removed by the owner) | The challenge requires Telnyx KV and Stateful Actors on Telnyx Edge. Only unit tests use fakes. |
+| 15 | OpenCode with Telnyx-hosted models writes all solution code: GLM-5.2 (shared, MCP), Kimi-K3 (webhook), GLM-5.3 (actor) | Claude or another coding assistant writes the code | Challenge requirement 6: "Build your entire solution using Telnyx inference". Claude only orchestrates, reviews and runs tests. |
+| 16 | Edge functions registered with `telnyx-edge new-func`; `func.toml` uses the official `[edge_compute]` format with the assigned `func_id` | Hand-written manifest with `name` / `runtime` / `entry` keys (first draft, invalid) | `ship` deploys the function named by `func_id`; the docs list no other identity keys. |
 
 ## Pending decisions
 
-- **Workflow** — FlyTLV nodes and edges for the assistant (next step, needs the Telnyx API key).
-- **Flight status branch** (Israel Airports Authority data) and **SMS** — not started; optional.
-- **Telnyx Inference model** for OpenCode (Kimi-K3, GLM-5.x, ...).
+- **Flight status branch** (Israel Airports Authority data) and **SMS**: not started; optional.
 
 ## Assumptions to verify on first deploy
 
-- `[env_vars]` is honored in `telnyx.toml` (actor service falls back to defaults if not).
 - `telnyx_conversation_id` is present in the webhook payload (example payload omits it; code falls back to `call_control_id`).
-- Edge Python build installs `pyproject.toml` dependencies (`httpx`, `cryptography`).
+- Edge Python build installs `pyproject.toml` dependencies (`telnyx`, `httpx`, `starlette`, `mcp`).
 - Telnyx MCP client accepts `application/json` responses (no SSE).
 - Whether a node with `tools_mode: replace` hides assistant-level MCP tools (MCP scoping per node is not exposed by the API).
 - KV read-your-writes between webhook and MCP server for the session mapping (same region expected).
