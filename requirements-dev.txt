@@ -13,6 +13,3 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 cryptography==50.0.2        # signs test webhooks with Ed25519 (UnitTest/test_webhook.py)
 
-# --- tools --------------------------------------------------------------------
-pyrefly==1.3.2              # Python type checker (stage 2 of scripts/run_all_tests.py)
-uvicorn==0.54.0             # runs services locally for smoke tests (scripts/serve_local.py)

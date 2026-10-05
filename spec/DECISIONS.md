@@ -16,8 +16,6 @@
 | 12 | Expression edges for feature flags, degraded backend, timeout; LLM edges for intent | LLM edges everywhere | Deterministic facts must not depend on model judgement and are evaluated before the model turn. |
 | 13 | Deals read aloud are stored in the actor (`setLastResults`); `save_deal` picks from them | LLM passes deal details to save | The model can only save a deal it was actually given — no invented prices or URLs. |
 | 14 | **Everything uses Telnyx** — no local stand-ins for KV or the actor | Local KV file + local Node actor for offline demos (built, then removed by the owner) | The challenge requires Telnyx KV and Stateful Actors on Telnyx Edge. Only unit tests use fakes. |
-| 15 | Settings edited in the admin UI (Settings tab) and saved to `.env`; one list in `settings.schema.json` | Editing `.env` by hand | Owner request; the same list drives the UI and `scripts/run_local.py`. |
-| 16 | One test runner (`scripts/run_all_tests.py`, `run_tests.bat`) with a result per stage, incl. smoke tests that start real local servers | Separate commands per service | Demo-friendly, one command, results also shown on the dashboard. |
 
 ## Pending decisions
 

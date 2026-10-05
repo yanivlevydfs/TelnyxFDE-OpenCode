@@ -226,9 +226,3 @@ services/*/function/common.py
 node_modules/
 telnyx-env.d.ts
 .telnyx/
-# Admin UI: generated status + local env
-admin-ui/public/status.json
-admin-ui/dist/
-admin-ui/.env.local
-# Local run data (logs, local KV)
-.local/
