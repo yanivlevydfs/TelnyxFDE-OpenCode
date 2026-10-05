@@ -1,13 +1,13 @@
 # services/webhook/func.toml — Telnyx Edge Function manifest.
 # Deploy:  telnyx-edge ship --from-dir services/webhook
 
-name = "fde-webhook"
-runtime = "python"
-entry = "function/func.py"
+[edge_compute]
+func_id = "e5907143-e572-4e86-8880-0de76f057561"
+func_name = "fde-webhook"
 
 [telnyx]
-# Injects TELNYX_API_KEY so the official SDK can call the KV REST API.
-binding = true
+# String binding handle; injects TELNYX_API_KEY so the official SDK can call the KV REST API.
+binding = "TELNYX"
 
 # Non-secret configuration only. Secrets live in Edge secrets
 # (`telnyx-edge secrets add <NAME> <VALUE>`) and are injected as env vars:

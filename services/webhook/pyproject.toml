@@ -6,7 +6,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "flytlv-webhook"
+name = "function"
 version = "0.1.0"
 description = "Dynamic Variables webhook for the FlyTLV Travel Line assistant"
 requires-python = ">=3.11"
