@@ -1,0 +1,21 @@
+# services/webhook/func.toml — Telnyx Edge Function manifest.
+# Deploy:  telnyx-edge ship --from-dir services/webhook
+
+name = "fde-webhook"
+runtime = "python"
+entry = "function/func.py"
+
+[telnyx]
+# Injects TELNYX_API_KEY so the official SDK can call the KV REST API.
+binding = true
+
+# Non-secret configuration only. Secrets live in Edge secrets
+# (`telnyx-edge secrets add <NAME> <VALUE>`) and are injected as env vars:
+#   TELNYX_PUBLIC_KEY, KV_NAMESPACE_ID, ACTOR_SERVICE_URL, INTERNAL_API_TOKEN
+[env_vars]
+WEBHOOK_VERIFY_SIGNATURE = "true" # false ONLY for local curl testing
+WEBHOOK_BUDGET_MS = "1200"        # keep below the assistant's dynamic_variables_webhook_timeout_ms
+HTTP_TIMEOUT_MS = "1000"
+KV_FLAGS_KEY = "flags/assistant"
+SESSION_KEY_PREFIX = "session/"
+SESSION_TTL = "3600"

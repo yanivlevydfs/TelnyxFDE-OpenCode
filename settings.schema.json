@@ -1,0 +1,157 @@
+{
+  "description": "Every setting the admin UI can edit. Values are saved to .env (git-ignored). Read by admin-ui and scripts/run_local.py.",
+  "settings": [
+    {
+      "key": "TELNYX_API_KEY",
+      "label": "Telnyx API key",
+      "group": "Telnyx",
+      "required": true,
+      "secret": true,
+      "help": "Mission Control -> API Keys"
+    },
+    {
+      "key": "TELNYX_PUBLIC_KEY",
+      "label": "Telnyx public key",
+      "group": "Telnyx",
+      "required": false,
+      "secret": false,
+      "help": "Mission Control -> Keys & Credentials -> Public Key (verifies webhook signatures on Edge)"
+    },
+    {
+      "key": "KV_NAMESPACE_ID",
+      "label": "KV namespace ID",
+      "group": "Telnyx",
+      "required": true,
+      "secret": false,
+      "help": "telnyx-edge storage kv create --name fde-kv"
+    },
+    {
+      "key": "ACTOR_SERVICE_URL",
+      "label": "Session actor URL",
+      "group": "Telnyx",
+      "required": true,
+      "secret": false,
+      "help": "URL printed by: telnyx-edge ship --from-dir services/session-actor"
+    },
+    {
+      "key": "INTERNAL_API_TOKEN",
+      "label": "Internal API token",
+      "group": "Telnyx",
+      "required": true,
+      "secret": true,
+      "help": "Any random string; same value as the INTERNAL_API_TOKEN Edge secret"
+    },
+    {
+      "key": "MCP_API_KEY",
+      "label": "MCP API key",
+      "group": "Telnyx",
+      "required": true,
+      "secret": true,
+      "help": "Any random string; Telnyx sends it to the MCP server as a bearer token"
+    },
+    {
+      "key": "FLYTLV_API_KEY",
+      "label": "flytlv API key",
+      "group": "flytlv",
+      "required": true,
+      "secret": true,
+      "help": "flytlv private feed key (X-API-Key header)"
+    },
+    {
+      "key": "FLYTLV_API_BASE",
+      "label": "flytlv API base URL",
+      "group": "flytlv",
+      "required": false,
+      "secret": false,
+      "help": "Default: https://flytlv.app"
+    },
+    {
+      "key": "DEALS_RESULT_LIMIT",
+      "label": "Deals read per search",
+      "group": "Behaviour",
+      "required": false,
+      "secret": false,
+      "help": "Default: 3"
+    },
+    {
+      "key": "DEALS_CACHE_TTL_SECS",
+      "label": "Deals cache TTL (seconds)",
+      "group": "Behaviour",
+      "required": false,
+      "secret": false,
+      "help": "Default: 600"
+    },
+    {
+      "key": "LOG_LEVEL",
+      "label": "Log level",
+      "group": "Behaviour",
+      "required": false,
+      "secret": false,
+      "help": "DEBUG | INFO | WARNING | ERROR (default INFO)"
+    },
+    {
+      "key": "WEBHOOK_URL",
+      "label": "Webhook URL (Edge)",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "URL printed by: telnyx-edge ship --from-dir services/webhook"
+    },
+    {
+      "key": "MCP_URL",
+      "label": "MCP server URL (Edge)",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "URL printed by: telnyx-edge ship --from-dir services/mcp-server"
+    },
+    {
+      "key": "ASSISTANT_MODEL",
+      "label": "Assistant model",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "Telnyx-hosted model id for the voice assistant"
+    },
+    {
+      "key": "ASSISTANT_VOICE",
+      "label": "Assistant voice",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "Telnyx voice id"
+    },
+    {
+      "key": "TRANSFER_FROM_NUMBER",
+      "label": "Assistant phone number (E.164)",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "The number callers dial; used as caller id for transfers"
+    },
+    {
+      "key": "ESCALATION_NUMBER",
+      "label": "Transfer-to number (E.164)",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "A person to transfer to; leave empty to disable transfers"
+    },
+    {
+      "key": "PHONE_NUMBER_ID",
+      "label": "Phone number id",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "Mission Control -> Numbers; provisioning routes it to the assistant"
+    },
+    {
+      "key": "MAX_CALL_SECS",
+      "label": "Max call length (seconds)",
+      "group": "Assistant",
+      "required": false,
+      "secret": false,
+      "help": "Calls longer than this go to goodbye (default 300)"
+    }
+  ]
+}

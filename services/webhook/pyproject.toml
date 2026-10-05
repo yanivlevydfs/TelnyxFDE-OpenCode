@@ -1,0 +1,20 @@
+# services/webhook/pyproject.toml
+# The Edge build installs these dependencies before shipping `function/`.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flytlv-webhook"
+version = "0.1.0"
+description = "Dynamic Variables webhook for the FlyTLV Travel Line assistant"
+requires-python = ">=3.11"
+dependencies = [
+    "telnyx[webhooks]==4.182.0", # KV REST API + Ed25519 webhook signature check
+    "httpx==0.28.1",             # session-actor HTTP calls
+    "starlette==1.7.0",          # ASGI routing for POST /
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["function"]
