@@ -45,6 +45,7 @@ _NODE_IDS = (
     "search_flights",      # prompt — find deals (MCP `search_deals`)
     "save_deal",           # prompt — save a shown deal (MCP `save_deal`)
     "list_saved",          # prompt — read saved deals (MCP `list_saved_deals`)
+    "answer_faq",          # prompt — general questions about the service (no tools)
     "transfer_call",       # prompt — hand off to a human (transfer tool)
     "farewell",            # speak  — goodbye
     "hangup_call",         # prompt — end the call (hangup tool)
@@ -134,6 +135,20 @@ LIST_INSTRUCTIONS = (
     "airports, outbound and return dates and times, airline and flight numbers, "
     "nights, stops and price. If they have no saved deals, say so and offer to "
     "search for flights."
+)
+
+FAQ_INSTRUCTIONS = (
+    "Answer the caller's general question about the FlyTLV Travel Line in one or "
+    "two short sentences, from these facts only: it finds cheap round-trip "
+    "flights from Tel Aviv (Ben Gurion) using the live flytlv.app deals feed; "
+    "one-way trips and other departure cities are not supported; prices are the "
+    "total round-trip price in the currency the feed gives; you do not book "
+    "flights, but you can text the deal and its booking link to the number they "
+    "are calling from; saved deals are kept for that phone number and read back "
+    "on later calls; a weekend means Thursday to Saturday departures; flights "
+    "leaving within three hours are not offered. For anything else (baggage, "
+    "seats, visas, refunds), say the airline or flytlv.app booking page has the "
+    "answer. Then ask if they would like to search for flights."
 )
 
 TRANSFER_INSTRUCTIONS = (
@@ -244,6 +259,8 @@ def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
          "instructions": SEARCH_INSTRUCTIONS, "instructions_mode": "append"},
         {"type": "prompt", "id": "save_deal", "name": "Save Deal",
          "instructions": SAVE_INSTRUCTIONS, "instructions_mode": "append"},
+        {"type": "prompt", "id": "answer_faq", "name": "Answer FAQ",
+         "instructions": FAQ_INSTRUCTIONS, "instructions_mode": "append"},
         {"type": "prompt", "id": "list_saved", "name": "List Saved Deals",
          "instructions": LIST_INSTRUCTIONS, "instructions_mode": "append"},
         {"type": "prompt", "id": "transfer_call", "name": "Transfer To Human",
@@ -273,6 +290,8 @@ def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
               _llm("The caller wants to save one of the deals that were just read out.")),
         _edge("e_intent_list", "identify_intent", "list_saved",
               _llm("The caller wants to hear the deals they saved on previous calls.")),
+        _edge("e_intent_faq", "identify_intent", "answer_faq",
+              _llm("The caller asks a general question about the service, such as how it works, how to book, one-way trips, or what a weekend means.")),
         _edge("e_intent_transfer", "identify_intent", "transfer_call",
               _llm("The caller wants to speak to a human agent.")),
 
@@ -297,6 +316,10 @@ def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
         # save / list return to the hub for whatever comes next
         _edge("e_save_to_intent", "save_deal", "identify_intent",
               _llm("The deal has been saved or could not be saved; the caller may have another request.")),
+        _edge("e_faq_to_search", "answer_faq", "search_flights",
+              _llm("The caller wants to search for flights now.")),
+        _edge("e_faq_to_intent", "answer_faq", "identify_intent",
+              _llm("The question was answered and the caller has another question or request.")),
         _edge("e_list_to_intent", "list_saved", "identify_intent",
               _llm("The caller has heard their saved deals and may have another request.")),
 

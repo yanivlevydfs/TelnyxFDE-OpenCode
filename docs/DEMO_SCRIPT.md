@@ -89,9 +89,14 @@ Point at the right screen:
 - The actor's `setLastResults` line — the deals read aloud are stored on the
   caller's actor so a later save can't invent one (*Actor: requirement 4c*).
 
-The assistant reads back 2–3 deals:
-"Larnaca, Wizz Air, direct, November 9 to 12, sixty-four dollars. Paphos,
-Ryanair, one stop, November 14 to 18, eighty-seven dollars. Want me to save one?"
+The assistant reads back 2–3 deals with every detail the tool returned:
+"Larnaca, Cyprus, sixty-four dollars round trip, three nights, direct. From Ben
+Gurion to Larnaca International on Monday the ninth of November, leaving at
+eight a.m., landing at ten past nine, Wizz Air W6 4604; back on Thursday the
+twelfth at six a.m., Wizz Air W6 4603. Want me to save it, or text you the link?"
+
+Also try: **"Anything for next weekend?"** (`weekend=upcoming`: Thu-Sat dates
+computed on the server) and **"Cheap flights to Greece"** (`country`).
 
 > Multi-step workflow (greeting → identify → search), MCP tool, KV cache and
 > actor write all on screen in one `trace_id`. *Workflow: requirement 1.*
@@ -151,13 +156,16 @@ done | jq -c 'select(.trace_id=="<conv-id>")'
 Walk one beat — `webhook.request` → `recordCall` → `mcp.search_deals` →
 `saveDeal` — all under one id, every latency span visible.
 
-**Evidence-driven debugging beat.** Tell one thing that broke during
-development and the signal that exposed it (e.g. "[spoiler for build-day] when
-the flytlv API key was rejected, the `flytlv.feed_off` ERROR fired exactly once
-and the MCP tool returned a `ToolError` with the caller-friendly message; the
-webhook logged `backend_degraded` and the workflow's expression edge sent those
-calls to `degraded_notice` instead of reading `{{placeholders}}` on air."). Show
-the log line. *Observability: requirement 5.*
+**Evidence-driven debugging beat.** Tell one real bug and the signal that
+exposed it. The strongest one: the Python webhook built but crashed on every
+start with `No module named 'function'`. The package installed fine locally on
+Python 3.9; the TypeScript build said `File '/workspace/src/kv.ts' not found`
+for a file that exists; and shipping the **unmodified official scaffold** failed
+the same way. Cause: the Windows `telnyx-edge` CLI zips paths with backslashes.
+Fix: ship from Linux in GitHub Actions. Second option: the deals cache never
+worked, and only the `mcp.cache_read_failed` WARNING (`HTTP 400 Invalid key
+format`) showed it. All five are in the README.
+*Observability: requirement 5.*
 
 ### 8:30–9:30 — Fallback path: flip a KV flag live = expression edge
 
