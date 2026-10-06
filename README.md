@@ -126,6 +126,12 @@ so the Python webhook reaches KV through the official `telnyx` SDK REST API
 (decision #2), the TypeScript MCP server uses `env.KV`, and the actor uses
 `this.ctx.storage` directly.
 
+**Proof of the read-modify-write guarantee.** `scripts/actor_concurrency_check.py`
+fires 20 concurrent `recordCall` requests at one fresh caller actor on the live
+Edge deployment. Every count 1..20 comes back exactly once and the final
+`callCount` is 20: no lost updates. A KV counter (last-write-wins, no
+compare-and-set) cannot guarantee that.
+
 ## Conversation Workflow
 
 11 nodes, 4 speak + 7 prompt; edges use all three documented condition kinds
