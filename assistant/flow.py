@@ -82,13 +82,16 @@ FAREWELL_MESSAGE = "Thanks for calling FlyTLV. Goodbye."
 # (escalation, hangup) ``replace`` the base to keep the model tightly on task.
 
 IDENTIFY_INSTRUCTIONS = (
-    "Greet the caller appropriately for this turn. If {{caller_known}} is 'true' "
-    "and {{last_saved_deal}} is not empty, acknowledge that they are back and "
-    "mention the deal they saved, for example 'Welcome back — last time you "
-    "saved {{last_saved_deal}}.' Then find out what they want: search for cheap "
-    "flights, save a deal from the ones just read out, hear their saved deals, "
-    "or speak to a human. Ask one short clarifying question if the request is "
-    "unclear; do not list every option at once."
+    "Greet the caller appropriately for this turn, once. Personalise from the "
+    "caller's profile: if {{caller_known}} is 'true', they have called "
+    "{{call_count}} times; if {{last_saved_deal}} is not empty, say for example "
+    "'Welcome back, last time you saved {{last_saved_deal}}' and offer to check "
+    "today's prices to that place again or read their {{saved_count}} saved "
+    "deals. If {{flag_promo}} is not empty, mention it once: {{flag_promo}}. Then "
+    "find out what they want: search for cheap flights, save a deal from the ones "
+    "just read out, hear their saved deals, ask a general question, or speak to a "
+    "human. Ask one short clarifying question if the request is unclear; do not "
+    "list every option at once."
 )
 
 ESCALATE_INSTRUCTIONS = (
@@ -113,7 +116,8 @@ SEARCH_INSTRUCTIONS = (
     "flight number; number of nights; direct or number of stops; and the total "
     "price with currency. Say dates and times naturally (for example 'Monday "
     "the ninth of November, leaving at eight a.m.'). Then offer to save one, "
-    "or to text them the deal and booking link with send_deal_sms. If "
+    "and, only if {{flag_sms_enabled}} is 'true', to text them the deal and "
+    "booking link with send_deal_sms. If "
     "nothing matches, say so and suggest widening the search. Never invent "
     "prices, dates, times, airports, airlines or URLs: every detail you mention "
     "must come from the tool result, and skip any detail the tool did not return."
@@ -124,7 +128,8 @@ SAVE_INSTRUCTIONS = (
     "caller has not said which one, ask them to pick by position (for example "
     "'the first one'). Pass the deal id exactly as it appeared in the search "
     "result; do not let the caller dictate a price or a URL to save. If the "
-    "caller wants the link by text message, call send_deal_sms with the same "
+    "caller wants the link by text message and {{flag_sms_enabled}} is 'true', "
+    "call send_deal_sms with the same "
     "deal id: it texts the number they are calling from and also saves the deal. "
     "Never ask for or accept a different phone number."
 )
@@ -173,6 +178,10 @@ DEFAULT_VARIABLES: dict[str, str] = {
     "last_saved_deal": "",
     "backend_degraded": "false",
     "flag_deals_enabled": "true",
+    # KV flags (flags/assistant) arrive as flag_<name>; defaults apply when the
+    # webhook is unreachable or the flag is not set.
+    "flag_sms_enabled": "true",
+    "flag_promo": "",
 }
 
 # Allowed edge condition types (the three documented by the Conversation

@@ -210,6 +210,24 @@ comparing against raw `{{placeholders}}`:
 | `backend_degraded` | the actor or the KV session write failed/timed out (a failed flags read only falls back to default flags) | `false` | expression edge → `degraded_notice` |
 | `flag_deals_enabled` | KV flag `deals_enabled` | `true` | expression edge → `deals_disabled` |
 
+### How the variables personalise the call and steer the workflow
+
+- **Personalise (prompt text):** `identify_intent` greets a returning caller with
+  `{{call_count}}` and `{{last_saved_deal}}` ("Welcome back, last time you saved
+  Larnaca, 64 USD") and offers to re-check that destination or read their
+  `{{saved_count}}` saved deals.
+- **Route (expression edges, evaluated before the model):** `backend_degraded`
+  sends the call to a scripted notice; `flag_deals_enabled = "false"` (a KV flag)
+  turns deal search off for everyone without a redeploy.
+- **Feature flags from KV (`flags/assistant`), no redeploy:** every flag becomes
+  `flag_<name>`. `sms_enabled` turns SMS offers on or off; `promo` is a one-line
+  promotion the assistant mentions once. Defaults live in `assistant/flow.py`
+  (`DEFAULT_VARIABLES`) so a missing flag never reaches the caller as a raw
+  `{{placeholder}}`.
+- **Telnyx system variables:** `{{telnyx_current_time_Asia/Jerusalem}}` gives the
+  model today's date in Israel, so "next Friday" or "this weekend" become exact
+  dates; `telnyx_conversation_duration_secs` drives the 10-minute escalation.
+
 ## MCP tools
 
 The MCP server (`fde-mcp`, TypeScript) exposes four tools the workflow's prompt
