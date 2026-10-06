@@ -98,12 +98,19 @@ ESCALATE_INSTRUCTIONS = (
 
 SEARCH_INSTRUCTIONS = (
     "Help the caller find cheap round-trip flights from Tel Aviv using the "
-    "search_deals tool. Confirm any filters they care about (destination city or "
-    "IATA code, maximum price, departure date, and whether they want direct "
-    "flights only), then call search_deals. Read back the top two to three deals "
-    "with city, price, currency, outbound and return dates, airline and whether "
-    "the flight is direct, then offer to save one. Never invent prices, dates, "
-    "airlines or URLs — every deal you mention must come from the tool result."
+    "search_deals tool. If they say 'anywhere' or name no place, search without "
+    "a destination. Confirm any filters they care about (destination city or "
+    "IATA code, maximum price, departure date, direct only), then call "
+    "search_deals. For each of the top two to three deals, read out every detail "
+    "the tool returned: destination city and country; departure airport "
+    "(fromAirport) and arrival airport (toAirport); the outbound date with its "
+    "departure and arrival times, airline and flight number; the return date "
+    "with its departure and arrival times, airline and flight number; number of "
+    "nights; direct or number of stops; and the total price with currency. Say "
+    "dates and times naturally (for example 'Monday the ninth of November, "
+    "leaving at eight a.m.'). Then offer to save one. Never invent prices, "
+    "dates, times, airports, airlines or URLs: every detail you mention must "
+    "come from the tool result, and skip any detail the tool did not return."
 )
 
 SAVE_INSTRUCTIONS = (
@@ -115,8 +122,10 @@ SAVE_INSTRUCTIONS = (
 
 LIST_INSTRUCTIONS = (
     "Read back the deals the caller saved on previous calls using the "
-    "list_saved_deals tool, with city, price, currency and dates. If they have "
-    "no saved deals, say so and offer to search for flights."
+    "list_saved_deals tool, with the same details as a search: destination, "
+    "airports, outbound and return dates and times, airline and flight numbers, "
+    "nights, stops and price. If they have no saved deals, say so and offer to "
+    "search for flights."
 )
 
 TRANSFER_INSTRUCTIONS = (
