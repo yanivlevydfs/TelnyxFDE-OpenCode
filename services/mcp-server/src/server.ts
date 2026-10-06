@@ -248,6 +248,27 @@ export function weekendDates(which: "upcoming" | "following", now = new Date()):
   return days;
 }
 
+/** Drop deals that leave too soon to book: departure (Israel local time) must
+ * be at least MIN_HOURS_BEFORE_DEPARTURE hours from now. flytlv still lists
+ * same-day flights after they leave. */
+export function bookable(deals: RawDeal[], now = new Date()): RawDeal[] {
+  const tz = config.optional("CALLER_TIMEZONE", "Asia/Jerusalem");
+  const hours = config.integer("MIN_HOURS_BEFORE_DEPARTURE", 3);
+  const cutoff = new Date(now.getTime() + hours * 3_600_000);
+  // "YYYY-MM-DD HH:MM" in the caller's timezone, comparable as a string.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(cutoff);
+  const v = (t: string) => parts.find((x) => x.type === t)?.value;
+  const min = `${v("year")}-${v("month")}-${v("day")} ${v("hour")}:${v("minute")}`;
+  return deals.filter((d) => {
+    if (!d.departure_date) return true;
+    const time = typeof d.outbound_departure_time === "string" ? d.outbound_departure_time : "23:59";
+    return `${d.departure_date} ${time}` >= min;
+  });
+}
+
 /** Keep deals whose destination is in `country` (English name or ISO code). */
 export function inCountry(deals: RawDeal[], country: string): RawDeal[] {
   const want = country.trim().toLowerCase();
@@ -426,6 +447,7 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         const currency = payload.currency ?? "";
         let dealsAll = (payload.deals ?? []) as RawDeal[];
         if (args.country) dealsAll = inCountry(dealsAll, args.country);
+        dealsAll = bookable(dealsAll);
         const limit = config.integer("DEALS_RESULT_LIMIT", 5);
         const slimmed = dealsAll.slice(0, limit).map((d) => slim(d, currency));
 
