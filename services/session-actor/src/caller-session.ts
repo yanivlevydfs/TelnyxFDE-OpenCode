@@ -22,12 +22,12 @@
  * Run tests:  cd services/session-actor && npm test
  */
 
-import { localIso } from "./time.js";
+import { log } from "./log.js";
 import { StatefulActor, type Env } from "@telnyx/edge-runtime";
 
-/** A flight deal kept by the actor. Mirrors the camelCase shape produced
- * by the MCP server's `slim()` (services/mcp-server/src/server.ts) so the
- * JSON stored here is independent of the flytlv.app snake_case contract. */
+/** A flight deal kept by the actor: the required core of the MCP server's
+ * `slim()` output (services/mcp-server/src/server.ts). Extra fields (airports,
+ * legs, nights) are stored as sent; only these are validated. */
 export interface Deal {
   /** Stable upstream deal id (used to dedup saved deals). */
   dealId: string;
@@ -82,51 +82,6 @@ function isDeal(v: unknown): v is Deal {
   return (
     typeof v === "object" && v !== null && typeof (v as Deal).dealId === "string"
   );
-}
-
-// --------------------------------------------------------------------- logging
-
-type Level = "DEBUG" | "INFO" | "WARNING" | "ERROR";
-const LEVELS: Record<Level, number> = {
-  DEBUG: 10,
-  INFO: 20,
-  WARNING: 30,
-  ERROR: 40,
-};
-
-/** One LOG_LEVEL setting per process. Edge pods scale to zero between calls
- * (per AGENTS.md "Functions scale to zero") so a module-level value is fine. */
-let logLevel: Level = "INFO";
-{
-  const envLevel = (process.env.LOG_LEVEL ?? "INFO").toUpperCase();
-  if (envLevel in LEVELS) logLevel = envLevel as Level;
-}
-
-/** Override the level (tests). */
-export function setLogLevel(level: Level): void {
-  if (level in LEVELS) logLevel = level;
-}
-
-/** Emit one JSON line per log event to the console (level is also the JSON
- * `level` field so `telnyx-edge logs --json | jq` matches Python services). */
-function log(
-  level: Level,
-  event: string,
-  fields: Record<string, unknown> = {},
-): void {
-  if (LEVELS[level] < LEVELS[logLevel]) return;
-  const line = JSON.stringify({
-    ts: localIso(),
-    level,
-    service: "session-actor",
-    event,
-    ...fields,
-    // Caller ids are phone digits: log the last 4 only.
-    ...(typeof fields.entity === "string" && fields.entity ? { entity: `***${fields.entity.slice(-4)}` } : {}),
-  });
-  if (level === "ERROR") console.error(line);
-  else if (level === "WARNING") console.warn(line);
-  else console.log(line);
 }
 
 // --------------------------------------------------------------- the actor
@@ -217,7 +172,9 @@ export class CallerSession extends StatefulActor<Env> {
     const saved = (await this.ctx.storage.get<Deal[]>(K_SAVED_DEALS)) ?? [];
     if (!saved.some((d) => d.dealId === dealId)) {
       saved.push(found);
-      await this.ctx.storage.put(K_SAVED_DEALS, saved);
+      // Bounded: keep the newest MAX_SAVED_DEALS (actor storage is not a database).
+      const max = Number(process.env.MAX_SAVED_DEALS ?? 50);
+      await this.ctx.storage.put(K_SAVED_DEALS, saved.slice(-max));
     }
     log("INFO", "saveDeal", {
       entity: this.ctx.id,

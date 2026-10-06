@@ -26,7 +26,7 @@ are skipped automatically.
 | **logging** | `info` / `warning` / `error` / `debug`; one JSON object per line (`level`, `event`, `trace_id`, fields, traceback). `timed(span)` context manager emits a latency `span` with `duration_ms` and `outcome`. `_trace_id` is mirrored onto the shared `common` logger object so every vendored copy sees the latest id. `LOG_LEVEL` env var. Uses `print()` via `_StdoutHandler` so pytest's `capsys` captures lines. |
 | **KV** | `Kv(client)` async JSON wrapper over `telnyx.storage.kvs.keys` (REST; Python has no KV `env` binding). `get_json` returns `None` for a missing key (`telnyx.NotFoundError`), `KvError` otherwise. `put_json` with optional `ttl_secs`. |
 | **actor client** | `ActorClient(http)` — POSTs JSON to `{ACTOR_SERVICE_URL}/actors/{entity_id}/{method}` with `Bearer INTERNAL_API_TOKEN` and the outbound `x-trace-id` (name from `TRACE_HEADER`). `4xx → ActorInputError`, `5xx/network → ActorError`. |
-| **sessions** | `save_session(kv, conv_id, phone)` / `load_session(kv, conv_id)` — the conversation→caller KV mapping with a TTL (`SESSION_TTL`, default 1 h). |
+| **sessions** | `save_session` / `load_session` — kept for the acceptance tests only. Production: the webhook writes `session/<conversation_id>` = `{"entity_id": digits}` (TTL `SESSION_TTL`, 1 h), which the MCP server reads. |
 | **phone** | `entity_id(phone)` — digits only (the actor `idFromName` input; "actor names cannot contain '+'"). `mask(phone)` — last 4 digits after `***` for logs. |
 
 ## Distributed tracing

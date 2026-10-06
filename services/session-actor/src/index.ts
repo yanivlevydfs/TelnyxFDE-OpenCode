@@ -1,5 +1,5 @@
 /**
- * HTTP facade for the CallerSession Stateful Actor.
+ * HTTP facade for the CallerSession and MetricsCounter Stateful Actors.
  *
  * Telnyx Stateful Actors are TypeScript-only and have no native HTTP surface,
  * so the calling services (webhook in Python, mcp-server in TypeScript) reach the actor through this
@@ -14,6 +14,9 @@
  *     → 400 {error} bad caller id / unknown method / actor input error
  *     → 401 {error} bad/missing bearer token
  *     → 404 {error} path does not match the route shape
+ *
+ *     POST /metrics/{add|snapshot|reset}   body: {counts, latency} for add
+ *     → shared "global" MetricsCounter (same bearer token)
  *
  * Security (DECISIONS #8 — least privilege):
  *   - Bearer `INTERNAL_API_TOKEN` read through `env.SECRETS` (cached per
@@ -31,7 +34,7 @@
  * Run tests:  cd services/session-actor && npm test
  */
 
-import { localIso } from "./time.js";
+import { log, traceContext } from "./log.js";
 import type { ActorNamespace, Secrets } from "@telnyx/edge-runtime";
 import {
   CallerSession,
@@ -83,10 +86,6 @@ interface Env {
   INTERNAL_API_TOKEN?: string;
 }
 
-/**
- * Default Worker export. `worker.fetch(req, env)` is the Edge entry point;
- * tests import this object as `worker` and call `worker.fetch(request, env)`.
- */
 /** POST /metrics/{add|snapshot|reset} on the shared "global" MetricsCounter. */
 async function metrics(req: Request, env: Env, op: string): Promise<Response> {
   if (!env.METRICS) return error(404, "metrics not configured");
@@ -111,14 +110,21 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-// Trace id of the request being handled (from the caller's x-trace-id header),
-// added to every facade log line so one call can be followed across services.
-let currentTrace = "";
-
+/**
+ * Default Worker export. `worker.fetch(req, env)` is the Edge entry point;
+ * tests import this object as `worker` and call `worker.fetch(request, env)`.
+ * Each request runs in its own trace context (the caller's x-trace-id).
+ */
 export default {
   /** One `actor.request` latency span per request, then route it. */
   async fetch(req: Request, env: Env): Promise<Response> {
-    currentTrace = req.headers.get(process.env.TRACE_HEADER ?? "x-trace-id") ?? "";
+    const trace = req.headers.get(process.env.TRACE_HEADER ?? "x-trace-id") ?? "";
+    return traceContext.run({ id: trace }, () => handle(req, env));
+  },
+};
+
+async function handle(req: Request, env: Env): Promise<Response> {
+  {
     const started = Date.now();
     const resp = await route(req, env);
     const [, entity = "", method = ""] =
@@ -126,8 +132,8 @@ export default {
     const op = method || new URL(req.url).pathname; // e.g. "/metrics/add"
     log("INFO", "actor.request", { entity, method: op, status: resp.status, duration_ms: Date.now() - started });
     return resp;
-  },
-};
+  }
+}
 
 async function route(req: Request, env: Env): Promise<Response> {
   {
@@ -207,7 +213,7 @@ async function route(req: Request, env: Env): Promise<Response> {
         error: msg,
         stack: e instanceof Error ? e.stack : undefined,
       });
-      return json(500, { error: msg });
+      return json(500, { error: "actor call failed" });
     }
   }
 }
@@ -258,42 +264,6 @@ async function internalTokenFor(env: Env): Promise<string | undefined> {
     });
     return undefined;
   }
-}
-
-// ----------------------------------------------------------------- logging
-
-type Level = "DEBUG" | "INFO" | "WARNING" | "ERROR";
-const LEVELS: Record<Level, number> = {
-  DEBUG: 10,
-  INFO: 20,
-  WARNING: 30,
-  ERROR: 40,
-};
-let logLevel: Level = "INFO";
-{
-  const envLevel = (process.env.LOG_LEVEL ?? "INFO").toUpperCase();
-  if (envLevel in LEVELS) logLevel = envLevel as Level;
-}
-
-function log(
-  level: Level,
-  event: string,
-  fields: Record<string, unknown> = {},
-): void {
-  if (LEVELS[level] < LEVELS[logLevel]) return;
-  const line = JSON.stringify({
-    ts: localIso(),
-    level,
-    service: "session-actor",
-    event,
-    trace_id: currentTrace,
-    ...fields,
-    // Caller ids are phone digits: log the last 4 only.
-    ...(typeof fields.entity === "string" && fields.entity ? { entity: `***${fields.entity.slice(-4)}` } : {}),
-  });
-  if (level === "ERROR") console.error(line);
-  else if (level === "WARNING") console.warn(line);
-  else console.log(line);
 }
 
 // ---------------------------------------------------------------- helpers

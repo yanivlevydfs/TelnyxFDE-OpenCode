@@ -185,8 +185,10 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
             if not isinstance(payload, dict):
                 payload = {}
             phone = str(payload.get("telnyx_end_user_target") or "")
-            conversation_id = str(payload.get("telnyx_conversation_id") or payload.get("call_control_id") or "")
-            c.set_trace_id(conversation_id or None)  # trace follows the conversation
+            # The MCP server finds the caller by telnyx_conversation_id, so only that
+            # id keys the session; call_control_id is a fallback for the trace only.
+            conversation_id = str(payload.get("telnyx_conversation_id") or "")
+            c.set_trace_id(conversation_id or str(payload.get("call_control_id") or "") or None)
             entity = c.entity_id(phone)  # digits only, '' for anonymous callers
             # Only an E.164 caller id is an identity (and an SMS destination): a
             # national number or SIP URI would collide or text the wrong number.
@@ -197,9 +199,10 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
             span["outcome"] = "degraded" if degraded else "ok"
             span["caller"] = c.mask(phone)
             span["degraded"] = degraded
-            calls = profile.get("callCount", 0)
-            caller_kind = "anonymous" if not entity else ("returning" if calls > 1 else "new")
-            counts[f"callers.{caller_kind}"] = 1
+            if not entity:
+                counts["callers.anonymous"] = 1
+            elif profile:  # only when the actor answered; otherwise unknown
+                counts["callers.returning" if profile.get("callCount", 0) > 1 else "callers.new"] = 1
             if degraded:
                 counts["webhook.degraded"] = 1
                 for name in degraded:

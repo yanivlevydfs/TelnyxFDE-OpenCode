@@ -11,6 +11,10 @@
  *   add({counts, latency})  counts: {name: +n}; latency: {name: milliseconds}
  *   snapshot()              {since, counts, latency: {name: {count, avg_ms, max_ms}}}
  *   reset()                 clear everything (start of a demo)
+ *
+ * ponytail: one global instance serializes every update. Fine at demo/call
+ * scale (each request sends ONE batched add); shard by idFromName(`<hour>`) and
+ * sum shards in snapshot() if throughput ever matters.
  */
 
 import { StatefulActor, type Env } from "@telnyx/edge-runtime";

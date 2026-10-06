@@ -11,6 +11,7 @@
  * error's stack as `exception` when passed.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { config } from "./config.js";
 
 type Level = "DEBUG" | "INFO" | "WARNING" | "ERROR";
@@ -29,22 +30,26 @@ let logLevel: Level = "INFO";
   if (envLevel in LEVELS) logLevel = envLevel as Level;
 }
 
-/** Current trace id (the conversation id of the in-flight request). */
-let traceId = "";
+/** Trace id of the request being handled (the conversation id). Kept per
+ * async context, so overlapping requests in one instance never mix ids. */
+export const traceContext = new AsyncLocalStorage<{ id: string }>();
 
-/** Set the current trace id; empty when none/blank. */
+/** Set the current request's trace id; empty when none/blank. */
 export function setTraceId(id?: string): void {
-  traceId = id && id.length > 0 ? id : "";
+  const value = id && id.length > 0 ? id : "";
+  const current = traceContext.getStore();
+  if (current) current.id = value;
+  else traceContext.enterWith({ id: value });
 }
 
 /** Read the current trace id (used for the outbound actor header). */
 export function getTraceId(): string {
-  return traceId;
+  return traceContext.getStore()?.id ?? "";
 }
 
 /** Timestamp in the logging timezone (LOG_TIMEZONE, default Asia/Jerusalem) as
  * ISO 8601 with its UTC offset, e.g. "2026-10-07T00:45:12.345+03:00". */
-export function localIso(d: Date = new Date()): string {
+function localIso(d: Date = new Date()): string {
   const tz = process.env.LOG_TIMEZONE ?? "Asia/Jerusalem";
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
@@ -72,7 +77,7 @@ function log(
     level,
     service: "fde-mcp",
     event,
-    trace_id: traceId,
+    trace_id: getTraceId(),
     ...fields,
   });
   if (level === "ERROR") console.error(line);

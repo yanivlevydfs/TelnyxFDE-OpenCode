@@ -36,7 +36,7 @@ A wrong key returns **404**.
 ```
 shared/common.py                     config, JSON logging, Kv, ActorClient, sessions, phone
 services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, Python)
-services/mcp-server/src/          MCP server, 3 tools (Edge Function, TypeScript)
+services/mcp-server/src/          MCP server, 4 tools (Edge Function, TypeScript)
 services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
 assistant/flow.py, provision.py      Assistant + Conversation Workflow via the Telnyx SDK
 scripts/vendor_shared.py             copy shared/common.py into each Python service

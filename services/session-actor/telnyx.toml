@@ -15,7 +15,7 @@ main = "src/index.ts"
 # we develop against (0.16.0). Older runtime quirks are not opted into.
 compatibility_date = "2026-05-01"
 
-# One actor type, exposed on `env.CALLER_SESSION`. The class name (type)
+# Two actor types. CallerSession on `env.CALLER_SESSION`; the class name (type)
 # MUST equal the exported `CallerSession` class in src/index.ts. Each caller
 # (digits of their phone) is its own actor instance, isolated & single-threaded.
 [[actors]]
@@ -40,7 +40,10 @@ name    = "INTERNAL_API_TOKEN"   # the key stored with `telnyx-edge secrets add`
 # Non-secret runtime knobs are read via `process.env`:
 #   INTERNAL_API_TOKEN  bearer token (Edge secret, see [[secrets]])
 #   LOG_LEVEL           DEBUG | INFO (default) | WARNING | ERROR
-# There are no non-secret env_vars blocks needed yet.
+#   LOG_TIMEZONE        log timestamp timezone (default Asia/Jerusalem)
+#   TRACE_HEADER        inbound trace header (default x-trace-id)
+#   MAX_SAVED_DEALS     saved deals kept per caller (default 50)
+# Their defaults suffice, so no [env_vars] block is needed.
 
 # Function identity, written by `telnyx-edge new-func --actor` (ship requires it).
 [edge_compute]
