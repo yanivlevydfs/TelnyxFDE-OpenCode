@@ -24,7 +24,7 @@ Caller numbers are masked to the last 4 digits.
 
 The webhook sets `trace_id` to `telnyx_conversation_id` (fallback `call_control_id`).
 Telnyx sends the same conversation id to the MCP server in `params._meta`, so every
-MCP tool span carries the same `trace_id`. Both Python services forward it to the actor
+MCP tool span carries the same `trace_id`. The webhook and the MCP server forward it to the actor
 service in the `x-trace-id` header (configurable via `TRACE_HEADER`).
 
 ```bash

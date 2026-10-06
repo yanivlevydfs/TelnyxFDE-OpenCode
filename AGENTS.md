@@ -23,7 +23,8 @@ A wrong key returns **404**.
    service as `function/common.py` by `scripts/vendor_shared.py`. Never copy-paste.
 3. Nothing hardcoded: every value comes from environment variables / Telnyx Edge secrets.
 4. Comment and document the code; a README per component.
-5. Python everywhere, except the Stateful Actor (Telnyx Actors are TypeScript-only).
+5. Python everywhere, except the Stateful Actor (Telnyx Actors are TypeScript-only) and the
+   MCP server (Edge builds Python 3.9; the Python `mcp` SDK needs 3.10+).
 6. Short, clean, readable code. Prefer official SDKs over hand-written code.
 7. Structured JSON logging with INFO / WARNING / ERROR (traceback on errors) and proper
    exception handling everywhere.
@@ -35,14 +36,14 @@ A wrong key returns **404**.
 ```
 shared/common.py                     config, JSON logging, Kv, ActorClient, sessions, phone
 services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, Python)
-services/mcp-server/function/func.py MCP server, 3 tools (Edge Function, Python)
+services/mcp-server/src/          MCP server, 3 tools (Edge Function, TypeScript)
 services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
 assistant/flow.py, provision.py      Assistant + Conversation Workflow via the Telnyx SDK
 scripts/vendor_shared.py             copy shared/common.py into each Python service
 ```
 
 Read the tests first: they define the exact function names, classes, variables and behaviour
-(e.g. `create_app(client, kv, actor)`, `create_server(kv, actor, http)`, `slim()`,
+(e.g. `create_app(client, kv, actor)`, `createServer(kv, actor, fetch)`, `slim()`,
 `Function`, `new()`, `build_flow()`, `validate()`, `build_tools()`, `assistant_body()`).
 
 ## Platform facts (verified)
@@ -71,9 +72,8 @@ Read the tests first: they define the exact function names, classes, variables a
 - Webhook ↔ actor contract: `recordCall` must return the full profile
   (`callCount`, `savedCount`, `lastSaved`), because the webhook builds `saved_count` and
   `last_saved_deal` ("welcome back, you saved …") from that one response.
-- MCP: official `mcp` SDK 2.x (`mcp.server.mcpserver.MCPServer`, `ToolError`). Edge has no ASGI
-  lifespan → create a `StreamableHTTPSessionManager(app=server._lowlevel_server, stateless=True,
-  json_response=True)` per request. Telnyx sends the conversation id in `params._meta.telnyx_conversation_id`.
+- MCP: official TypeScript SDK `@modelcontextprotocol/sdk` (`McpServer`). A fresh server +
+  stateless `StreamableHTTPServerTransport` (JSON responses) per request; KV via the `env.KV` binding. Telnyx sends the conversation id in `params._meta.telnyx_conversation_id`.
 - Dynamic variables webhook: Telnyx POSTs once at call start; reply `{"dynamic_variables": {...}}`,
   string values only; default timeout 1.5 s → run KV + actor calls in parallel under a budget and
   return safe defaults with `backend_degraded="true"` on failure.
