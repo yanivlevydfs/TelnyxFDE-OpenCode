@@ -27,6 +27,12 @@ env:
 jobs:
   ship:
     runs-on: ubuntu-latest
+    # One ship per service at a time: Telnyx answers 409 "Function Busy" when a
+    # second ship starts while one runs. Later runs wait (a newer one replaces a
+    # waiting one), never cancel a ship in progress.
+    concurrency:
+      group: ship-${{ matrix.service }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
