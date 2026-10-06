@@ -223,7 +223,7 @@ def _expr_gte(name: str, value: int) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ builders
 
-def build_flow(conversation_timeout_secs: int = 300) -> dict[str, Any]:
+def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
     """Return the ``conversation_flow`` graph for the FlyTLV Travel Line.
 
     ``conversation_timeout_secs`` is the after which the workflow escalates a
@@ -283,6 +283,10 @@ def build_flow(conversation_timeout_secs: int = 300) -> dict[str, Any]:
         # timeout escalation → transfer
         _edge("e_escalate_to_transfer", "timeout_escalate", "transfer_call",
               _llm("The caller accepts being transferred to a human, or the call should be escalated now.")),
+        # ...or the caller declines: wrap up (identify_intent would re-route here
+        # every turn once the timeout expression is true, so there is no way back).
+        _edge("e_escalate_to_farewell", "timeout_escalate", "farewell",
+              _llm("The caller declines the transfer, or a human agent is not available.")),
 
         # search_flights can lead to saving a deal or back to the hub
         _edge("e_search_to_save", "search_flights", "save_deal",

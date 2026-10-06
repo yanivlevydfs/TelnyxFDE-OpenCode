@@ -448,6 +448,8 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         let dealsAll = (payload.deals ?? []) as RawDeal[];
         if (args.country) dealsAll = inCountry(dealsAll, args.country);
         dealsAll = bookable(dealsAll);
+        // A feed row without a deal id can't be saved; the actor would reject the whole list.
+        dealsAll = dealsAll.filter((d) => typeof d.deal_id === "string" && d.deal_id.length > 0);
         const limit = config.integer("DEALS_RESULT_LIMIT", 5);
         const slimmed = dealsAll.slice(0, limit).map((d) => slim(d, currency));
 

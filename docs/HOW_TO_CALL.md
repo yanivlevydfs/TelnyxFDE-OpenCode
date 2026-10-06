@@ -100,7 +100,7 @@ same full details.
   cities are not supported.
 - **Your phone number is your account.** Saved deals are tied to the number
   you call from, so call from the same number to hear them again.
-- **Long calls:** after about 5 minutes the agent offers to wrap up.
+- **Long calls:** after about 10 minutes the agent offers to wrap up.
 - **Speaking to a human:** a human agent is not connected yet. If you ask for
   one, the agent apologises and helps you itself, or ends the call politely.
 - **If the deals service is down**, the agent tells you and asks you to call
