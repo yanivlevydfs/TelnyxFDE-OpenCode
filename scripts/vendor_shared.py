@@ -9,9 +9,7 @@
     python scripts/vendor_shared.py
 
     TypeScript services (services/session-actor, services/mcp-server) have no
-    `function/` directory and are skipped automatically — the mcp-server was
-    ported from Python to TypeScript (the Python `mcp` SDK needs 3.10+ but Edge
-    builds Python with 3.9), so it is no longer vendored here.
+    `function/` directory and are skipped automatically.
 """
 
 from __future__ import annotations

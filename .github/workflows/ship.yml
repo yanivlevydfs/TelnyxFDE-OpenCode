@@ -1,0 +1,53 @@
+# Ship the Edge Functions from Linux.
+#
+# Why CI and not a laptop: telnyx-edge v0.5.9 on Windows zips paths with "\"
+# (src\kv.ts, function\__init__.py). Linux builders then see flat files instead
+# of folders, so Python fails with "No module named 'function'" and tsc with
+# "File '/workspace/src/kv.ts' not found". Shipping from Linux avoids it.
+#
+# Needs repo secret TELNYX_API_KEY. Run manually from the Actions tab, or push
+# changes under services/ or shared/ to master.
+name: Ship Edge Functions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ["services/**", "shared/**"]
+
+env:
+  TELNYX_EDGE_VERSION: v0.5.9
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [webhook, mcp-server, session-actor]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # function/common.py is gitignored; copy shared/common.py into each Python service.
+      - run: python scripts/vendor_shared.py
+
+      - name: Install telnyx-edge
+        run: |
+          curl -fsSL "https://github.com/team-telnyx/edge-compute/releases/download/${TELNYX_EDGE_VERSION}/telnyx-edge-${TELNYX_EDGE_VERSION}-linux-amd64.tar.gz" | tar xz
+          sudo mv "telnyx-edge-${TELNYX_EDGE_VERSION}-linux-amd64/telnyx-edge" /usr/local/bin/
+
+      # The CLI does not read $TELNYX_API_KEY on its own.
+      - run: telnyx-edge auth api-key set "$TELNYX_API_KEY"
+        env:
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+
+      # The actor is an umbrella project bundled client-side by esbuild; it needs node_modules.
+      - if: matrix.service == 'session-actor'
+        run: npm ci
+        working-directory: services/session-actor
+
+      - run: telnyx-edge ship --from-dir services/${{ matrix.service }} --timeout 20m

@@ -66,9 +66,9 @@ webhook   (Python Edge Function · fde-webhook)                                 
    └── 2. mid-conversation tool calls ──────────────────────────────────────────┘
        (search / save / list tool nodes)
         ▼
-mcp-server (Python Edge Function · fde-mcp)
+mcp-server (TypeScript Edge Function · fde-mcp)
    │  ├─ Bearer auth (MCP_API_KEY)
-   │  ├─ KV  REST:  cache/deals/<sig>  (TTL'd search cache)  +  session/<conv_id> → caller
+   │  ├─ KV  env.KV: cache/deals/<sig>  (TTL'd search cache)  +  session/<conv_id> → caller
    │  ├─ HTTP:  flytlv.app  GET /api/private/deals  (X-API-Key)                 ──▶ flytlv feed
    │  └─ HTTP ─▶ session-actor: setLastResults / saveDeal / getSaved
 
@@ -79,7 +79,7 @@ Built using:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Everything runs on Telnyx Edge: KV via the REST API (Python has no `env` binding),
+Everything runs on Telnyx Edge: KV via the REST API from Python and the `env.KV` binding from TypeScript,
 the actor on the Edge actor runtime, the MCP server and webhook as Edge
 Functions. Only unit tests use fakes (owner's rule #14 — no local stand-ins).
 
@@ -89,7 +89,7 @@ Functions. Only unit tests use fakes (owner's rule #14 — no local stand-ins).
 |---|---|---|---|
 | Assistant + workflow | Telnyx Voice AI | conversation flow, routing | webhook (once/call), mcp-server (per tool call) |
 | `webhook` | Edge Function · Python | nothing (stateless) | KV REST, session-actor HTTP |
-| `mcp-server` | Edge Function · Python | nothing (stateless) | KV REST, flytlv HTTP, session-actor HTTP |
+| `mcp-server` | Edge Function · TypeScript | nothing (stateless) | KV binding, flytlv HTTP, session-actor HTTP |
 | `session-actor` | Edge Actor · TypeScript | per-caller state | actor storage |
 | KV namespace | Telnyx KV | flags, caches, session map | — |
 
@@ -108,8 +108,9 @@ the full rationale.
 | Per-request data (auth check, slimmed deals, trace id) | **Plain function logic** | Lives for one request; nothing to persist. No primitive needed. |
 
 Edge-side constraint that shaped this: the KV `env` binding is TypeScript-only,
-so the Python webhook and MCP server reach KV through the official `telnyx`
-SDK REST API (decision #2), while the actor uses `this.ctx.storage` directly.
+so the Python webhook reaches KV through the official `telnyx` SDK REST API
+(decision #2), the TypeScript MCP server uses `env.KV`, and the actor uses
+`this.ctx.storage` directly.
 
 ## Conversation Workflow
 
@@ -285,7 +286,7 @@ each once:
 | `TELNYX_PUBLIC_KEY` | webhook | Ed25519 webhook signature verification (`client.webhooks.unwrap`) |
 | `KV_NAMESPACE_ID` | webhook, mcp-server | Telnyx KV namespace id (from `kv create`) |
 | `ACTOR_SERVICE_URL` | webhook, mcp-server | `https://fde-session-actor-<id>.telnyxcompute.com` |
-| `INTERNAL_API_TOKEN` | webhook, mcp-server, session-actor | shared bearer the Python services send and the actor facade validates (decision #8) |
+| `INTERNAL_API_TOKEN` | webhook, mcp-server, session-actor | shared bearer the webhook and MCP server send and the actor facade validates (decision #8) |
 | `MCP_API_KEY` | mcp-server, assistant | bearer the assistant sends to the MCP server; stored as a Telnyx integration secret (`api_key_ref`) |
 | `FLYTLV_API_KEY` | mcp-server | flytlv.app private deals feed (`X-API-Key` header; 404 if rejected) |
 
@@ -374,8 +375,7 @@ runs tests). Current `/telnyx` model list for reference: `moonshotai/Kimi-K3`,
 shared/common.py                     config, JSON logging, Kv (KV REST), ActorClient, sessions, phone
 scripts/vendor_shared.py             copy shared/common.py into each Python service as function/common.py
 services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, Python)
-services/mcp-server/function/func.py MCP server: search_deals, save_deal, list_saved_deals (MCP SDK)
-services/mcp-server/function/flytlv.py  minimal flytlv.app deals API client
+services/mcp-server/src/             MCP server (TypeScript): search_deals, save_deal, list_saved_deals
 services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
 assistant/flow.py, provision.py       Conversation Workflow + provisioning via the Telnyx SDK
 UnitTest/                             acceptance tests (do not edit — the job is done when all pass)

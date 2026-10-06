@@ -7,8 +7,8 @@ Caller (phone)
 Telnyx AI Assistant ── Conversation Workflow (speak / prompt / tool nodes, edges)
    │  1. conversation start                 │  2. mid-conversation tool calls
    ▼                                         ▼
-webhook  (Python Edge Function)          mcp-server  (Python Edge Function)
-   │  ├─ KV REST: feature flags              │  ├─ KV REST: cached reference data
+webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
+   │  ├─ KV REST: feature flags              │  ├─ KV env.KV: deals cache
    │  └─ HTTP ─┐                             │  └─ HTTP ─┐
    │           ▼                             │           ▼
    │      session-actor (TypeScript Edge Function)
@@ -23,7 +23,7 @@ webhook  (Python Edge Function)          mcp-server  (Python Edge Function)
 |---|---|---|---|
 | Assistant + workflow | Telnyx Voice AI | Conversation flow, routing | webhook (once), mcp-server (per tool call) |
 | webhook | Edge Function, Python | Nothing (stateless) | KV, session-actor |
-| mcp-server | Edge Function, Python | Nothing (stateless) | KV, session-actor |
+| mcp-server | Edge Function, TypeScript | Nothing (stateless) | KV, session-actor |
 | session-actor | Edge Function, TypeScript | Per-caller state | Actor storage |
 | KV namespace | Telnyx KV | Flags, caches | — |
 

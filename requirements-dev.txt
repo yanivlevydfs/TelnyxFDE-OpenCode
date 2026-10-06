@@ -5,8 +5,7 @@
 # --- runtime (used by the services) ---------------------------------------
 telnyx[webhooks]==4.182.0   # Telnyx SDK: KV, webhook signature check (webhooks extra)
 httpx==0.28.1               # HTTP client: flytlv API, session-actor
-starlette==1.7.0            # webhook HTTP routing
-mcp==2.3.0                  # official MCP SDK: the MCP server
+starlette==0.49.3           # webhook HTTP routing (same pin as services/webhook, Edge is Python 3.9)
 
 # --- tests --------------------------------------------------------------------
 pytest==9.1.1

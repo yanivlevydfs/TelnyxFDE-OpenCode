@@ -3,10 +3,10 @@
 | # | Decision | Alternatives considered | Why |
 |---|---|---|---|
 | 1 | Every component is an independently deployed microservice with its own folder and manifest | Single function with path routing | Project rule; independent deploys, scaling, logs and metrics per service. |
-| 2 | Python for webhook and MCP server | TypeScript everywhere | Project rule. Python reaches Telnyx KV through the official `telnyx` SDK (4.182.0). |
+| 2 | Python for the webhook; TypeScript for the MCP server | Python MCP server (built first, then ported) | Project rule is Python, but Edge builds Python 3.9 and the Python `mcp` SDK needs 3.10+. Python reaches KV through the official `telnyx` SDK (4.182.0). |
 | 3 | session-actor in TypeScript | Python-only (no actor) | Stateful Actors are TypeScript-only with no REST fallback; the actor is a required primitive. Kept as a thin HTTP facade. |
 | 4 | Shared Python code in ONE file (`shared/common.py`), copied into each service by `scripts/vendor_shared.py` | 7-file shared package; copy-paste per service | Edge builds each folder alone; one file is the least code with one source of truth. |
-| 5 | Official SDKs: `mcp` (MCP server, stateless JSON per request) and `telnyx` (KV, webhook signature check) | Hand-written MCP protocol, KV client and signature check (built first, then deleted) | Less code, maintained by the vendors. Edge has no ASGI lifespan, so a stateless MCP session manager runs per request. |
+| 5 | Official SDKs: `@modelcontextprotocol/sdk` (MCP server, stateless JSON per request) and `telnyx` (KV, webhook signature check) | Hand-written MCP protocol, KV client and signature check (built first, then deleted) | Less code, maintained by the vendors. A fresh server + stateless transport runs per request. |
 | 6 | Webhook degrades to safe defaults under a time budget | Fail the webhook | Telnyx default timeout is 1.5 s; a failed webhook leaves raw `{{vars}}`. `backend_degraded` lets the workflow route to a fallback. |
 | 7 | Webhook verifies Telnyx Ed25519 signatures; fails closed if key missing | Trust the public URL | Trust boundary; unauthenticated callers could pollute actor state. |
 | 8 | Actor facade uses a method allowlist + bearer token | Expose all actor methods | Public URL; least privilege. |
@@ -26,7 +26,7 @@
 ## Assumptions to verify on first deploy
 
 - `telnyx_conversation_id` is present in the webhook payload (example payload omits it; code falls back to `call_control_id`).
-- Edge Python build installs `pyproject.toml` dependencies (`telnyx`, `httpx`, `starlette`, `mcp`).
+- Edge Python build (Python 3.9) installs `pyproject.toml` dependencies (`telnyx`, `httpx`, `starlette` 0.49.3).
 - Telnyx MCP client accepts `application/json` responses (no SSE).
 - Whether a node with `tools_mode: replace` hides assistant-level MCP tools (MCP scoping per node is not exposed by the API).
 - KV read-your-writes between webhook and MCP server for the session mapping (same region expected).

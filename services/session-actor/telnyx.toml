@@ -24,7 +24,7 @@ type    = "CallerSession"
 
 # Edge secrets binding. The HTTP facade reads `INTERNAL_API_TOKEN` through
 # this binding (`env.SECRETS.get("INTERNAL_API_TOKEN")`); it is the shared
-# bearer the Python webhook + mcp-server services send in their
+# bearer the webhook (Python) and mcp-server (TypeScript) send in their
 # `Authorization: Bearer` header. Secrets themselves are not stored in this
 # file — they are added with `telnyx-edge secrets add INTERNAL_API_TOKEN <v>`.
 [[secrets]]
