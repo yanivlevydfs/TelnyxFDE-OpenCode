@@ -301,6 +301,33 @@ Signal cheat-sheet: structured JSON logs (all services) · latency spans
 distributed `trace_id` · platform metrics (`telnyx-edge metrics <fn>`: count,
 2xx/4xx/5xx, p50/p95/p99) · degraded-mode flag (response + log).
 
+### Service metrics (beyond logs)
+
+Counters and latency live in a second Stateful Actor, **`MetricsCounter`** (one
+`global` instance), shared by the webhook and the MCP server via the facade's
+`POST /metrics/add`. Why an actor: Edge instances scale to zero (in-memory
+counters reset) and KV loses concurrent increments; the actor's one-at-a-time
+method turns make every increment an atomic read-modify-write.
+
+| Metric | From | Meaning |
+|---|---|---|
+| `webhook.calls`, `webhook.rejected` | webhook | calls started; bad signature or JSON |
+| `webhook.degraded`, `webhook.failed.<dep>` | webhook | calls on the degraded path, and which dependency failed |
+| `callers.new` / `returning` / `anonymous` | webhook | who is calling |
+| `mcp.tool_calls`, `tool.<name>`, `tool.errors` | MCP | tool usage and caller-facing tool errors |
+| `cache.hit`, `cache.miss` | MCP | KV deals-cache effectiveness |
+| `flytlv.calls`, `flytlv.errors` | MCP | upstream deals API calls and failures |
+| `deals.saved`, `sms.sent` | MCP | business outcomes |
+| latency: `webhook.request`, `tool.<name>`, `flytlv.search` | both | count, avg and max ms |
+
+```bash
+python scripts/metrics.py          # counters, degraded rate, cache hit rate, latency
+python scripts/metrics.py --reset  # start a demo from zero
+```
+
+Metrics are sent after the webhook's response (no cost to its 1.2 s budget) and
+fire-and-forget from the MCP server, so a metrics failure never affects a call.
+
 ### What broke during development, and how I found it
 
 Each of these was found from logs, deploy records or a live check, not by guessing.
