@@ -11,6 +11,12 @@ name: Ship Edge Functions
 
 on:
   workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to ship (all = every service)"
+        default: all
+        type: choice
+        options: [all, webhook, mcp-server, session-actor]
   push:
     branches: [master]
     paths: ["services/**", "shared/**"]
@@ -24,7 +30,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [webhook, mcp-server, session-actor]
+        # A manual run can ship one service only; otherwise ship all three.
+        service: ${{ fromJSON((inputs.service && inputs.service != 'all') && format('["{0}"]', inputs.service) || '["webhook","mcp-server","session-actor"]') }}
     steps:
       - uses: actions/checkout@v4
 
