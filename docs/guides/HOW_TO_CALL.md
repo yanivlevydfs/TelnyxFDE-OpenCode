@@ -86,6 +86,9 @@ SMS from **FlyTLV** with the deal's details and the booking link:
   send it to another number.
 - Texting a deal also saves it.
 - SMS works for **Israeli mobile numbers** only.
+- **Not available yet:** the Telnyx account level allows only long-code senders,
+  so the "FlyTLV" sender is blocked until the account is upgraded. The agent
+  then says it could not send the text; the deal is still saved.
 
 ## 6. Hear your saved deals
 
@@ -105,8 +108,8 @@ same full details.
 - **Your phone number is your account.** Saved deals are tied to the number
   you call from, so call from the same number to hear them again.
 - **Long calls:** after about 10 minutes the agent offers to wrap up.
-- **Speaking to a human:** a human agent is not connected yet. If you ask for
-  one, the agent apologises and helps you itself, or ends the call politely.
+- **Speaking to a human:** say *"Can I speak to a person?"* The agent offers to
+  transfer you to **Ofek**, our human agent.
 - **If the deals service is down**, the agent tells you and asks you to call
   back in a few minutes.
 - **Booking:** the agent does not book flights. Ask for the deal by SMS and
