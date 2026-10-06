@@ -220,7 +220,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # --- TelnyxFDE ---
-# Copies of shared/common.py (made by scripts/vendor_shared.py)
+# Copies of shared/common.py (made by scripts/build/vendor_shared.py)
 services/*/function/common.py
 # Node / Telnyx Edge (TypeScript actor service)
 node_modules/

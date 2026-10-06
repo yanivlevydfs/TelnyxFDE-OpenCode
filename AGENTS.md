@@ -1,7 +1,7 @@
 # AGENTS.md — instructions for the AI coding agent (OpenCode + Telnyx Inference)
 
-You are building the Telnyx FDE coding challenge solution described in `code_challenge.md`.
-Follow it strictly. The design is in `spec/`. The acceptance tests are in `UnitTest/` —
+You are building the Telnyx FDE coding challenge solution described in `docs/challenge/code_challenge.md`.
+Follow it strictly. The design is in `docs/design/`. The acceptance tests are in `UnitTest/` —
 **the job is done when every test passes**. Do not edit the tests to make them pass.
 
 ## Product: FlyTLV Travel Line
@@ -20,7 +20,7 @@ A wrong key returns **404**.
 
 1. Every component is a separate microservice with its own folder and files.
 2. Reuse code: shared Python code lives in ONE file, `shared/common.py`, copied into each
-   service as `function/common.py` by `scripts/vendor_shared.py`. Never copy-paste.
+   service as `function/common.py` by `scripts/build/vendor_shared.py`. Never copy-paste.
 3. Nothing hardcoded: every value comes from environment variables / Telnyx Edge secrets.
 4. Comment and document the code; a README per component.
 5. Python everywhere, except the Stateful Actor (Telnyx Actors are TypeScript-only) and the
@@ -39,7 +39,7 @@ services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, P
 services/mcp-server/src/          MCP server, 4 tools (Edge Function, TypeScript)
 services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
 assistant/flow.py, provision.py      Assistant + Conversation Workflow via the Telnyx SDK
-scripts/vendor_shared.py             copy shared/common.py into each Python service
+scripts/build/vendor_shared.py             copy shared/common.py into each Python service
 ```
 
 Read the tests first: they define the exact function names, classes, variables and behaviour

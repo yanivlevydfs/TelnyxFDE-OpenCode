@@ -4,7 +4,7 @@ Both Python services ship their code as a package named `function`, so each is
 loaded here under its own name (webhook_fn, mcp_fn) to test them side by side.
 
 Run all Python tests from the repo root:
-    python scripts/vendor_shared.py
+    python scripts/build/vendor_shared.py
     .venv/Scripts/python -m pytest UnitTest -q
 """
 
@@ -35,7 +35,7 @@ def load_service(folder: str, alias: str):
         return sys.modules[f"{alias}.func"]
     init = ROOT / "services" / folder / "function" / "__init__.py"
     if not (init.parent / "common.py").exists():
-        raise RuntimeError("run `python scripts/vendor_shared.py` first")
+        raise RuntimeError("run `python scripts/build/vendor_shared.py` first")
     spec = importlib.util.spec_from_file_location(alias, init, submodule_search_locations=[str(init.parent)])
     package = importlib.util.module_from_spec(spec)
     sys.modules[alias] = package

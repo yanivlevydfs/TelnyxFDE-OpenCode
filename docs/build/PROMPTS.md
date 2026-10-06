@@ -32,13 +32,13 @@ Inference is billed to the Telnyx account. If the balance goes negative, Telnyx 
 
 Read AGENTS.md and UnitTest/test_common.py. Write shared/common.py so every test in
 UnitTest/test_common.py passes. Run `.venv/Scripts/python -m pytest UnitTest/test_common.py -q`
-and fix until green. Then write scripts/vendor_shared.py.
+and fix until green. Then write scripts/build/vendor_shared.py.
 
 ## 2. Webhook
 
-Read AGENTS.md, spec/ and UnitTest/test_webhook.py. Build services/webhook (function/func.py,
+Read AGENTS.md, docs/design/ and UnitTest/test_webhook.py. Build services/webhook (function/func.py,
 function/__init__.py, pyproject.toml, func.toml, README.md). Run
-`python scripts/vendor_shared.py` then `.venv/Scripts/python -m pytest UnitTest/test_webhook.py -q`
+`python scripts/build/vendor_shared.py` then `.venv/Scripts/python -m pytest UnitTest/test_webhook.py -q`
 and fix until green.
 
 ## 3. MCP server

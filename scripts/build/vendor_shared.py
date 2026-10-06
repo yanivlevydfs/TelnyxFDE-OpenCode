@@ -1,4 +1,4 @@
-"""scripts/vendor_shared.py — copy shared/common.py into each Python service.
+"""scripts/build/vendor_shared.py — copy shared/common.py into each Python service.
 
     The Telnyx Edge build ships one function folder at a time, so shared Python
     code can't live in a package imported across services. Instead we keep ONE
@@ -6,7 +6,7 @@
     function/common.py. Re-run after editing shared/common.py and before
     `telnyx-edge ship` or `python -m pytest UnitTest`.
 
-    python scripts/vendor_shared.py
+    python scripts/build/vendor_shared.py
 
     TypeScript services (services/session-actor, services/mcp-server) have no
     `function/` directory and are skipped automatically.
@@ -18,7 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]  # scripts/build/ -> repo root
 SOURCE = ROOT / "shared" / "common.py"
 
 

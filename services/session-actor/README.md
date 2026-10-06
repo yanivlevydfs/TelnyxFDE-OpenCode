@@ -34,7 +34,7 @@ calls from the same caller (e.g. a re-dial while the first call is still
 finishing) would race and lose updates. A Telnyx Stateful Actor serializes
 each instance's method turns one at a time, which is the lock we want for
 free. The actor is the right primitive here, KV is not. See
-`spec/DECISIONS.md` (#9, #13).
+`docs/design/DECISIONS.md` (#9, #13).
 
 ## API
 

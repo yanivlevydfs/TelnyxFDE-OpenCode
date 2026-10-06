@@ -1,7 +1,7 @@
 """shared/common.py — config, JSON logging, Kv, ActorClient, sessions, phone.
 
 Single source of truth for Python code reused across the Edge Function services
-(webhook, mcp-server). `scripts/vendor_shared.py` copies this file into each
+(webhook, mcp-server). `scripts/build/vendor_shared.py` copies this file into each
 service as `function/common.py` so the Edge build picks it up. Keep it one file,
 no imports of repo-local modules — only the stdlib, httpx and telnyx.
 

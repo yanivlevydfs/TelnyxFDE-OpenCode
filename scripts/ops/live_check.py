@@ -1,9 +1,9 @@
-"""scripts/live_check.py — end-to-end check of the deployed Telnyx Edge services.
+"""scripts/ops/live_check.py — end-to-end check of the deployed Telnyx Edge services.
 
 Runs real requests against the live webhook, MCP server and actor, then prints
 PASS/FAIL per check. Uses fresh test caller ids, never a real caller.
 
-    python scripts/live_check.py
+    python scripts/ops/live_check.py
 
 Needs the .env values (WEBHOOK_URL, MCP_URL, MCP_API_KEY, ACTOR_SERVICE_URL,
 INTERNAL_API_TOKEN, TELNYX_API_KEY, KV_NAMESPACE_ID).
@@ -16,13 +16,14 @@ import json
 import os
 import random
 import sys
+import time
 from pathlib import Path
 
 import httpx
 import telnyx
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shared"))
-import common as c  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))  # scripts/ops/ -> repo root
+import common as c
 
 E = os.environ
 results: list[tuple[str, bool, str]] = []
@@ -48,11 +49,29 @@ def actor(path: str, body: dict | None = None) -> httpx.Response:
                       headers={"Authorization": f"Bearer {E['INTERNAL_API_TOKEN']}"}, json=body or {})
 
 
-async def main() -> int:
-    kv = c.Kv(telnyx.AsyncTelnyx(api_key=E["TELNYX_API_KEY"]))
-    flags = await kv.get_json(E.get("KV_FLAGS_KEY", "flags/assistant")) or {}
+def kv(op):
+    """Run one KV operation (Telnyx SDK, async) with a fresh client."""
+    async def run():
+        return await op(c.Kv(telnyx.AsyncTelnyx(api_key=E["TELNYX_API_KEY"])))
+    return asyncio.run(run())
+
+
+async def concurrent_record_calls(n: int) -> list[int]:
+    """n concurrent recordCall requests to one fresh caller actor."""
+    who = f"1999{random.randint(10**6, 10**7)}"
+    async with httpx.AsyncClient(timeout=60) as h:
+        rs = await asyncio.gather(*[h.post(f"{E['ACTOR_SERVICE_URL'].rstrip('/')}/actors/{who}/recordCall",
+                                           headers={"Authorization": f"Bearer {E['INTERNAL_API_TOKEN']}"}, json={})
+                                    for _ in range(n)])
+    return sorted(r.json()["callCount"] for r in rs)
+
+
+def main() -> int:
+    flags_key = E.get("KV_FLAGS_KEY", "flags/assistant")
+    flags = kv(lambda k: k.get_json(flags_key)) or {}
     conv, entity = f"live-check-{random.randint(10**5, 10**6)}", f"1888{random.randint(10**6, 10**7)}"
-    await kv.put_json(f"session/{conv}", {"entity_id": entity}, ttl_secs=1800)
+    kv(lambda k: k.put_json(f"session/{conv}", {"entity_id": entity}, ttl_secs=1800))
+    greece: list[dict] = []
 
     # Security
     r = httpx.post(E["WEBHOOK_URL"], content="{}", timeout=30)
@@ -98,22 +117,17 @@ async def main() -> int:
     check("hidden caller id still gets deals", not err and "note" in json.loads(text), text[:60])
 
     # SMS kill switch (KV flag) without sending a message
-    await kv.put_json(E.get("KV_FLAGS_KEY", "flags/assistant"), {**flags, "sms_enabled": False})
+    kv(lambda k: k.put_json(flags_key, {**flags, "sms_enabled": False}))
     err, text = mcp(conv, "send_deal_sms", {"deal_id": greece[0]["dealId"]})
     check("sms_enabled=false blocks SMS in code", err and "turned off" in text, text[:60])
-    await kv.put_json(E.get("KV_FLAGS_KEY", "flags/assistant"), flags or {"deals_enabled": True, "sms_enabled": True, "promo": ""})
+    kv(lambda k: k.put_json(flags_key, flags or {"deals_enabled": True, "sms_enabled": True, "promo": ""}))
 
     # Actor: concurrent read-modify-write
-    async with httpx.AsyncClient(timeout=60) as h:
-        who = f"1999{random.randint(10**6, 10**7)}"
-        rs = await asyncio.gather(*[h.post(f"{E['ACTOR_SERVICE_URL'].rstrip('/')}/actors/{who}/recordCall",
-                                           headers={"Authorization": f"Bearer {E['INTERNAL_API_TOKEN']}"}, json={})
-                                    for _ in range(20)])
-    counts = sorted(r.json()["callCount"] for r in rs)
+    counts = asyncio.run(concurrent_record_calls(20))
     check("actor: 20 concurrent recordCall, no lost updates", counts == list(range(1, 21)))
 
     # Metrics actor
-    await asyncio.sleep(3)
+    time.sleep(3)  # metrics are sent after each response
     snap = actor("/metrics/snapshot").json()
     cnt = snap.get("counts", {})
     check("metrics: tool calls counted", cnt.get("mcp.tool_calls", 0) >= 8, str(cnt.get("mcp.tool_calls")))
@@ -126,4 +140,4 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(main())
