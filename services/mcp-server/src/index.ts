@@ -16,10 +16,10 @@
 
 import http from "node:http";
 
-import { info } from "./log";
-import { ActorClient } from "./actor";
-import { EdgeKv } from "./kv";
-import { createHandler } from "./server";
+import { info } from "./log.js";
+import { ActorClient } from "./actor.js";
+import { EdgeKv } from "./kv.js";
+import { createHandler } from "./server.js";
 
 /** Build the production dependencies from Edge config / secrets. */
 function buildDependencies() {
@@ -36,20 +36,10 @@ function createHttpServer(): http.Server {
   return http.createServer((req, res) => handler(req, res));
 }
 
-// Only listen when run directly (Edge invokes the bundled module; local dev
-// runs `node dist/index.js`). Guards against tests/importers accidentally
-// binding the port.
-const isMain = (() => {
-  try {
-    return import.meta.url === `file://${process.argv[1]}`;
-  } catch {
-    return false;
-  }
-})();
-
-if (isMain) {
-  const port = Number(process.env.PORT ?? 8080);
-  createHttpServer().listen(port, () => {
-    info("mcp.listening", { port });
-  });
-}
+// Always listen, as the official Telnyx TS scaffold does: Edge starts this
+// file with `npm start` (node dist/index.js). Tests import server.ts, never
+// this file, so no guard is needed.
+const port = Number(process.env.PORT ?? 8080);
+createHttpServer().listen(port, () => {
+  info("mcp.listening", { port });
+});

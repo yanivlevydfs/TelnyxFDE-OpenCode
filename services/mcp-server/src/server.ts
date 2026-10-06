@@ -34,14 +34,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-import { config } from "./config";
-import { debug, error, info, setTraceId, warning } from "./log";
+import { config } from "./config.js";
+import { debug, error, info, setTraceId, warning } from "./log.js";
 import {
   Actor,
   ActorError,
   ActorInputError,
-} from "./actor";
-import { FlytlvClient, FlytlvError, type FlytlvPayload } from "./flytlv";
+} from "./actor.js";
+import { FlytlvClient, FlytlvError, type FlytlvPayload } from "./flytlv.js";
 
 // ------------------------------------------------------------------ public API
 

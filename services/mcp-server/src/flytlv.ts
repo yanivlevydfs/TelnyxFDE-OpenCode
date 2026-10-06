@@ -21,8 +21,8 @@
  * MCP `isError` result (never leaks the URL, the key or a traceback).
  */
 
-import { config } from "./config";
-import { error, warning } from "./log";
+import { config } from "./config.js";
+import { error, warning } from "./log.js";
 
 /** The flytlv deals API cannot be used right now. The message is
  * caller-friendly and safe to surface verbatim (never leaks the URL, key or

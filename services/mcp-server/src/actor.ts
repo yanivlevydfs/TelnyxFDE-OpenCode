@@ -10,8 +10,8 @@
  * are injected so tests pass a fake.
  */
 
-import { config } from "./config";
-import { getTraceId } from "./log";
+import { config } from "./config.js";
+import { getTraceId } from "./log.js";
 
 /** Any failure calling the session-actor facade. */
 export class ActorError extends Error {

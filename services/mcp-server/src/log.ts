@@ -11,7 +11,7 @@
  * error's stack as `exception` when passed.
  */
 
-import { config } from "./config";
+import { config } from "./config.js";
 
 type Level = "DEBUG" | "INFO" | "WARNING" | "ERROR";
 
