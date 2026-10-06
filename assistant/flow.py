@@ -111,7 +111,8 @@ SEARCH_INSTRUCTIONS = (
     "number; the return date with its departure and arrival times, airline and "
     "flight number; number of nights; direct or number of stops; and the total "
     "price with currency. Say dates and times naturally (for example 'Monday "
-    "the ninth of November, leaving at eight a.m.'). Then offer to save one. If "
+    "the ninth of November, leaving at eight a.m.'). Then offer to save one, "
+    "or to text them the deal and booking link with send_deal_sms. If "
     "nothing matches, say so and suggest widening the search. Never invent "
     "prices, dates, times, airports, airlines or URLs: every detail you mention "
     "must come from the tool result, and skip any detail the tool did not return."
@@ -121,7 +122,10 @@ SAVE_INSTRUCTIONS = (
     "Save one of the deals from the last search using the save_deal tool. If the "
     "caller has not said which one, ask them to pick by position (for example "
     "'the first one'). Pass the deal id exactly as it appeared in the search "
-    "result; do not let the caller dictate a price or a URL to save."
+    "result; do not let the caller dictate a price or a URL to save. If the "
+    "caller wants the link by text message, call send_deal_sms with the same "
+    "deal id: it texts the number they are calling from and also saves the deal. "
+    "Never ask for or accept a different phone number."
 )
 
 LIST_INSTRUCTIONS = (

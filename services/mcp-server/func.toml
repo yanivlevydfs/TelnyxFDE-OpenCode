@@ -10,6 +10,11 @@ func_name = "fde-mcp"
 #   await env.KV.put(key, JSON.stringify(v), { expirationTtl: secs })
 # Holds the session/<conversation_id> -> {entity_id} map (written by the
 # webhook) and the cache/deals/<query> deals cache.
+# Telnyx API binding: env.TELNYX is a pre-authenticated SDK client, used by
+# src/sms.ts to send deal links by SMS.
+[telnyx]
+binding = "TELNYX"
+
 [storage.kv.KV]
 id = "445c3e11-c172-48df-af37-3486ca3ff50c"
 
@@ -33,3 +38,5 @@ SESSION_KEY_PREFIX = "session/"  # written by the webhook, read by the tools
 HTTP_TIMEOUT_MS = "3000"
 TRACE_HEADER = "x-trace-id"      # outbound trace header to the actor
 LOG_LEVEL = "INFO"
+SMS_FROM = "FlyTLV"                # alphanumeric sender (Israeli numbers are voice-only)
+MESSAGING_PROFILE_ID = "4001a112-28fd-40f5-a0de-226b1bad6b80"  # profile flytlv-sms: IL only, $5/day cap

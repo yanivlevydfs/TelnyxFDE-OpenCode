@@ -20,6 +20,7 @@ import { info } from "./log.js";
 import { ActorClient } from "./actor.js";
 import { EdgeKv } from "./kv.js";
 import { createHandler } from "./server.js";
+import { TelnyxSms } from "./sms.js";
 
 /** Build the production dependencies from Edge config / secrets. */
 function buildDependencies() {
@@ -27,6 +28,7 @@ function buildDependencies() {
     kv: new EdgeKv(),
     actor: new ActorClient(fetch),
     fetchImpl: fetch,
+    sms: new TelnyxSms(),
   };
 }
 
