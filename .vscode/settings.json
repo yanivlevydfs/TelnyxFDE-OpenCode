@@ -1,0 +1,22 @@
+{
+  // Hide generated caches and installed dependencies in the Explorer so it shows
+  // only the project. They still exist on disk (tests, tools and builds use them).
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    ".venv": true,
+    "reference": true
+  },
+  // Keep tools from creating __pycache__ folders while you work.
+  "python.terminal.activateEnvironment": true,
+  "terminal.integrated.env.windows": { "PYTHONDONTWRITEBYTECODE": "1" },
+  "search.exclude": {
+    "**/node_modules": true,
+    ".venv": true,
+    "reference": true
+  },
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
+}
