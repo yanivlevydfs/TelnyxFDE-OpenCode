@@ -22,6 +22,7 @@
  * Run tests:  cd services/session-actor && npm test
  */
 
+import { localIso } from "./time.js";
 import { StatefulActor, type Env } from "@telnyx/edge-runtime";
 
 /** A flight deal kept by the actor. Mirrors the camelCase shape produced
@@ -115,7 +116,7 @@ function log(
 ): void {
   if (LEVELS[level] < LEVELS[logLevel]) return;
   const line = JSON.stringify({
-    ts: new Date().toISOString(),
+    ts: localIso(),
     level,
     service: "session-actor",
     event,

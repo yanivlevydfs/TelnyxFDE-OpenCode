@@ -18,6 +18,7 @@ dependencies = [
     "telnyx[webhooks]==4.182.0", # KV REST API + Ed25519 webhook signature check
     "httpx==0.28.1",             # session-actor HTTP calls
     "starlette==0.49.3",          # ASGI routing for POST / (resolves on Python 3.9)
+    "tzdata==2025.2",             # timezone data for Israel-time log timestamps
 ]
 
 [tool.hatch.build.targets.wheel]
