@@ -71,9 +71,15 @@ _trace_id: str = uuid.uuid4().hex
 
 
 def set_trace_id(tid: str | None) -> str:
-    """Set the current trace id; generate a 32-hex one if None. Returns it."""
+    """Set the current trace id; generate a 32-hex one if None. Returns it.
+
+    The id is mirrored onto the shared ``"common"`` logger object (one singleton
+    for every vendored copy of this file) so that the ``_JsonFormatter`` another
+    copy installed reads the latest value instead of a stale module global.
+    """
     global _trace_id
     _trace_id = tid or uuid.uuid4().hex
+    logger._trace_id = _trace_id
     return _trace_id
 
 
@@ -84,7 +90,9 @@ class _JsonFormatter(logging.Formatter):
         payload: dict[str, Any] = {
             "level": record.levelname,
             "event": record.getMessage(),
-            "trace_id": _trace_id,
+            # Read from the shared logger so a set_trace_id in any vendored copy
+            # is visible to the formatter installed by whichever copy ran first.
+            "trace_id": getattr(logger, "_trace_id", _trace_id),
         }
         if hasattr(record, "fields"):
             payload.update(record.fields)
@@ -105,7 +113,8 @@ class _StdoutHandler(logging.Handler):
 
 
 logger = logging.getLogger("common")
-logger.setLevel(logging.INFO)
+# Log level from the LOG_LEVEL env var (default INFO); unknown names -> INFO.
+logger.setLevel(getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO))
 # Don't double-add if this module is re-imported in the same process. Compare
 # by class NAME: vendored copies of this file (webhook_fn.common, ...) are
 # distinct classes but must share one stdout handler on the "common" logger.
@@ -114,6 +123,10 @@ if not any(h.__class__.__name__ == "_StdoutHandler" for h in logger.handlers):
     _handler.setFormatter(_JsonFormatter())
     logger.addHandler(_handler)
 logger.propagate = False  # never bubble up to the root logger
+# Initialise the shared trace id once (first importer wins; set_trace_id updates
+# it thereafter). Lives on the logger object so every vendored copy shares it.
+if not hasattr(logger, "_trace_id"):
+    logger._trace_id = _trace_id
 
 
 def info(event: str, **fields: Any) -> None:
@@ -129,6 +142,11 @@ def warning(event: str, **fields: Any) -> None:
 def error(event: str, *, exc_info: bool = False, **fields: Any) -> None:
     """ERROR line. Pass exc_info=True to append a traceback."""
     logger.error(event, exc_info=exc_info, extra={"fields": fields})
+
+
+def debug(event: str, **fields: Any) -> None:
+    """DEBUG line. Keyword args become JSON fields (emitted only at DEBUG level)."""
+    logger.debug(event, extra={"fields": fields})
 
 
 @contextmanager
@@ -217,12 +235,14 @@ class ActorClient:
         self._http = http
         self._base = require("ACTOR_SERVICE_URL").rstrip("/")
         self._token = require("INTERNAL_API_TOKEN")
+        # Name of the outbound trace header (configurable; default x-trace-id).
+        self._trace_header = optional("TRACE_HEADER", "x-trace-id")
 
     async def call(self, entity_id: str, method: str, body: Any = None) -> Any:
         url = f"{self._base}/actors/{entity_id}/{method}"
         headers = {
             "authorization": f"Bearer {self._token}",
-            "x-trace-id": _trace_id,
+            self._trace_header: _trace_id,
             "content-type": "application/json",
         }
         try:

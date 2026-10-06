@@ -226,3 +226,4 @@ services/*/function/common.py
 node_modules/
 telnyx-env.d.ts
 .telnyx/
+reference/
