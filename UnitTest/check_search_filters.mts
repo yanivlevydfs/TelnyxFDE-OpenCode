@@ -28,3 +28,15 @@ const text = dealSms({
 });
 assert.equal(text, "FlyTLV: Larnaca, Cyprus - 64 USD round trip, direct.\nOut 2026-11-09 08:00 W64604. Back 2026-11-12 06:00 W64603.\nBook: https://flytlv.app/go?id=tlv-lca-1");
 console.log("sms text check OK");
+
+// Departed / too-soon flights are dropped (3 h minimum, Israel time).
+import { bookable } from "../services/mcp-server/src/server.ts";
+const now = new Date("2026-10-06T15:00:00Z"); // 18:00 in Israel
+const kept = bookable([
+  { deal_id: "gone", departure_date: "2026-10-06", outbound_departure_time: "18:40" },
+  { deal_id: "soon", departure_date: "2026-10-06", outbound_departure_time: "20:30" },
+  { deal_id: "ok", departure_date: "2026-10-06", outbound_departure_time: "21:30" },
+  { deal_id: "later", departure_date: "2026-10-07", outbound_departure_time: "06:00" },
+] as never, now).map((d: { deal_id: string }) => d.deal_id);
+assert.deepEqual(kept, ["ok", "later"]);
+console.log("bookable check OK");
