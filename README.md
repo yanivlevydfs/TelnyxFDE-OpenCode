@@ -25,7 +25,7 @@ See [Which model built each component](#which-model-built-each-component).
 |---|---|---|---|---|---|
 | Shared code | `shared/common.py` | GLM-5.2 | Claude Code | 13/13 | vendored into each Python service |
 | Dynamic Variables webhook | `services/webhook` | Kimi-K3 | Claude Code | 9/9 | live, `fde-webhook` |
-| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python) | Claude Code (TypeScript port, features) | 11/11 | live, `fde-mcp` |
+| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code | 11/11 | live, `fde-mcp` |
 | CallerSession Stateful Actor | `services/session-actor` | GLM-5.2 | Claude Code | 7/7 | live, `fde-session-actor` |
 | Assistant + Conversation Workflow | `assistant/` | GLM-5.2 | Claude Code | 7/7 | live (`provision.py`) |
 | Deploy pipeline | `.github/workflows/ship.yml` | — | Claude Code | — | GitHub Actions |
@@ -379,15 +379,17 @@ reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek
 |---|---|---|
 | Shared code (config, JSON logging, `Kv`, `ActorClient`, sessions, phone) | `shared/common.py` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 | Dynamic Variables webhook (signature, budget, degraded defaults) | `services/webhook` | **Kimi-K3** · `telnyx/moonshotai/Kimi-K3` |
-| MCP server (3 tools, flytlv client, bearer auth; Python) | `services/mcp-server` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
+| MCP server (3 tools, flytlv client, bearer auth; Python, then ported to TypeScript for Edge) | `services/mcp-server` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 | CallerSession Stateful Actor + HTTP facade | `services/session-actor` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 | Assistant + Conversation Workflow + provisioning | `assistant/` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
+| Webhook fix for Edge's Python 3.9 build | `services/webhook` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 
-**After the first deploy (Claude Code).** Shipping to Telnyx Edge exposed platform
-problems the tests could not, and those fixes plus the later features were made
-with Claude Code:
+The OpenCode session history (`opencode.db`) records each of these runs and its model.
 
-- MCP server ported to TypeScript: Edge builds Python 3.9, the Python `mcp` SDK needs 3.10+.
+**After the first deploy (Claude Code, from 6 Oct ~15:00 UTC).** Shipping to Telnyx
+Edge exposed platform problems the tests could not, and those fixes plus the later
+features were made with Claude Code:
+
 - Deploys moved to GitHub Actions: the Windows `telnyx-edge` CLI zips paths with
   backslashes, so the Linux builders saw flat files instead of folders.
 - MCP `/health/*` probe routes, an expired org API-key binding (KV returned 401),
