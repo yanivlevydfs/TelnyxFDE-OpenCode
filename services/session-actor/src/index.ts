@@ -152,6 +152,11 @@ export default {
         // Validation/parsing failure from the actor — caller's fault.
         return json(400, { error: msg });
       }
+      // On Telnyx Edge the actor runs behind an RPC hop, so its ActorInputError
+      // arrives here as a plain Error whose text embeds the original
+      // {"name":"ActorInputError","message":"..."}. Recover it as a 400.
+      const remote = /"message":"([^"]*)","name":"ActorInputError"/.exec(msg);
+      if (remote) return json(400, { error: remote[1] });
       // Unexpected failure — log with stack, return 500 (server's fault).
       log("ERROR", "dispatch_failed", {
         entity,
