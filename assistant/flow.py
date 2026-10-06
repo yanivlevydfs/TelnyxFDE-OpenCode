@@ -103,26 +103,41 @@ ESCALATE_INSTRUCTIONS = (
 )
 
 SEARCH_INSTRUCTIONS = (
-    "Help the caller find cheap round-trip flights from Tel Aviv using the "
-    "search_deals tool. Map the request to the tool arguments: 'anywhere' or no "
-    "place named -> no destination and no country; a city or airport -> "
-    "destination (IATA code, e.g. ATH); a whole country -> country (e.g. "
-    "'Greece'); 'this weekend' or 'next weekend' -> weekend='upcoming', 'the "
-    "weekend after' -> weekend='following' (never compute weekend dates "
-    "yourself); a specific day -> departure_date as YYYY-MM-DD. Also pass "
-    "max_price or direct_only if the caller asks. For each of the top two to "
-    "three deals, read out every detail the tool returned: destination city and "
-    "country; departure airport (fromAirport) and arrival airport (toAirport); "
-    "the outbound date with its departure and arrival times, airline and flight "
-    "number; the return date with its departure and arrival times, airline and "
-    "flight number; number of nights; direct or number of stops; and the total "
-    "price with currency. Say dates and times naturally (for example 'Monday "
-    "the ninth of November, leaving at eight a.m.'). Then offer to save one, "
-    "and, only if {{flag_sms_enabled}} is 'true', to text them the deal and "
-    "booking link with send_deal_sms. If "
-    "nothing matches, say so and suggest widening the search. Never invent "
-    "prices, dates, times, airports, airlines or URLs: every detail you mention "
-    "must come from the tool result, and skip any detail the tool did not return."
+    "Help the caller find cheap flights from Tel Aviv with the search_deals tool. "
+    "Map what they say to the tool arguments: 'anywhere' or no place -> no destination "
+    "or country; a city or airport -> destination (IATA code, e.g. ATH); a whole "
+    "country -> country; 'one way' -> trip_type='one_way' (otherwise round trip); a "
+    "holiday (Hanukkah, Purim, Passover, Shavuot, Sukkot, Rosh Hashanah, Sigd...) -> "
+    "category with the holiday name; 'a weekend trip' -> category='Weekend'; 'weekdays "
+    "only' -> category='Weekdays'; 'a week' -> category='Weekly', 'two weeks' -> "
+    "category='2 Weeks', 'a month' -> category='1 Month'; 'this weekend' or 'next "
+    "weekend' -> weekend='upcoming', 'the weekend after' -> weekend='following' (never "
+    "compute weekend dates yourself); a specific day -> departure_date as YYYY-MM-DD; "
+    "'leaving on a Friday' -> departure_weekday='Friday'; a number of nights -> "
+    "min_nights and max_nights; 'at least half price' or a discount -> "
+    "min_discount_pct; a budget -> max_price; direct only -> direct_only; 'short "
+    "layovers' -> max_layover_hours; morning/afternoon/evening/night departures -> "
+    "time_of_day; 'the cheapest' -> sort='cheapest', 'the best deal' -> "
+    "sort='best_value', 'the biggest discount' -> sort='biggest_discount', 'the "
+    "soonest' -> sort='soonest'. "
+    "For each of the top two to three deals, read out every detail the tool returned: "
+    "destination city and country; departure airport (fromAirport) and arrival airport "
+    "(toAirport); round trip or one way; the outbound weekday and date with departure "
+    "and arrival times, airline and flight number; for a round trip the return weekday "
+    "and date with times, airline and flight number, and the number of nights; direct, "
+    "or the stops with the connection airports (via) and the layover length "
+    "(layoverMin, say it in hours and minutes, and warn when it is longer than six "
+    "hours); the trip category when it is a holiday or a named trip style; and the "
+    "price with currency. When the tool returns them, also say how good the deal is: "
+    "the discount below the usual price (discountPct), how much the caller saves "
+    "(savingsAmount), and the deal quality (dealQuality), for example 'an exceptional "
+    "deal: 57 percent below the usual price, you save 86 dollars'. Say dates, times and "
+    "durations naturally. Then offer to save one, and, only if {{flag_sms_enabled}} is "
+    "'true', to text them the deal and booking link with send_deal_sms. If nothing "
+    "matches, say so and suggest widening the search (another date, more nights, any "
+    "destination). Never invent prices, dates, times, airports, airlines, discounts or "
+    "URLs: every detail you mention must come from the tool result, and skip any detail "
+    "the tool did not return."
 )
 
 SAVE_INSTRUCTIONS = (
@@ -139,23 +154,93 @@ SAVE_INSTRUCTIONS = (
 LIST_INSTRUCTIONS = (
     "Read back the deals the caller saved on previous calls using the "
     "list_saved_deals tool, with the same details as a search: destination, "
-    "airports, outbound and return dates and times, airline and flight numbers, "
-    "nights, stops and price. If they have no saved deals, say so and offer to "
-    "search for flights."
+    "airports, round trip or one way, outbound and return weekdays, dates and times, "
+    "airline and flight numbers, nights, stops and layovers, price, discount and "
+    "savings. If they have no saved deals, say so and offer to search for flights."
 )
+
+# The FAQ knowledge base: (topic, answer) pairs. Only facts that are true for
+# this service and the flytlv.app feed; anything else is "ask the airline".
+FAQ_ENTRIES: list[tuple[str, str]] = [
+    ("What is this line",
+     ("FlyTLV Travel Line is an automated phone agent that finds cheap flight deals "
+     "from Tel Aviv on the live flytlv.app deals feed, reads them out with full "
+     "details, saves the ones you like and remembers them on your next call.")),
+    ("Where can I fly from",
+     ("Only from Tel Aviv, Ben Gurion airport (TLV). Other departure cities are not "
+     "supported.")),
+    ("Where can I fly to",
+     ("Any destination in the feed: ask for a city, an airport, a whole country, or "
+     "'anywhere' for the cheapest deals overall.")),
+    ("Round trip or one way",
+     ("Both. Deals are round trips by default; ask for one way and the agent searches "
+     "one-way flights.")),
+    ("Holidays",
+     ("You can ask for holiday trips by name, for example Hanukkah, Purim, Passover, "
+     "Shavuot, Sukkot, Rosh Hashanah or Sigd, when the feed has deals for them.")),
+    ("Weekend and weekday trips",
+     ("Ask for 'a weekend trip' (Thursday to Sunday or Friday to Monday style trips), "
+     "'weekdays only' (Sunday to Thursday style trips), or 'this weekend' for flights "
+     "leaving this coming Thursday to Saturday.")),
+    ("Trip lengths",
+     ("Quick visits of about two nights, a week, two weeks or a month, or say the "
+     "exact number of nights you want.")),
+    ("Specific days and times",
+     ("Give a date, a weekday ('leaving on a Friday') or a time of day (morning, "
+     "afternoon, evening or night departures).")),
+    ("Price",
+     ("The price is the total the feed shows for the trip, in the feed's currency "
+     "(usually US dollars): round trip for round-trip deals, one way for one-way "
+     "flights.")),
+    ("Discount and savings",
+     ("Each round-trip deal is compared with the usual price on that route: the agent "
+     "tells you how many percent below the usual price it is and how much you save.")),
+    ("Deal quality",
+     ("Deals are rated exceptional, great or good, from how far below the route's "
+     "usual price they are.")),
+    ("Cheapest or best",
+     ("Ask for the cheapest, the best value, the biggest discount, the soonest or the "
+     "fastest flights.")),
+    ("Direct flights and layovers",
+     ("Ask for direct flights only, or a maximum layover. For connecting flights the "
+     "agent tells you where the connection is and how long the layover lasts.")),
+    ("Budget",
+     ("Say your maximum price and the agent only offers deals under it.")),
+    ("Booking",
+     ("The agent does not book or take payment. Each deal has a flytlv.app booking "
+     "link; the agent can text it to you, and you book on flytlv.app.")),
+    ("Text message",
+     ("When text messages are enabled, the agent texts a deal and its booking link "
+     "only to the number you are calling from, never to another number.")),
+    ("Saved deals",
+     ("You can save as many deals as you like. They are kept for the phone number you "
+     "call from and read back when you call again.")),
+    ("Speaking to a person",
+     ("Ask for a person and the agent offers to transfer you to a human agent, when "
+     "one is available.")),
+    ("How fresh the prices are",
+     ("Deals come from the live feed and are refreshed often; prices and availability "
+     "can change until you book. Flights leaving in the next few hours are not offered.")),
+    ("Hidden caller id",
+     ("With a hidden number the agent can still read deals, but it cannot save or "
+     "text them.")),
+    ("Privacy and recording",
+     ("The call may be recorded for quality. Your number is used only to keep your "
+     "saved deals, and logs show only its last four digits.")),
+    ("Language and hours",
+     ("The agent answers in English, any time of day.")),
+    ("Not covered",
+     ("Baggage, seats, visas, changes and refunds are set by the airline: check the "
+     "airline or the flytlv.app booking page.")),
+]
 
 FAQ_INSTRUCTIONS = (
     "Answer the caller's general question about the FlyTLV Travel Line in one or "
-    "two short sentences, from these facts only: it finds cheap round-trip "
-    "flights from Tel Aviv (Ben Gurion) using the live flytlv.app deals feed; "
-    "one-way trips and other departure cities are not supported; prices are the "
-    "total round-trip price in the currency the feed gives; you do not book "
-    "flights, but you can text the deal and its booking link to the number they "
-    "are calling from; saved deals are kept for that phone number and read back "
-    "on later calls; a weekend means Thursday to Saturday departures; flights "
-    "leaving in the next few hours are not offered. For anything else (baggage, "
-    "seats, visas, refunds), say the airline or flytlv.app booking page has the "
-    "answer. Then ask if they would like to search for flights."
+    "two short spoken sentences, using ONLY these facts (never add others):\n"
+    + "\n".join(f"- {topic}: {answer}" for topic, answer in FAQ_ENTRIES)
+    + "\nIf the question is not covered, say you do not have that information and "
+    "suggest the airline or flytlv.app. Then ask if they would like to search for "
+    "flights."
 )
 
 TRANSFER_INSTRUCTIONS = (
