@@ -1,0 +1,20 @@
+# services/mcp-server/pyproject.toml
+# The Edge build installs these dependencies before shipping `function/`.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "function"
+version = "0.1.0"
+description = "MCP server (3 tools) for the FlyTLV Travel Line assistant"
+requires-python = ">=3.11"
+dependencies = [
+    "telnyx==4.182.0", # KV REST API (used by the vendored common.py)
+    "httpx==0.28.1",   # flytlv deals API + session-actor calls
+    "mcp==2.3.0",      # official MCP SDK: MCPServer + StreamableHTTPSessionManager
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["function"]

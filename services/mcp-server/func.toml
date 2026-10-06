@@ -1,0 +1,33 @@
+# services/mcp-server/func.toml — Telnyx Edge Function manifest.
+# Deploy:  telnyx-edge ship --from-dir services/mcp-server
+
+[edge_compute]
+func_id = "bc3393fa-a5f2-4470-b7af-137f3d9c831d"
+func_name = "fde-mcp"
+
+[telnyx]
+# String binding handle; injects TELNYX_API_KEY so the official SDK can call
+# the KV REST API (session/conversation -> caller mapping, deals cache).
+binding = "TELNYX"
+
+# Non-secret configuration only. Secrets live in Edge secrets
+# (`telnyx-edge secrets add <NAME> <VALUE>`) and are injected as env vars:
+#   MCP_API_KEY          bearer token registered with Telnyx as api_key_ref
+#   FLYTLV_API_KEY       flytlv.app private deals feed (X-API-Key)
+#   KV_NAMESPACE_ID      Telnyx KV namespace id
+#   ACTOR_SERVICE_URL    session-actor Edge Function URL
+#   INTERNAL_API_TOKEN   actor facade bearer token
+[env_vars]
+MCP_SERVER_NAME = "fde-mcp"
+FLYTLV_API_BASE = "https://flytlv.app"
+FLYTLV_DEALS_PATH = "/api/private/deals"
+FLYTLV_API_KEY_HEADER = "X-API-Key"
+FLYTLV_TIMEOUT_MS = "3000"        # short: a phone caller is on the line
+DEALS_FETCH_LIMIT = "20"         # how many deals to pull from flytlv per query
+DEALS_RESULT_LIMIT = "5"         # how many to speak back / remember per call
+DEALS_CACHE_TTL = "300"          # seconds; flytlv caches ~10 min server-side
+DEALS_CACHE_PREFIX = "cache/deals/"
+SESSION_KEY_PREFIX = "session/"  # written by the webhook, read by the tools
+HTTP_TIMEOUT_MS = "3000"
+TRACE_HEADER = "x-trace-id"      # outbound trace header to the actor
+LOG_LEVEL = "INFO"
