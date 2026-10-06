@@ -17,7 +17,7 @@
 
 import { env } from "@telnyx/edge-runtime";
 
-import { type Kv, KvError } from "./server";
+import { type Kv, KvError } from "./server.js";
 
 /**
  * Minimal hand-written type for the KV binding. The runtime-generated
