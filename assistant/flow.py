@@ -368,7 +368,10 @@ def build_tools(transfer_from: str, transfer_to: str) -> list[dict[str, Any]]:
 
     Tool shapes follow the Telnyx Assistant API ``TransferTool`` / ``HangupTool``.
     """
-    tools: list[dict[str, Any]] = [{"type": "hangup"}]
+    tools: list[dict[str, Any]] = [{
+        "type": "hangup",
+        "hangup": {"description": "End the call after saying goodbye."},
+    }]
 
     to = (transfer_to or "").strip()
     if to:

@@ -153,8 +153,14 @@ async def _create_integration_secret(client: telnyx.AsyncTelnyx, env: dict[str, 
     """
     identifier = _opt(env, "MCP_API_KEY_REF", "flytlv-mcp-key")
     token = _req(env, "MCP_API_KEY")
-    await client.integration_secrets.create(identifier=identifier, type="token", token=token)
-    c.info("provision.integration_secret", identifier=identifier)
+    try:
+        await client.integration_secrets.create(identifier=identifier, type="bearer", token=token)
+        c.info("provision.integration_secret", identifier=identifier)
+    except telnyx.UnprocessableEntityError as exc:
+        # Re-running provisioning: the secret already exists, so reuse it.
+        if "already in use" not in str(exc):
+            raise
+        c.warning("provision.integration_secret_exists", identifier=identifier)
     return identifier
 
 
@@ -165,7 +171,7 @@ async def _create_mcp_server(client: telnyx.AsyncTelnyx, env: dict[str, str],
     url = _req(env, "MCP_URL")
     server = await client.ai.mcp_servers.create(
         name=name,
-        type="streamable_http",
+        type="http",
         url=url,
         api_key_ref=api_key_ref,
     )
@@ -181,11 +187,10 @@ def _extract_connection_id(assistant: Any) -> str | None:
     code does not break if the SDK model shape changes.
     """
     telephony = _get(assistant, "telephony_settings")
-    if isinstance(telephony, dict):
-        for key in ("connection_id", "default_connection_id", "texml_app_id", "default_texml_app_id"):
-            val = telephony.get(key)
-            if val:
-                return str(val)
+    for key in ("connection_id", "default_connection_id", "texml_app_id", "default_texml_app_id"):
+        val = _get(telephony, key)  # works for the SDK model and a plain dict
+        if val:
+            return str(val)
     return _get(assistant, "connection_id") or None
 
 
@@ -239,7 +244,8 @@ async def provision(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> Any:
     phone number. Uses the SDK's async resources (``ai.assistants.create`` etc.).
     """
     secret_ref = await _create_integration_secret(client, env)
-    mcp_id = await _create_mcp_server(client, env, secret_ref)
+    # Re-running: reuse an already registered MCP server instead of adding another.
+    mcp_id = env.get("MCP_SERVER_ID") or await _create_mcp_server(client, env, secret_ref)
     body = assistant_body(env, mcp_id)
     assistant = await client.ai.assistants.create(**body)
     c.info("provision.assistant", id=assistant.id, name=body["name"])
