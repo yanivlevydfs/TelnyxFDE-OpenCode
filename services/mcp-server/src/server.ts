@@ -441,8 +441,9 @@ async function handleRequest(
   try {
     const pathname = new URL(req.url ?? "/", "http://server").pathname;
 
-    // GET /health — lightweight liveness probe (no auth).
-    if (req.method === "GET" && pathname === "/health") {
+    // Health probes (no auth). The platform calls /health/liveness and
+    // /health/readiness, so answer /health and every path under it.
+    if (pathname === "/health" || pathname.startsWith("/health/")) {
       sendJson(res, 200, { status: "ok" });
       return;
     }
