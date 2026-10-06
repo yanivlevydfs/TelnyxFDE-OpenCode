@@ -105,7 +105,7 @@ npm install
 npm test
 ```
 
-The test (`UnitTest/test_session_actor.test.mts`) injects an in-memory fake
+The test (`tests/test_session_actor.test.mts`) injects an in-memory fake
 `ctx.storage` and a fake `env.SECRETS.get → "tok"`. It runs with the Node
 built-in test runner via `tsx`. Only the unit layer uses fakes — every other
 service talks to a real Telnyx actor.

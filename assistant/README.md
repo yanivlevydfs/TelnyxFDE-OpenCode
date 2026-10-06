@@ -124,8 +124,8 @@ python assistant/provision.py
 ## Test
 
 ```bash
-.venv/Scripts/python -m pytest UnitTest/test_assistant.py -q   # this component
-.venv/Scripts/python -m pytest UnitTest -q                     # everything
+.venv/Scripts/python -m pytest tests/test_assistant.py -q   # this component
+.venv/Scripts/python -m pytest tests -q                     # everything
 ```
 
 ## Observability

@@ -1,5 +1,5 @@
 // Self-check for the MetricsCounter actor (counters + latency) and the facade's
-// /metrics routes. Run: cd services/session-actor && npx tsx ../../UnitTest/check_metrics.mts
+// /metrics routes. Run: cd services/session-actor && npx tsx ../../tests/check_metrics.mts
 import assert from "node:assert/strict";
 import { MetricsCounter } from "../services/session-actor/src/metrics-counter.ts";
 import worker from "../services/session-actor/src/index.ts";

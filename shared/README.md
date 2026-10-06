@@ -48,8 +48,8 @@ logging and no stale id.
 ## Test
 
 ```bash
-.venv/Scripts/python -m pytest UnitTest/test_common.py -q   # this module (13 tests)
-.venv/Scripts/python -m pytest UnitTest -q                   # whole suite
+.venv/Scripts/python -m pytest tests/test_common.py -q   # this module (13 tests)
+.venv/Scripts/python -m pytest tests -q                   # whole suite
 ```
 
 The tests pass fakes for the `telnyx` client and `httpx`, and rely on `capsys`

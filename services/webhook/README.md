@@ -62,6 +62,6 @@ The function is already registered: `func_id = "e5907143-e572-4e86-8880-0de76f05
 
 ```bash
 python scripts/build/vendor_shared.py
-.venv/Scripts/python -m pytest UnitTest/test_webhook.py -q
+.venv/Scripts/python -m pytest tests/test_webhook.py -q
 telnyx-edge ship --from-dir services/webhook
 ```

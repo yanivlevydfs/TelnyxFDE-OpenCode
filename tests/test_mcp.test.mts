@@ -1,6 +1,6 @@
 /**
  * Unit tests for the TypeScript MCP server (services/mcp-server/src/server.ts),
- * ported 1:1 from UnitTest/test_mcp.py (the spec). Uses node:test with fakes
+ * ported 1:1 from tests/test_mcp.py (the spec). Uses node:test with fakes
  * for kv / actor / fetch — the real Edge clients are exercised only in
  * `index.ts` (production).
  *
@@ -24,7 +24,7 @@ import {
 } from "../services/mcp-server/src/actor";
 
 // Test configuration only — real values come from Telnyx Edge secrets.
-// Mirrors UnitTest/conftest.py + the [env_vars] defaults in func.toml. Set
+// Mirrors tests/conftest.py + the [env_vars] defaults in func.toml. Set
 // before any rpc() call; config reads env lazily so import order is fine.
 process.env.MCP_API_KEY = "mcp-test";
 process.env.FLYTLV_API_KEY = "flytlv-test";

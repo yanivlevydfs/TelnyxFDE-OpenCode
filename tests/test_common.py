@@ -1,6 +1,6 @@
 """Unit tests for shared/common.py — config, logging, Kv, ActorClient, sessions, phone.
 
-Run:  .venv/Scripts/python -m pytest UnitTest -q
+Run:  .venv/Scripts/python -m pytest tests -q
 """
 
 from __future__ import annotations

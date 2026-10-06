@@ -6,7 +6,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "test": "tsx --test ../../UnitTest/test_session_actor.test.mts",
+    "test": "tsx --test ../../tests/test_session_actor.test.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 """Self-check: the webhook reports metrics to the shared actor after responding.
 
-Run: .venv/Scripts/python UnitTest/check_webhook_metrics.py
+Run: .venv/Scripts/python tests/check_webhook_metrics.py
 """
 import json
 import os
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "UnitTest"))
+sys.path.insert(0, str(ROOT / "tests"))
 for k, v in {"ACTOR_SERVICE_URL": "https://actor.test", "INTERNAL_API_TOKEN": "t",
              "KV_NAMESPACE_ID": "ns", "TELNYX_PUBLIC_KEY": "k"}.items():
     os.environ.setdefault(k, v)

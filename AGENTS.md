@@ -1,7 +1,7 @@
 # AGENTS.md — instructions for the AI coding agent (OpenCode + Telnyx Inference)
 
 You are building the Telnyx FDE coding challenge solution described in `docs/challenge/code_challenge.md`.
-Follow it strictly. The design is in `docs/design/`. The acceptance tests are in `UnitTest/` —
+Follow it strictly. The design is in `docs/design/`. The acceptance tests are in `tests/` —
 **the job is done when every test passes**. Do not edit the tests to make them pass.
 
 ## Product: FlyTLV Travel Line
@@ -33,7 +33,7 @@ A wrong key returns **404**.
 
 ## Repository structure
 
-The tests import `shared/`, `services/`, `assistant/` and `UnitTest/` paths, so
+The tests import `shared/`, `services/`, `assistant/` and `tests/` paths, so
 those stay where they are.
 
 ```
@@ -49,7 +49,7 @@ docs/challenge/                      code_challenge.md (the brief), USE_CASE.md
 docs/design/                         ARCHITECTURE, DECISIONS, OBSERVABILITY
 docs/guides/                         HOW_TO_CALL (callers), DEMO_SCRIPT (demo day)
 docs/build/PROMPTS.md                OpenCode build prompts
-UnitTest/                            acceptance tests (do not edit) + check_* self-checks
+tests/                            acceptance tests (do not edit) + check_* self-checks
 ```
 
 Read the tests first: they define the exact function names, classes, variables and behaviour
@@ -96,5 +96,5 @@ Read the tests first: they define the exact function names, classes, variables a
 ## Workflow for the agent
 
 Work one component at a time: shared → webhook → mcp-server → session-actor → assistant.
-After each one run its tests (`.venv/Scripts/python -m pytest UnitTest/<file> -q`, or `npm test`
+After each one run its tests (`.venv/Scripts/python -m pytest tests/<file> -q`, or `npm test`
 in services/session-actor) and fix the code until they pass. Commit after each green component.

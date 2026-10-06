@@ -17,8 +17,12 @@ import asyncio
 import os
 import random
 import sys
+from pathlib import Path
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))  # scripts/<group>/ -> repo root
+import common as c
 
 
 async def main(n: int) -> int:
@@ -34,8 +38,9 @@ async def main(n: int) -> int:
         final = (await client.post(f"{url}/actors/{entity}/getProfile",
                                    headers=headers, json={})).json()["callCount"]
     ok = counts == list(range(1, n + 1)) and final == n
-    print(f"{n} concurrent recordCall -> counts {counts}")
-    print(f"final callCount {final}: {'no lost updates' if ok else 'LOST UPDATES'}")
+    log = c.info if ok else c.error
+    log("actor.concurrency_check", requests=n, counts=counts, final_call_count=final,
+        result="no lost updates" if ok else "LOST UPDATES")
     return 0 if ok else 1
 
 
