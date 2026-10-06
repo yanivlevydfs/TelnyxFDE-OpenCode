@@ -55,10 +55,11 @@ read-only `reference/flytlv_app` client.
 - `src/index.ts` — production entry: `node:http` server, wires real deps, listens on `PORT || 8080`.
 - `src/server.ts` — `createServer(kv, actor, fetchImpl, sms?, metrics?)` (4 tools + zod schemas; `send_deal_sms` only when an SMS sender is wired) and `createHandler(deps)` (auth + health + per-request MCP). Also `slim()` and the `Kv` / `KvError` contracts.
 - `src/flytlv.ts` — flytlv.app deals API client (`FlytlvClient` / `FlytlvError`).
-- `src/actor.ts` — HTTP client for the session-actor facade (`ActorClient` / `ActorError` / `ActorInputError`); 400 → input error with the message.
+- `src/actor.ts` — HTTP client for the session-actor facade (`ActorClient` / `ActorError` / `ActorInputError`; 400 → input error with the message) and `ActorMetrics` (one batched `/metrics/add` per request).
 - `src/kv.ts` — thin JSON wrapper over the `env.KV` Edge binding (`EdgeKv`).
 - `src/config.ts` — lazy env reading (`require` / `optional` / `integer` / `flag`).
-- `src/log.ts` — structured JSON logging + per-request `trace_id`.
+- `src/log.ts` — structured JSON logging: Israel-time `ts`, per-request `trace_id` (AsyncLocalStorage).
+- `src/sms.ts` — sends a deal by SMS through the `env.TELNYX` binding (alphanumeric sender `FlyTLV`).
 - `func.toml` — Edge manifest: `[edge_compute]` id/name, `[storage.kv.KV]` binding, `[env_vars]`.
 - `package.json` / `tsconfig.json` — `npm run build` (tsc → `dist/`), `npm start`, `npm test`.
 

@@ -31,15 +31,25 @@ A wrong key returns **404**.
 8. **Everything uses Telnyx**: Telnyx KV and the Stateful Actor on Telnyx Edge. No local
    stand-ins. Only unit tests use fakes.
 
-## Target structure (the tests import these paths)
+## Repository structure
+
+The tests import `shared/`, `services/`, `assistant/` and `UnitTest/` paths, so
+those stay where they are.
 
 ```
+services/                            LIVE on Telnyx Edge (shipped by .github/workflows/ship.yml)
+  webhook/function/func.py           Dynamic Variables webhook (Edge Function, Python)
+  mcp-server/src/                    MCP server, 4 tools (Edge Function, TypeScript)
+  session-actor/src/                 CallerSession + MetricsCounter Stateful Actors + HTTP facade (TypeScript)
 shared/common.py                     config, JSON logging, Kv, ActorClient, sessions, phone
-services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, Python)
-services/mcp-server/src/          MCP server, 4 tools (Edge Function, TypeScript)
-services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
-assistant/flow.py, provision.py      Assistant + Conversation Workflow via the Telnyx SDK
-scripts/build/vendor_shared.py             copy shared/common.py into each Python service
+assistant/flow.py, provision.py      PROVISIONING: workflow + assistant via the Telnyx SDK
+scripts/build/vendor_shared.py       copy shared/common.py into each Python service
+scripts/ops/                         live_check.py, metrics.py, actor_concurrency_check.py
+docs/challenge/                      code_challenge.md (the brief), USE_CASE.md
+docs/design/                         ARCHITECTURE, DECISIONS, OBSERVABILITY
+docs/guides/                         HOW_TO_CALL (callers), DEMO_SCRIPT (demo day)
+docs/build/PROMPTS.md                OpenCode build prompts
+UnitTest/                            acceptance tests (do not edit) + check_* self-checks
 ```
 
 Read the tests first: they define the exact function names, classes, variables and behaviour

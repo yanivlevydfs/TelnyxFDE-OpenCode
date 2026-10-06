@@ -20,15 +20,22 @@ greeting (speak — verbatim disclosure)
   └─ default ─→ identify_intent (prompt — routing hub)
                   ├─ expression  backend_degraded == "true"            → degraded_notice (speak) → farewell
                   ├─ expression  flag_deals_enabled == "false"         → deals_disabled (speak)  → farewell
-                  ├─ expression  telnyx_conversation_duration_secs >= N → timeout_escalate (prompt) → transfer_call
-                  ├─ llm "search flights"     → search_flights  ─┬─→ save_deal
-                  │                                             └─→ identify_intent
-                  ├─ llm "save a deal"          → save_deal      ──→ identify_intent
-                  ├─ llm "list saved deals"     → list_saved     ──→ identify_intent
-                  └─ llm "speak to a human"     → transfer_call  ──→ farewell (speak) → hangup_call (prompt)
+                  ├─ expression  telnyx_conversation_duration_secs >= N → timeout_escalate (prompt)
+                  │                                                         ├─ llm accepts  → transfer_call
+                  │                                                         └─ llm declines → farewell
+                  ├─ llm "search flights"      → search_flights ─┬─→ save_deal
+                  │                                              └─→ identify_intent
+                  ├─ llm "save a deal"         → save_deal      ──→ identify_intent
+                  ├─ llm "list saved deals"    → list_saved     ──→ identify_intent
+                  ├─ llm "general question"    → answer_faq     ─┬─→ search_flights
+                  │                                              └─→ identify_intent
+                  ├─ llm "speak to a human"    → transfer_call  ──→ farewell
+                  └─ llm "caller is finished"  → farewell (speak) → hangup_call (prompt)
+   (search_flights, save_deal, list_saved and answer_faq also have a
+    "caller is finished" edge to farewell)
 ```
 
-- **speak nodes** = `greeting`, `degraded_notice`, `deals_disabled`, `farewell` —
+- **12 nodes, 26 edges.** **speak nodes** = `greeting`, `degraded_notice`, `deals_disabled`, `farewell` —
   each has its single required `default` edge (verbatim delivery, no model turn).
 - **prompt nodes** = the LLM-driven steps; they carry step instructions that
   `append` to the assistant base instructions (two tightly-scoped steps `replace`).
