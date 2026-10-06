@@ -19,14 +19,27 @@
 | 15 | OpenCode with Telnyx-hosted models built the first version of every component: GLM-5.2 (shared, MCP, actor, assistant), Kimi-K3 (webhook). After the first deploy, platform fixes and new features were made with Claude Code | Everything in one tool | Challenge requirement 6: "Build your entire solution using Telnyx inference"; the challenge also welcomes comparing tools. Edge-specific failures (Windows CLI paths, Python 3.9 builds, health probes, expired binding) surfaced only on deploy. |
 | 16 | Edge functions registered with `telnyx-edge new-func`; `func.toml` uses the official `[edge_compute]` format with the assigned `func_id` | Hand-written manifest with `name` / `runtime` / `entry` keys (first draft, invalid) | `ship` deploys the function named by `func_id`; the docs list no other identity keys. |
 
+| 17 | Ship from Linux in GitHub Actions | `telnyx-edge ship` from the Windows laptop | The Windows CLI (v0.5.9) zips paths with backslashes; Linux builders then see flat files. Proven by shipping the unmodified official scaffold. |
+| 18 | MCP server in TypeScript (`@modelcontextprotocol/sdk`, `env.KV` binding) | Python MCP server (built first) | Edge builds Python 3.9; the Python `mcp` SDK needs 3.10+. |
+| 19 | Webhook writes the session AFTER its response; flags cached in-process for 60 s; only the actor call is inside the 2.5 s budget | Everything inline under the budget | Telnyx KV over REST measured 1.2-3.7 s per read and ~2 s per write; inline, every call was degraded (metrics: 17/17). The first MCP tool call comes seconds later. |
+| 20 | Assistant `dynamic_variables_webhook_timeout_ms` = 8000 | 1500 (default) | Telnyx guidance for Edge Functions: a cold start can exceed 1.5 s. |
+| 21 | Service metrics in a second Stateful Actor (`MetricsCounter`, one `global` instance), one batched update per request | KV counters; in-memory counters | KV loses concurrent increments; Edge instances scale to zero. Single instance is fine at call scale; shard by hour if throughput grows. |
+| 22 | End the call with a terminal **tool node** running a shared hangup tool; no prompt node has the hangup tool | Prompt node asking the model to call hangup | Deterministic end, and the model cannot hang up mid-conversation (tools scoped per node). MCP tools cannot be scoped per node: only shared tools can. |
+| 23 | Deal links by SMS from the alphanumeric sender `FlyTLV` (messaging profile `flytlv-sms`, Israel only, $5/day cap) | SMS from the Israeli number; WhatsApp | Telnyx Israeli numbers are voice-only; WhatsApp is not enabled at the account level (dropped by the owner). |
+| 24 | SMS only to the caller's own number and only for a deal they were offered; `sms_enabled` KV flag enforced in the tool | Model-supplied phone number; prompt-only flag | Prevents texting strangers or invented links; the flag is a real kill switch without a redeploy. |
+| 25 | Weekend dates (Thu-Sat) and the 3-hour departure cutoff computed on the server in Asia/Jerusalem | Model computes dates | Models mis-compute relative dates; the assistant also gets `{{telnyx_current_time_Asia/Jerusalem}}` (the UTC weekday variable gave the wrong weekday after midnight in Israel). |
+| 26 | A caller with a hidden id (or no conversation id) still gets deals read, but nothing is saved | Refuse the search | Better voice UX; saving needs a caller identity. |
+| 27 | Model `zai-org/GLM-5.3-Flash` for the assistant | GLM-5.3 | GLM-5.3 is not `recommended_for_assistants` and the API rejects it. |
+
 ## Pending decisions
 
-- **Flight status branch** (Israel Airports Authority data) and **SMS**: not started; optional.
+- **Human transfer**: the transfer tool and node exist; they need a `TRANSFER_TO_NUMBER`.
+- **Flight status branch** (Israel Airports Authority data): not started; optional.
 
-## Assumptions to verify on first deploy
+## Verified on deploy
 
-- `telnyx_conversation_id` is present in the webhook payload (example payload omits it; code falls back to `call_control_id`).
-- Edge Python build (Python 3.9) installs `pyproject.toml` dependencies (`telnyx`, `httpx`, `starlette` 0.49.3).
-- Telnyx MCP client accepts `application/json` responses (no SSE).
-- Whether a node with `tools_mode: replace` hides assistant-level MCP tools (MCP scoping per node is not exposed by the API).
-- KV read-your-writes between webhook and MCP server for the session mapping (same region expected).
+- `telnyx_conversation_id` is present for calls and chat; it keys the session (call_control_id only feeds the trace id).
+- Edge Python 3.9 installs `telnyx[webhooks]`, `httpx`, `starlette` 0.49.3 and `tzdata`.
+- The Telnyx MCP client works with `application/json` responses.
+- MCP tools are assistant-level and cannot be scoped per node (only shared tools can).
+- KV read-after-write between webhook and MCP server works (live end-to-end checks).

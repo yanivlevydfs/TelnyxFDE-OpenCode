@@ -332,7 +332,8 @@ async function readCaller(kv: Kv, conv: string): Promise<string | undefined> {
   const prefix = config.optional("SESSION_KEY_PREFIX", "session/");
   let session: unknown;
   try {
-    session = await kv.getJson(`${prefix}${conv}`);
+    // One retry: Telnyx KV occasionally answers a transient 503.
+    session = await kv.getJson(`${prefix}${conv}`).catch(() => kv.getJson(`${prefix}${conv}`));
   } catch (e) {
     error("mcp.session_read_failed", { conversation: conv, error: e instanceof Error ? e.message : String(e) }, e);
     throw new ToolError("The session service is unavailable; please try again later.");
