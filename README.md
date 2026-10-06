@@ -145,6 +145,7 @@ is the greeting speak node.
 | `search_flights` | prompt | append | Calls the `search_deals` MCP tool; reads back the top 2–3 deals (city, price, dates, airline, direct); offers to save one. Never invents data. |
 | `save_deal` | prompt | append | Calls `save_deal` to save one of the deals just read out; the caller picks by position. |
 | `list_saved` | prompt | append | Calls `list_saved_deals` to read back deals saved on previous calls. |
+| `answer_faq` | prompt | append | Answers general questions about the service (booking, one-way, weekends) from fixed facts; no tools. |
 | `transfer_call` | prompt | append | Calls the inline `transfer` tool to hand off to a human. |
 | `farewell` | speak | — | Verbatim goodbye. |
 | `hangup_call` | prompt | replace | Calls the inline `hangup` tool to end the call. |
@@ -160,10 +161,11 @@ backend or a disabled flag is handled deterministically, not by model guess.
 | `greeting` | `identify_intent` | (required single default for a speak node) | default |
 | `identify_intent` | `degraded_notice` | `backend_degraded == "true"` | expression (string ==) |
 | `identify_intent` | `deals_disabled` | `flag_deals_enabled == "false"` | expression (string ==) |
-| `identify_intent` | `timeout_escalate` | `telnyx_conversation_duration_secs >= 300` | expression (number >=) |
+| `identify_intent` | `timeout_escalate` | `telnyx_conversation_duration_secs >= 600` | expression (number >=) |
 | `identify_intent` | `search_flights` | "caller wants to search for cheap flights" | llm |
 | `identify_intent` | `save_deal` | "caller wants to save one of the deals just read out" | llm |
 | `identify_intent` | `list_saved` | "caller wants to hear deals saved on previous calls" | llm |
+| `identify_intent` | `answer_faq` | "caller asks a general question about the service" | llm |
 | `identify_intent` | `transfer_call` | "caller wants to speak to a human agent" | llm |
 | `degraded_notice` | `farewell` | (speak node's single default edge) | default |
 | `deals_disabled` | `farewell` | (speak node's single default edge) | default |
@@ -172,6 +174,9 @@ backend or a disabled flag is handled deterministically, not by model guess.
 | `search_flights` | `identify_intent` | "caller wants a new search / different filters" | llm |
 | `save_deal` | `identify_intent` | "deal saved or could not be saved; another request" | llm |
 | `list_saved` | `identify_intent` | "heard saved deals; may have another request" | llm |
+| `answer_faq` | `search_flights` | "caller wants to search now" | llm |
+| `answer_faq` | `identify_intent` | "question answered; another request" | llm |
+| `timeout_escalate` | `farewell` | "caller declines the transfer, or no human is available" | llm |
 | `transfer_call` | `farewell` | "transfer made or unavailable; wrap up" | llm |
 | `farewell` | `hangup_call` | (speak node's single default edge) | default |
 
@@ -202,29 +207,31 @@ comparing against raw `{{placeholders}}`:
 | `call_count` | actor `callCount` | `0` | greeting / welcome-back |
 | `saved_count` | actor `savedCount` | `0` | greeting / welcome-back |
 | `last_saved_deal` | actor `lastSaved` ("Larnaca, 64 USD") | `` | `identify_intent` welcome-back |
-| `backend_degraded` | any dependency failed/timed out | `false` | expression edge → `degraded_notice` |
+| `backend_degraded` | the actor or the KV session write failed/timed out (a failed flags read only falls back to default flags) | `false` | expression edge → `degraded_notice` |
 | `flag_deals_enabled` | KV flag `deals_enabled` | `true` | expression edge → `deals_disabled` |
 
 ## MCP tools
 
-The MCP server (`fde-mcp`) exposes three tools the workflow's prompt nodes call
-mid-conversation over stateless Streamable HTTP:
+The MCP server (`fde-mcp`, TypeScript) exposes four tools the workflow's prompt
+nodes call mid-conversation over stateless Streamable HTTP:
 
 | Tool | Does | Actor method |
 |---|---|---|
-| `search_deals` | Query flytlv (KV-cached), speak deals back, remember them | `setLastResults` |
+| `search_deals` | Query flytlv (KV-cached) and read deals back with airports, dates, times, flight numbers, nights and price; remember them. Arguments: `destination`, `country`, `weekend` (`upcoming`/`following`; Thu-Sat dates computed on the server), `departure_date`, `max_price`, `direct_only`. Flights leaving within 3 hours are dropped. | `setLastResults` |
 | `save_deal` | Save one of the last-shown deals (the actor validates the choice) | `saveDeal` |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
+| `send_deal_sms` | Text the caller a shown deal and its booking link from the alphanumeric sender `FlyTLV` (Telnyx Israeli numbers are voice-only). Only to the number the caller is calling from, only a deal they were offered. | `saveDeal`, `getSaved` |
 
 Tool failures raise `ToolError` → the LLM receives `isError: true` with a
 caller-friendly message (never a traceback, URL or API key).
 
 ## Observability
 
-Every service emits one structured JSON line per event, a per-KV/actor/tool
-latency `span`, and a shared `trace_id` (= `telnyx_conversation_id`) that
-threads a single call through webhook → actor → MCP. Caller numbers are masked
-to the last 4 digits. See [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md).
+Every service emits one structured JSON line per event, one latency line per
+request (`webhook.request`, `mcp.request`, `actor.request`, each with
+`duration_ms`), and a shared `trace_id` (= `telnyx_conversation_id`) that threads
+a single call through webhook → actor and MCP → actor (sent as `x-trace-id`).
+Caller numbers are masked to the last 4 digits. See [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md).
 
 ### How I'd know within a minute that the assistant is broken
 
@@ -247,8 +254,8 @@ to the last 4 digits. See [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md).
    done | jq -c 'select(.trace_id=="<conversation-id>")'
    ```
    One id, three logs — reconstruct one call end-to-end, including each
-   `mcp.search_deals` / `mcp.save_deal` INFO span, the actor `recordCall` /
-   `saveDeal` lines, and any `flytlv.feed_off` ERROR (the 404 fail-closed feed,
+   `mcp.request` span (tool, status, `duration_ms`), the `mcp.search_deals` /
+   `mcp.save_deal` lines, the `actor.request` spans, and any `flytlv.feed_off` ERROR (the 404 fail-closed feed,
    logged once per instance).
 
 The **`backend_degraded="true"`** dynamic variable flows straight back to the
@@ -257,8 +264,37 @@ calls to `degraded_notice` instead of reading raw `{{placeholders}}` on air — 
 broken backend is partially self-protecting.
 
 Signal cheat-sheet: structured JSON logs (all services) · latency spans
-(`event:"span"`, `duration_ms`) · distributed `trace_id` · platform metrics
-(count / 2xx-4xx-5xx / p50/p95/p99) · degraded-mode flag (response + log).
+(`webhook.request` / `mcp.request` / `actor.request`, `duration_ms`) ·
+distributed `trace_id` · platform metrics (`telnyx-edge metrics <fn>`: count,
+2xx/4xx/5xx, p50/p95/p99) · degraded-mode flag (response + log).
+
+### What broke during development, and how I found it
+
+Each of these was found from logs, deploy records or a live check, not by guessing.
+
+1. **Python functions crashed with `No module named 'function'`.** Signal: the
+   runtime log (`telnyx-edge logs fde-webhook`) showed the import failing on every
+   start, while the same package installed fine locally on Python 3.9. Second
+   signal: the TypeScript build reported `File '/workspace/src/kv.ts' not found`
+   for a file that exists. Proof: shipping the **unmodified official Python
+   scaffold** failed the same way (hatchling: "Unable to determine which files to
+   ship"). Cause: `telnyx-edge` 0.5.9 on Windows zips paths with backslashes, so
+   the Linux builders see flat files instead of folders. Fix: ship from Linux
+   (`.github/workflows/ship.yml`).
+2. **Every KV call returned 401.** Signal: `mcp.session_read_failed` WARNING with
+   `HTTP 401 ... The provided token is expired`; `telnyx-edge bindings validate`
+   confirmed the org API-key binding behind the KV binding had expired. Fix:
+   renew it (`PUT /v2/compute/bindings/{id}`).
+3. **The MCP server was killed about 28 s after every start.** Signal:
+   `mcp.listening` followed by `Terminated` in the runtime log, in a loop. Cause:
+   the platform probes `/health/liveness` and `/health/readiness`; the server only
+   answered `/health`. Fix: answer every path under `/health`.
+4. **The deals cache never worked.** Signal: `mcp.cache_read_failed` WARNING with
+   `HTTP 400 Invalid key format` (searches still succeeded, so only the log showed
+   it). Cause: cache keys contained `|` and `,`. Fix: KV-legal keys.
+5. **"Pick a deal I read out" came back as "service unavailable".** Signal: the
+   actor facade's `dispatch_failed` ERROR showed the actor's `ActorInputError`
+   arriving as an RPC 500. Fix: the facade recovers it and returns 400.
 
 ## Setup
 
@@ -307,31 +343,36 @@ each once:
 Non-secret runtime knobs live in each `func.toml` / `telnyx.toml` `[env_vars]`
 block (budgets, cache TTLs, prefixes, timeouts, `LOG_LEVEL`).
 
-### Ship each service with `telnyx-edge ship`
+### Ship the services (GitHub Actions)
+
+Deploys run from Linux in GitHub Actions
+([.github/workflows/ship.yml](.github/workflows/ship.yml)), because
+`telnyx-edge` on Windows zips paths with backslashes and breaks multi-folder
+functions (see "What broke during development" above). The workflow vendors
+`shared/common.py`, installs `telnyx-edge` v0.5.9, logs in with the repo secret
+`TELNYX_API_KEY` and runs `telnyx-edge ship` for each service.
+
+- **Automatic:** a push to `master` that changes `services/` or `shared/` ships
+  all three services.
+- **Manual:** Actions → *Ship Edge Functions* → *Run workflow*, with `service` =
+  `all`, `webhook`, `mcp-server` or `session-actor`.
+- One ship per function at a time: a second one gets `409 Function Busy`.
+
+From Linux or macOS the same commands work by hand:
 
 ```bash
-# Vendoring first — the Edge build ships one folder at a time, so shared/common.py
-# must be copied into each Python service before ship:
-python scripts/vendor_shared.py
-
-# Dynamic Variables webhook (registered fde-webhook, func_id e5907143-e572-4e86-8880-0de76f057561)
-telnyx-edge ship --from-dir services/webhook
-# → https://fde-webhook-<id>.telnyxcompute.com
-
-# MCP server (registered fde-mcp, func_id bc3393fa-a5f2-4470-b7af-137f3d9c831d)
-telnyx-edge ship --from-dir services/mcp-server
-# → https://fde-mcp-<id>.telnyxcompute.com
-
-# CallerSession Stateful Actor (umbrella telnyx.toml — no func_id)
-cd services/session-actor && telnyx-edge ship
-# → https://fde-session-actor-<id>.telnyxcompute.com
+python scripts/vendor_shared.py                    # copy shared/common.py into Python services
+telnyx-edge ship --from-dir services/webhook       # fde-webhook (Python)
+telnyx-edge ship --from-dir services/mcp-server    # fde-mcp (TypeScript)
+telnyx-edge ship --from-dir services/session-actor # fde-session-actor (umbrella telnyx.toml)
 ```
 
-The Python services' `pyproject.toml` lists the deps Edge installs
-(`telnyx[webhooks]`, `httpx`, `starlette` for the webhook; `telnyx`, `httpx`,
-`mcp` for the MCP server). The actor uses the shared `INTERNAL_API_TOKEN`
-secret (added with `telnyx-edge secrets add INTERNAL_API_TOKEN <value>` and
-read via the `[[secrets]]` Dapr binding).
+The webhook's `pyproject.toml` lists what Edge installs on Python 3.9
+(`telnyx[webhooks]`, `httpx`, `starlette` 0.49.3). The MCP server and the actor
+are TypeScript (`package.json`). The actor reads `INTERNAL_API_TOKEN` through its
+`[[secrets]]` binding. SMS uses the Telnyx messaging profile `flytlv-sms`
+(alphanumeric sender `FlyTLV`, Israel only, $5/day spend cap), configured in
+`services/mcp-server/func.toml`.
 
 ### Provision the assistant (`provision.py`)
 
@@ -344,13 +385,18 @@ python assistant/provision.py --dry-run     # review the body, no API calls
 
 # Provision for real (env filled in — nothing is hardcoded):
 TELNYX_API_KEY=... \
-ASSISTANT_MODEL=telnyx/zai-org/GLM-5.2 \
+ASSISTANT_MODEL=zai-org/GLM-5.3-Flash \
 ASSISTANT_VOICE=Telnyx.KokoroTTS.af_heart \
 WEBHOOK_URL=https://fde-webhook-<id>.telnyxcompute.com \
 MCP_URL=https://fde-mcp-<id>.telnyxcompute.com MCP_API_KEY=... \
 ASSISTANT_PHONE_NUMBER_ID=... TRANSFER_TO_NUMBER=... \
 python assistant/provision.py
 ```
+
+Re-running is safe: an existing integration secret is reused, `MCP_SERVER_ID`
+reuses the registered MCP server, and `ASSISTANT_ID` updates the existing
+assistant instead of creating another. The model must be one Telnyx marks
+`recommended_for_assistants` in `/v2/ai/models` (GLM-5.3 is not; GLM-5.3-Flash is).
 
 It runs four ordered steps (each logged as structured JSON):
 

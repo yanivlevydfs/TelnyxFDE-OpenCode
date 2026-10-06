@@ -5,17 +5,20 @@
 | Signal | Where | How to read it |
 |---|---|---|
 | Structured JSON logs | All services (`shared/common.py`, `session-actor/src/index.ts`) | `telnyx-edge logs <fn> --type runtime --json --tail` |
-| Latency spans (`event: "span"`, `duration_ms`) | Every KV call, actor call, MCP tool, whole webhook request | filter `span` with `jq` |
-| Distributed trace id (`trace_id`) | Webhook → actor → MCP | one id per conversation |
+| Latency spans (`duration_ms`) | One per request: `webhook.request`, `mcp.request` (with the tool name), `actor.request` | `jq 'select(.duration_ms)'` |
+| Distributed trace id (`trace_id`) | Webhook → actor, MCP → actor (`x-trace-id` header) | one id per conversation |
 | Platform metrics (count, 2xx/4xx/5xx, p50/p95/p99) | Edge built-in | `telnyx-edge metrics <fn>` / `telnyx-edge actors metrics CallerSession` |
 | Degraded-mode flag | webhook response + log `outcome: "degraded"` | `backend_degraded` dynamic variable |
 
 ### Log line shape
 
 ```json
-{"ts":"2026-10-04T12:00:00Z","level":"info","service":"webhook","event":"span",
- "trace_id":"<telnyx_conversation_id>","span":"webhook.request","duration_ms":212.4,
- "outcome":"ok","caller":"***0100","assistant_id":"...","degraded":[]}
+{"level":"INFO","event":"webhook.request","trace_id":"<telnyx_conversation_id>",
+ "span":"webhook.request","duration_ms":212,"outcome":"ok","caller":"***0100","degraded":[]}
+{"ts":"...","level":"INFO","service":"fde-mcp","event":"mcp.request","trace_id":"<id>",
+ "method":"tools/call","tool":"search_deals","status":200,"duration_ms":1840}
+{"ts":"...","level":"INFO","service":"session-actor","event":"actor.request","trace_id":"<id>",
+ "entity":"***4567","method":"setLastResults","status":200,"duration_ms":95}
 ```
 
 Caller numbers are masked to the last 4 digits.
@@ -47,4 +50,5 @@ Alert export (optional): `telnyx-edge log-export set <fn> --endpoint <OTLP> --he
 
 ## Debugging trail
 
-_To be filled in during development: one real bug, the signal that exposed it, and the fix._
+Five real bugs, each with the log line or record that exposed it, are in the README:
+[What broke during development, and how I found it](../README.md#what-broke-during-development-and-how-i-found-it).

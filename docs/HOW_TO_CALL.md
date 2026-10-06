@@ -38,6 +38,10 @@ You can combine them: *"Direct flights to Italy next weekend, under 150 dollars.
 
 "Weekend" means trips that leave on a **Thursday, Friday or Saturday**.
 
+You can also just ask a question: *"How do I book?"*, *"Do you do one-way
+flights?"*, *"What counts as a weekend?"* The agent answers briefly and offers
+to search.
+
 ## 3. What you get for each deal
 
 The agent reads out two or three of the cheapest deals. For each one you hear:
