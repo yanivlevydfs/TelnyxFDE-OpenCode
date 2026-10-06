@@ -247,7 +247,11 @@ async def provision(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> Any:
     # Re-running: reuse an already registered MCP server instead of adding another.
     mcp_id = env.get("MCP_SERVER_ID") or await _create_mcp_server(client, env, secret_ref)
     body = assistant_body(env, mcp_id)
-    assistant = await client.ai.assistants.create(**body)
+    if env.get("ASSISTANT_ID"):
+        # Re-running: update the existing assistant (same id, same phone link).
+        assistant = await client.ai.assistants.update(env["ASSISTANT_ID"], **body)
+    else:
+        assistant = await client.ai.assistants.create(**body)
     c.info("provision.assistant", id=assistant.id, name=body["name"])
     await _link_phone_number(client, assistant.id, env)
     return assistant

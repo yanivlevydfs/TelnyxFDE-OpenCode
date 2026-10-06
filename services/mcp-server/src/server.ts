@@ -86,6 +86,22 @@ export interface Deal {
   /** Direct flight (no connections). */
   direct: boolean;
   url: string | undefined;
+  /** Flight details read aloud; present only when flytlv sends them. */
+  fromAirport?: string;
+  toAirport?: string;
+  nights?: number;
+  outbound?: Leg;
+  inbound?: Leg;
+}
+
+/** One direction of the round trip, as spoken to the caller. */
+export interface Leg {
+  departs?: string;
+  arrives?: string;
+  airline?: string;
+  flightNumber?: string;
+  stops?: number;
+  durationMin?: number;
 }
 
 /** A raw flytlv deal (feed may omit many fields). */
@@ -97,7 +113,35 @@ interface RawDeal {
   airline?: string;
   is_direct?: boolean;
   deal_url?: string;
-  destination_airport?: { city?: string; country?: string };
+  nights?: number;
+  origin?: { iata?: string; airport_name?: string };
+  destination_airport?: { city?: string; country?: string; iata?: string; airport_name?: string };
+  [key: string]: unknown; // outbound_* / inbound_* leg fields
+}
+
+/** "Ben Gurion International Airport (TLV)", or whichever part is present. */
+function airport(a?: { iata?: string; airport_name?: string }): string | undefined {
+  if (!a?.airport_name) return a?.iata;
+  return a.iata ? `${a.airport_name} (${a.iata})` : a.airport_name;
+}
+
+/** Copy only the keys whose value is present, so absent data is not spoken. */
+function present<T extends object>(obj: T): Partial<T> | undefined {
+  const out = Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+  return Object.keys(out).length ? (out as Partial<T>) : undefined;
+}
+
+/** One leg from flytlv's `outbound_*` or `inbound_*` fields. */
+function leg(deal: RawDeal, dir: "outbound" | "inbound"): Leg | undefined {
+  const f = (k: string) => deal[`${dir}_${k}`];
+  return present({
+    departs: f("departure_time") as string | undefined,
+    arrives: f("arrival_time") as string | undefined,
+    airline: f("airline") as string | undefined,
+    flightNumber: f("flight_number") as string | undefined,
+    stops: f("stops") as number | undefined,
+    durationMin: f("duration") as number | undefined,
+  });
 }
 
 /** Reduce a raw flytlv deal to the camelCase fields read aloud / shown.
@@ -118,6 +162,15 @@ export function slim(deal: RawDeal, currency: string): Deal {
     airline: deal.airline,
     direct: Boolean(deal.is_direct),
     url: deal.deal_url,
+    // Spoken flight details: airports, times, flight numbers. Added only when
+    // present, so deals without them keep the original shape.
+    ...present({
+      fromAirport: airport(deal.origin),
+      toAirport: airport(deal.destination_airport),
+      nights: deal.nights,
+      outbound: leg(deal, "outbound"),
+      inbound: leg(deal, "inbound"),
+    }),
   };
 }
 
