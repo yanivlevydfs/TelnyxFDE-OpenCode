@@ -69,13 +69,27 @@ one copy.
 You can only save a deal the agent has just read to you. Prices and links
 always come from the deals feed, never from what is said on the call.
 
-## 5. Hear your saved deals
+## 5. Get a deal by text message (SMS)
+
+Say **"Text me the first one"** or **"Send me the Athens link."** You get an
+SMS from **FlyTLV** with the deal's details and the booking link:
+
+> FlyTLV: Larnaca, Cyprus - 64 USD round trip, direct.
+> Out 2026-11-09 08:00 W64604. Back 2026-11-12 06:00 W64603.
+> Book: https://flytlv.app/go?id=tlv-lca-20261109-20261112
+
+- The text goes **only to the number you are calling from**. The agent will not
+  send it to another number.
+- Texting a deal also saves it.
+- SMS works for **Israeli mobile numbers** only.
+
+## 6. Hear your saved deals
 
 Say **"What deals did I save?"** The agent reads back every deal you have
 saved, on this call or on earlier calls from the same phone number, with the
 same full details.
 
-## 6. Change your search or finish
+## 7. Change your search or finish
 
 - New search: *"Show me something else"*, *"What about Spain?"*
 - Finish: *"That's all, thanks."* The agent says goodbye and ends the call.
@@ -91,8 +105,8 @@ same full details.
   one, the agent apologises and helps you itself, or ends the call politely.
 - **If the deals service is down**, the agent tells you and asks you to call
   back in a few minutes.
-- **Booking:** the agent does not book flights. Each deal has a flytlv.app link
-  for booking online.
+- **Booking:** the agent does not book flights. Ask for the deal by SMS and
+  book with the flytlv.app link.
 
 ## Quick test script (about 3 minutes)
 
@@ -101,7 +115,8 @@ same full details.
    numbers and price.
 3. Say *"Save the first one."*
 4. Say *"Any deals to Greece for next weekend?"*, then save one.
-5. Say *"What deals did I save?"* You should hear both.
-6. Say *"That's all, thanks."* and hang up.
-7. Call again from the same phone. The agent should say "Welcome back" and
+5. Say *"Text me that one."* You should get an SMS from FlyTLV.
+6. Say *"What deals did I save?"* You should hear both.
+7. Say *"That's all, thanks."* and hang up.
+8. Call again from the same phone. The agent should say "Welcome back" and
    mention your last saved deal.
