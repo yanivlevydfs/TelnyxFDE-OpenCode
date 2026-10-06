@@ -21,7 +21,7 @@ expression-edge routing (`backend_degraded`, `flag_*`).
 ## Variables returned
 
 | Variable | Source | Example |
-|---|---|---|
+| --- | --- | --- |
 | `caller_known` | actor profile present | `true` |
 | `call_count` | actor `callCount` | `3` |
 | `saved_count` | actor `savedCount` | `1` |

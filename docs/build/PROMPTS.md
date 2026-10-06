@@ -20,7 +20,7 @@ Inference is billed to the Telnyx account. If the balance goes negative, Telnyx 
 ## Status
 
 | Step | Component | Model | Result |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Shared code | GLM-5.2 | Done: 13/13 tests pass |
 | 2 | Webhook | Kimi-K3 | Done: 9/9 tests pass; `func.toml` fixed to the official format |
 | 3 | MCP server | GLM-5.2 | Stopped by error 20015 before writing files; rerun |

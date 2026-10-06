@@ -24,7 +24,7 @@ If you have called before and saved a deal, the agent also says
 Say what you want in your own words. Examples:
 
 | You want | Say something like |
-|---|---|
+| --- | --- |
 | The cheapest trip anywhere | "I need cheap deals to anywhere." |
 | A trip this coming weekend | "Any cheap deals for next weekend?" |
 | The weekend after that | "What about the weekend after?" |

@@ -22,7 +22,7 @@ webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
 ## Components
 
 | Component | Runs | Owns | Talks to |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Assistant + workflow | Telnyx Voice AI | Conversation flow, routing | webhook (once), mcp-server (per tool call) |
 | webhook | Edge Function, Python | Nothing (stateless) | KV, session-actor |
 | mcp-server | Edge Function, TypeScript | Nothing (stateless) | KV, session-actor |
@@ -32,7 +32,7 @@ webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
 ## Choosing the primitive for each piece of state
 
 | State | Primitive | Why |
-|---|---|---|
+| --- | --- | --- |
 | Feature flags (toggle workflow paths) | **KV** | Read-mostly, global, changed by an operator; eventual consistency is fine. |
 | Cached flytlv deal searches | **KV** with `ttl_secs` | Avoids repeat upstream calls; stale-for-seconds is acceptable. |
 | Conversation → caller mapping | **KV** with `ttl_secs` | Written once by the webhook, read by MCP tools; no read-modify-write. |

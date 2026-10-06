@@ -22,7 +22,7 @@ See [Which model built each component](#which-model-built-each-component).
 ## Status
 
 | Component | Folder | First version (OpenCode) | Since first deploy | Tests | Deployed |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Shared code | `shared/common.py` | GLM-5.2 | Claude Code | 13/13 | vendored into each Python service |
 | Dynamic Variables webhook | `services/webhook` | Kimi-K3 | Claude Code | 9/9 | live, `fde-webhook` |
 | MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code | 11/11 | live, `fde-mcp` |
@@ -37,7 +37,7 @@ Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python 
 **Live endpoints and phone number**
 
 | What | Where |
-|---|---|
+| --- | --- |
 | Phone | **+972 76-567-1113** (how to talk to it: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)) |
 | Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` (GLM-5.3-Flash) |
 | Webhook (Edge Function) | https://fde-webhook-e5907143-e.telnyxcompute.com |
@@ -100,7 +100,7 @@ Functions. Only unit tests use fakes (owner's rule #14 — no local stand-ins).
 ### Components
 
 | Component | Runtime | Owns | Talks to |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Assistant + workflow | Telnyx Voice AI | conversation flow, routing | webhook (once/call), mcp-server (per tool call) |
 | `webhook` | Edge Function · Python | nothing (stateless) | KV REST, session-actor HTTP |
 | `mcp-server` | Edge Function · TypeScript | nothing (stateless) | KV binding, flytlv HTTP, session-actor HTTP |
@@ -114,7 +114,7 @@ This is the reasoning for every piece: see `docs/design/DECISIONS.md` (#9, #11, 
 the full rationale.
 
 | State | Primitive | Why this primitive |
-|---|---|---|
+| --- | --- | --- |
 | Feature flags (toggle workflow paths) | **KV** (`flags/assistant`) | Read-mostly, set by an operator, toggles routing without a redeploy; eventual consistency is fine. KV is the cheapest global read here. |
 | Cached flytlv deal searches | **KV** + `ttl_secs` (`cache/deals/<sig>`) | Avoids repeat upstream calls for identical queries; stale-for-seconds is acceptable and the same key can re-`slim()` without another hit (the raw payload is cached). |
 | Conversation → caller mapping | **KV** + `ttl_secs` (`session/<conv_id>`) | Written **once** by the webhook at call start, read-only by MCP tools. No read-modify-write, so KV wins. Deliberately *not* an LLM-supplied tool arg — a malicious/invented number could act on another caller's saved deals (decision #11). |
@@ -142,7 +142,7 @@ is the greeting speak node.
 ### Nodes
 
 | Node | Type | `instructions_mode` | Does |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `greeting` | speak | — | Verbatim welcome + AI disclosure. The start node; its one default edge. |
 | `identify_intent` | prompt | append | Routing hub. If `caller_known`, acknowledges "welcome back" with `last_saved_deal`; then detects intent. Expression edges are evaluated before the model turn (deterministic facts never depend on model judgement — decision #12). |
 | `degraded_notice` | speak | — | Apology when the backend is degraded; flows to farewell. |
@@ -163,7 +163,7 @@ Declaration order is priority order. From `identify_intent`, expression edges
 backend or a disabled flag is handled deterministically, not by model guess.
 
 | From | To | Condition | Kind |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `greeting` | `identify_intent` | (required single default for a speak node) | default |
 | `identify_intent` | `degraded_notice` | `backend_degraded == "true"` | expression (string ==) |
 | `identify_intent` | `deals_disabled` | `flag_deals_enabled == "false"` | expression (string ==) |
@@ -208,7 +208,7 @@ at call start; if it fails entirely the defaults keep expression edges from
 comparing against raw `{{placeholders}}`:
 
 | Variable | Source | Default | Used by |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `caller_known` | actor profile present | `false` | `identify_intent` (welcome-back) |
 | `call_count` | actor `callCount` | `0` | greeting / welcome-back |
 | `saved_count` | actor `savedCount` | `0` | greeting / welcome-back |
@@ -240,7 +240,7 @@ The MCP server (`fde-mcp`, TypeScript) exposes four tools the workflow's prompt
 nodes call mid-conversation over stateless Streamable HTTP:
 
 | Tool | Does | Actor method |
-|---|---|---|
+| --- | --- | --- |
 | `search_deals` | Query flytlv (KV-cached) and read deals back with airports, dates, times, flight numbers, nights and price; remember them. Arguments: `destination`, `country`, `weekend` (`upcoming`/`following`; Thu-Sat dates computed on the server), `departure_date`, `max_price`, `direct_only`. Flights leaving within 3 hours are dropped. | `setLastResults` |
 | `save_deal` | Save one of the last-shown deals (the actor validates the choice) | `saveDeal` |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
@@ -310,7 +310,7 @@ counters reset) and KV loses concurrent increments; the actor's one-at-a-time
 method turns make every increment an atomic read-modify-write.
 
 | Metric | From | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `webhook.calls`, `webhook.rejected` | webhook | calls started; bad signature or JSON |
 | `webhook.degraded`, `webhook.failed.<dep>` | webhook | calls on the degraded path, and which dependency failed |
 | `callers.new` / `returning` / `anonymous` | webhook | who is calling |
@@ -391,7 +391,7 @@ each once:
 ### Edge secrets list
 
 | Secret | Used by | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `TELNYX_API_KEY` | webhook, mcp-server, assistant | Telnyx SDK auth (auto-injected on Edge by the `[telnyx]` binding; also used by `provision.py`) |
 | `TELNYX_PUBLIC_KEY` | webhook | Ed25519 webhook signature verification (`client.webhooks.unwrap`) |
 | `KV_NAMESPACE_ID` | webhook, mcp-server | Telnyx KV namespace id (from `kv create`) |
@@ -482,7 +482,7 @@ reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek
 `Qwen3.x`, `MiniMax`.
 
 | Component | Folder | First version built by |
-|---|---|---|
+| --- | --- | --- |
 | Shared code (config, JSON logging, `Kv`, `ActorClient`, sessions, phone) | `shared/common.py` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 | Dynamic Variables webhook (signature, budget, degraded defaults) | `services/webhook` | **Kimi-K3** · `telnyx/moonshotai/Kimi-K3` |
 | MCP server (3 tools, flytlv client, bearer auth; Python, then ported to TypeScript for Edge) | `services/mcp-server` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
