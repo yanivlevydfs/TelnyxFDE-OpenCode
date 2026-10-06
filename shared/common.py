@@ -17,7 +17,9 @@ import re
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 import telnyx
@@ -83,11 +85,25 @@ def set_trace_id(tid: str | None) -> str:
     return _trace_id
 
 
+def _log_tz():
+    """Logging timezone from LOG_TIMEZONE (default Asia/Jerusalem); UTC if unknown."""
+    try:
+        return ZoneInfo(os.environ.get("LOG_TIMEZONE", "Asia/Jerusalem"))
+    except (ZoneInfoNotFoundError, ValueError):
+        return timezone.utc
+
+
+def _local_ts(created: float) -> str:
+    """ISO 8601 with offset, e.g. 2026-10-07T00:45:12.345+03:00."""
+    return datetime.fromtimestamp(created, _log_tz()).isoformat(timespec="milliseconds")
+
+
 class _JsonFormatter(logging.Formatter):
     """One JSON object per log line: level, event, trace_id, fields, exception."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
+            "ts": _local_ts(record.created),
             "level": record.levelname,
             "event": record.getMessage(),
             # Read from the shared logger so a set_trace_id in any vendored copy

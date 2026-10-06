@@ -31,6 +31,7 @@
  * Run tests:  cd services/session-actor && npm test
  */
 
+import { localIso } from "./time.js";
 import type { ActorNamespace, Secrets } from "@telnyx/edge-runtime";
 import {
   CallerSession,
@@ -256,7 +257,7 @@ function log(
 ): void {
   if (LEVELS[level] < LEVELS[logLevel]) return;
   const line = JSON.stringify({
-    ts: new Date().toISOString(),
+    ts: localIso(),
     level,
     service: "session-actor",
     event,
