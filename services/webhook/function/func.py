@@ -79,8 +79,13 @@ async def _fetch_context(kv: Any, actor: Any, entity: str, conversation_id: str)
 
     try:
         results = await asyncio.wait_for(asyncio.gather(*calls, return_exceptions=True), timeout=budget)
-    except TimeoutError:  # budget hit: every outstanding call counts as failed
-        results = [TimeoutError(f"dependency budget exceeded ({budget}s)") for _ in calls]
+    except asyncio.TimeoutError:  # budget hit: every outstanding call counts as failed.
+        # Use asyncio.TimeoutError (not the builtin TimeoutError): on Python 3.9
+        # `asyncio.wait_for` raises asyncio.TimeoutError, which is NOT a subclass
+        # of the builtin TimeoutError (`except TimeoutError:` would miss it). On
+        # 3.11+ asyncio.TimeoutError is an alias for the builtin, so this catches
+        # the timeout on every supported interpreter.
+        results = [asyncio.TimeoutError(f"dependency budget exceeded ({budget}s)") for _ in calls]
 
     out: dict[str, Any] = dict(zip(names, results))
     degraded = [name for name, result in out.items() if isinstance(result, BaseException)]
