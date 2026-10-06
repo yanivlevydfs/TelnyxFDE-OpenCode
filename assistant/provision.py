@@ -42,9 +42,8 @@ _REPO_SHARED = str(Path(__file__).resolve().parent.parent / "shared")
 if _REPO_SHARED not in sys.path:
     sys.path.insert(0, _REPO_SHARED)
 
-import common as c  # noqa: E402  (structured logging + config helpers)
-import flow  # noqa: E402  (graph, tools and default variables)
-
+import common as c
+import flow
 
 # ------------------------------------------------------------- base prompt
 #

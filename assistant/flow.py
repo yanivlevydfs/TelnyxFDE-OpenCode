@@ -317,7 +317,7 @@ def validate(flow: dict[str, Any]) -> list[str]:
 
     nodes = flow.get("nodes") or []
     edges = flow.get("edges") or []
-    node_ids: set[str] = {n.get("id") for n in nodes if isinstance(n, dict)}
+    node_ids: set[Any] = {n.get("id") for n in nodes if isinstance(n, dict)}
 
     # The start node must exist.
     start = flow.get("start_node_id")
@@ -325,7 +325,7 @@ def validate(flow: dict[str, Any]) -> list[str]:
         problems.append(f"start node {start!r} not found in nodes")
 
     # Duplicate node ids would make edges ambiguous.
-    seen: dict[str, int] = {}
+    seen: dict[Any, int] = {}  # ids may be missing (None); validate reports it
     for n in nodes:
         if isinstance(n, dict):
             seen[n.get("id")] = seen.get(n.get("id"), 0) + 1
@@ -354,7 +354,7 @@ def validate(flow: dict[str, Any]) -> list[str]:
 
     # A speak node must have exactly one outgoing default edge so the
     # conversation always has a defined next step after the scripted line.
-    out_by_src: dict[str, list[dict[str, Any]]] = {}
+    out_by_src: dict[Any, list[dict[str, Any]]] = {}
     for e in edges:
         if isinstance(e, dict):
             out_by_src.setdefault(e.get("start_node_id"), []).append(e)
