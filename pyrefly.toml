@@ -2,3 +2,5 @@
 # shared/ and assistant/ hold modules imported by bare name (common, flow).
 search-path = [".", "shared", "assistant", "services/webhook"]
 python-interpreter = ".venv/Scripts/python.exe"
+# UnitTest/ holds the acceptance tests (not edited); their fakes are duck-typed.
+project-excludes = ["UnitTest/**", "**/node_modules/**", "**/.venv/**"]

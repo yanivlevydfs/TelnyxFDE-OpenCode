@@ -79,7 +79,7 @@ def set_trace_id(tid: str | None) -> str:
     """
     global _trace_id
     _trace_id = tid or uuid.uuid4().hex
-    logger._trace_id = _trace_id
+    setattr(logger, "_trace_id", _trace_id)  # noqa: B010 (Logger has no such attr for type checkers)
     return _trace_id
 
 
@@ -108,7 +108,7 @@ class _StdoutHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             print(self.format(record))
-        except Exception:
+        except Exception:  # noqa: BLE001 (logging.Handler.emit contract: never raise)
             self.handleError(record)
 
 
@@ -126,7 +126,7 @@ logger.propagate = False  # never bubble up to the root logger
 # Initialise the shared trace id once (first importer wins; set_trace_id updates
 # it thereafter). Lives on the logger object so every vendored copy shares it.
 if not hasattr(logger, "_trace_id"):
-    logger._trace_id = _trace_id
+    setattr(logger, "_trace_id", _trace_id)  # noqa: B010 (Logger has no such attr for type checkers)
 
 
 def info(event: str, **fields: Any) -> None:
