@@ -65,7 +65,10 @@ export class ActorClient implements Actor {
     } catch (e) {
       throw new ActorError(`actor ${entityId}/${method}: ${e instanceof Error ? e.message : String(e)}`);
     }
-    if (resp.status >= 500) {
+    // Only 400/409/422 are the caller's input (e.g. "deal not in the last search
+    // results"); auth/routing errors (401/403/404/405) and 5xx mean the service
+    // is unusable. ActorError messages are logged, never shown to the model.
+    if (resp.status >= 500 || ![400, 409, 422].includes(resp.status) && resp.status >= 400) {
       throw new ActorError(`actor ${entityId}/${method} returned ${resp.status}`);
     }
     if (resp.status >= 400) {
@@ -84,7 +87,8 @@ export class ActorClient implements Actor {
           /* keep status fallback */
         }
       }
-      throw new ActorInputError(`actor ${entityId}/${method}: ${msg}`);
+      // The actor's own reason only: no phone number or method name reaches the model.
+      throw new ActorInputError(msg);
     }
     return await resp.json();
   }

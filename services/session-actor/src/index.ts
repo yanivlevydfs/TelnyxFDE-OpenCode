@@ -82,6 +82,14 @@ interface Env {
  * Default Worker export. `worker.fetch(req, env)` is the Edge entry point;
  * tests import this object as `worker` and call `worker.fetch(request, env)`.
  */
+/** Constant-time string compare, so response timing does not leak the token. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     // Only POST is used by the actor facade.
@@ -94,15 +102,22 @@ export default {
     if (!match) return error(404, "not found");
 
     const [, entityRaw, methodName] = match;
-    const entity = decodeURIComponent(entityRaw ?? "");
 
     // Auth first — never leak routing reasons to an unauthenticated caller.
     const expectedToken = await internalTokenFor(env);
     if (
       !expectedToken ||
-      req.headers.get("authorization") !== `Bearer ${expectedToken}`
+      !safeEqual(req.headers.get("authorization") ?? "", `Bearer ${expectedToken}`)
     ) {
       return error(401, "unauthorized");
+    }
+
+    // Decode after auth: a malformed escape ("%E0") is a 400, not a crash.
+    let entity: string;
+    try {
+      entity = decodeURIComponent(entityRaw ?? "");
+    } catch {
+      return error(400, "invalid actor id");
     }
 
     // Entity id must be digits only — matches `entity_id` from common.py

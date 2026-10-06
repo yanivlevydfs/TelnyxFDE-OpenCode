@@ -57,8 +57,8 @@ BASE_INSTRUCTIONS = (
     "round-trip flights from Tel Aviv over the phone, using tools for all flight "
     "data — you never invent prices, dates, airlines, cities or booking URLs. "
     "Keep responses short and spoken-friendly; spell amounts naturally (for "
-    "example 'sixty-four dollars'). Prices are in {{currency}} when the tool "
-    "gives a currency. Be honest when a tool fails, and offer to transfer the "
+    "example 'sixty-four dollars') and always say the currency the tool "
+    "returned. Be honest when a tool fails, and offer to transfer the "
     "caller to a human if you cannot help."
 )
 
@@ -102,7 +102,7 @@ def assistant_body(env: dict[str, str], mcp_id: str,
     ``--dry-run`` with just the required vars produces a complete body.
     """
     if conversation_timeout_secs is None:
-        conversation_timeout_secs = _int(env, "CONVERSATION_TIMEOUT_SECS", 300)
+        conversation_timeout_secs = _int(env, "CONVERSATION_TIMEOUT_SECS", 600)
 
     transfer_from = _opt(env, "ASSISTANT_PHONE_NUMBER", "")
     transfer_to = _opt(env, "TRANSFER_TO_NUMBER", "")
@@ -277,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         # --dry-run does not call the SDK: emit the body so it can be reviewed
         # (and asserted on by the unit tests).
-        timeout = _int(env, "CONVERSATION_TIMEOUT_SECS", 300)
+        timeout = _int(env, "CONVERSATION_TIMEOUT_SECS", 600)
         body = assistant_body(env, env.get("MCP_SERVER_ID", "mcp-server-id"), timeout)
         print(json.dumps(body, indent=2, sort_keys=True))
         return 0

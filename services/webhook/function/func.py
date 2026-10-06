@@ -78,20 +78,25 @@ async def _fetch_context(kv: Any, actor: Any, entity: str, conversation_id: str)
                 f"{session_prefix}{conversation_id}", {"entity_id": entity},
                 ttl_secs=c.integer("SESSION_TTL", 3600)))
 
-    try:
-        results = await asyncio.wait_for(asyncio.gather(*calls, return_exceptions=True), timeout=budget)
-    except asyncio.TimeoutError:  # budget hit: every outstanding call counts as failed.
-        # Use asyncio.TimeoutError (not the builtin TimeoutError): on Python 3.9
-        # `asyncio.wait_for` raises asyncio.TimeoutError, which is NOT a subclass
-        # of the builtin TimeoutError (`except TimeoutError:` would miss it). On
-        # 3.11+ asyncio.TimeoutError is an alias for the builtin, so this catches
-        # the timeout on every supported interpreter.
-        results = [asyncio.TimeoutError(f"dependency budget exceeded ({budget}s)") for _ in calls]
+    # Bound the batch by the budget but keep whatever finished in time:
+    # a slow actor must not discard flags that already arrived.
+    tasks = [asyncio.ensure_future(call) for call in calls]
+    done, pending = await asyncio.wait(tasks, timeout=budget)
+    for task in pending:
+        task.cancel()
+    results: list[Any] = [
+        (t.exception() or t.result()) if t in done
+        else asyncio.TimeoutError(f"dependency budget exceeded ({budget}s)")
+        for t in tasks
+    ]
 
     out: dict[str, Any] = dict(zip(names, results))
-    degraded = [name for name, result in out.items() if isinstance(result, BaseException)]
-    for name in degraded:
+    failed = [name for name, result in out.items() if isinstance(result, BaseException)]
+    for name in failed:
         c.error("webhook.dependency_failed", dependency=name, error=str(out[name]))
+    # Only the actor and the session mapping break the call (the MCP tools need
+    # both); a failed flags read just falls back to default flags.
+    degraded = [name for name in failed if name != "flags"]
 
     flags = out.get("flags")
     profile = out.get("profile")
@@ -129,7 +134,8 @@ def _flag_vars(flags: dict) -> dict[str, str]:
 def _dynamic_variables(profile: dict, flags: dict, degraded: bool) -> dict[str, str]:
     """The flat string-only variable set returned to Telnyx."""
     return {
-        "caller_known": "true" if profile else "false",
+        # Known = called before (recordCall already counted this call).
+        "caller_known": "true" if profile.get("callCount", 0) > 1 else "false",
         "call_count": str(profile.get("callCount", 0)),
         "saved_count": str(profile.get("savedCount", 0)),
         "last_saved_deal": _last_saved_deal(profile),
@@ -166,6 +172,10 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
             conversation_id = str(payload.get("telnyx_conversation_id") or payload.get("call_control_id") or "")
             c.set_trace_id(conversation_id or None)  # trace follows the conversation
             entity = c.entity_id(phone)  # digits only, '' for anonymous callers
+            # Only an E.164 caller id is an identity (and an SMS destination): a
+            # national number or SIP URI would collide or text the wrong number.
+            if not (phone.strip().startswith("+") and 8 <= len(entity) <= 15):
+                entity = ""
 
             flags, profile, degraded = await _fetch_context(kv, actor, entity, conversation_id)
             span["outcome"] = "degraded" if degraded else "ok"
