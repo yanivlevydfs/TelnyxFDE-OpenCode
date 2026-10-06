@@ -115,7 +115,7 @@ interface RawDeal {
   deal_url?: string;
   nights?: number;
   origin?: { iata?: string; airport_name?: string };
-  destination_airport?: { city?: string; country?: string; iata?: string; airport_name?: string };
+  destination_airport?: { city?: string; country?: string; country_code?: string; iata?: string; airport_name?: string };
   [key: string]: unknown; // outbound_* / inbound_* leg fields
 }
 
@@ -207,17 +207,56 @@ function conversationId(extra: unknown): string {
   return "";
 }
 
+/** YYYY-MM-DD and weekday (0=Sun) of `d` in the caller's timezone. */
+function localDay(d: Date, tz: string): { iso: string; dow: number } {
+  const iso = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+  const dow = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return { iso, dow };
+}
+
+/** Thursday, Friday and Saturday departure dates for a weekend, computed on
+ * the server so the model never guesses dates. "upcoming" = the coming
+ * weekend (today counts if it is Thu-Sat); "following" = the one after. */
+export function weekendDates(which: "upcoming" | "following", now = new Date()): string[] {
+  const tz = config.optional("CALLER_TIMEZONE", "Asia/Jerusalem");
+  const { iso, dow } = localDay(now, tz);
+  const today = new Date(`${iso}T12:00:00Z`);
+  // This week's Thursday: ahead on Sun-Wed, behind on Fri/Sat (past days are dropped).
+  const offset = 4 - dow + (which === "following" ? 7 : 0);
+  const days: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today.getTime() + (offset + i) * 86_400_000);
+    const day = d.toISOString().slice(0, 10);
+    if (day >= iso) days.push(day); // never search in the past
+  }
+  return days;
+}
+
+/** Keep deals whose destination is in `country` (English name or ISO code). */
+export function inCountry(deals: RawDeal[], country: string): RawDeal[] {
+  const want = country.trim().toLowerCase();
+  return deals.filter((d) => {
+    const a = d.destination_airport ?? {};
+    return [a.country, a.country_code, d.destination_country, d.destination_country_code]
+      .some((v) => typeof v === "string" && v.toLowerCase() === want);
+  });
+}
+
 /** Canonical, string-only flytlv query params for a search. */
 function buildParams(
   destination: string,
   directOnly: boolean,
   maxPrice: number,
   departureDate: string,
+  byCountry = false,
 ): Record<string, string> {
   const params: Record<string, string> = {
     sort: "cheapest", // cheapest first per the feed docs
     one_per_destination: "true", // at most one deal per city
-    limit: String(config.integer("DEALS_FETCH_LIMIT", 20)),
+    // A country filter runs on our side, so fetch every destination's best deal.
+    limit: String(byCountry
+      ? config.integer("DEALS_COUNTRY_FETCH_LIMIT", 300)
+      : config.integer("DEALS_FETCH_LIMIT", 20)),
   };
   if (destination.trim()) params.destination = destination.trim().toUpperCase();
   if (directOnly) params.stops = "0"; // direct flights only
@@ -309,7 +348,11 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): Mcp
         destination: z.string().optional().describe("Destination IATA airport code, e.g. LCA."),
         direct_only: z.boolean().optional().describe("Limit to direct flights only."),
         max_price: z.number().optional().describe("Maximum price in the feed's currency."),
-        departure_date: z.string().optional().describe("Desired departure date (YYYY-MM-DD)."),
+        departure_date: z.string().optional().describe("Departure date YYYY-MM-DD, or a comma-separated list of dates."),
+        weekend: z.enum(["upcoming", "following"]).optional()
+          .describe("Weekend trips (Thu/Fri/Sat departures): 'upcoming' = this/next weekend, 'following' = the weekend after. Dates are computed by the server."),
+        country: z.string().optional()
+          .describe("Destination country, English name or ISO code (e.g. 'Greece' or 'GR'). Use instead of destination for a whole country."),
       },
     },
     async (args, extra) => {
@@ -319,11 +362,13 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): Mcp
         if (!conv) throw new ToolError("I can't identify this call; please hang up and try again.");
         const entityId = await bestEffortCaller(kv, conv);
 
+        const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");
         const params = buildParams(
           args.destination ?? "",
           args.direct_only ?? false,
           args.max_price ?? 0,
-          args.departure_date ?? "",
+          dates,
+          Boolean(args.country),
         );
         const key = cacheKey(params);
         const ttl = config.integer("DEALS_CACHE_TTL", 300);
@@ -363,7 +408,8 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): Mcp
         }
 
         const currency = payload.currency ?? "";
-        const dealsAll = (payload.deals ?? []) as RawDeal[];
+        let dealsAll = (payload.deals ?? []) as RawDeal[];
+        if (args.country) dealsAll = inCountry(dealsAll, args.country);
         const limit = config.integer("DEALS_RESULT_LIMIT", 5);
         const slimmed = dealsAll.slice(0, limit).map((d) => slim(d, currency));
 
