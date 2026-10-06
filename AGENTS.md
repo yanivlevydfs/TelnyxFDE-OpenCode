@@ -48,7 +48,7 @@ scripts/ops/                         live_check.py, metrics.py, actor_concurrenc
 docs/challenge/                      code_challenge.md (the brief), USE_CASE.md
 docs/design/                         ARCHITECTURE, DECISIONS, OBSERVABILITY
 docs/guides/                         HOW_TO_CALL (callers), DEMO_SCRIPT (demo day)
-docs/build/PROMPTS.md                OpenCode build prompts
+docs/build/PROMPTS.md, DOGFOODING.md OpenCode build prompts; dogfooding notes
 tests/                            acceptance tests (do not edit) + check_* self-checks
 ```
 

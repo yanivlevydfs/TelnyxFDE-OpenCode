@@ -10,13 +10,18 @@ expression-edge routing (`backend_degraded`, `flag_*`).
 1. **Verify** the Telnyx Ed25519 signature + timestamp window via the official
    SDK (`client.webhooks.unwrap`) — *before* parsing the body. Bad/stale →
    `401`, invalid JSON → `400`.
-2. In **parallel, under `WEBHOOK_BUDGET_MS`**:
-   - read feature flags from KV (`KV_FLAGS_KEY`),
+2. In **parallel, under `WEBHOOK_BUDGET_MS` (2.5 s)**:
+   - read feature flags from KV (`KV_FLAGS_KEY`), cached in memory for
+     `FLAGS_CACHE_SECS` (60 s) because a Telnyx KV read takes 1-4 s;
    - call `CallerSession.recordCall` on the caller's Stateful Actor
-     (entity id = caller's phone, digits only),
-   - write `session/<telnyx_conversation_id> → {"entity_id": ...}` in KV so the
-     MCP server can resolve the caller later (TTL = `SESSION_TTL`).
-3. Return `{"dynamic_variables": {...}}`.
+     (entity id = caller's E.164 phone, digits only).
+3. Return `{"dynamic_variables": {...}}`. Only an actor failure sets
+   `backend_degraded="true"`; a failed flags read falls back to default flags.
+4. **After the response** (Starlette background task): write
+   `session/<telnyx_conversation_id> → {"entity_id": ...}` in KV (TTL
+   `SESSION_TTL`) so the MCP tools can resolve the caller, and send this call's
+   counters and latency to the `MetricsCounter` actor. A KV write takes ~2 s, and
+   the first tool call comes seconds later, after the greeting.
 
 ## Variables returned
 

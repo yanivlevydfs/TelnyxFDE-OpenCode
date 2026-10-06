@@ -9,6 +9,10 @@
 | Distributed trace id (`trace_id`) | Webhook → actor, MCP → actor (`x-trace-id` header) | one id per conversation |
 | Platform metrics (count, 2xx/4xx/5xx, p50/p95/p99) | Edge built-in | `telnyx-edge metrics <fn>` / `telnyx-edge actors metrics CallerSession` |
 | Degraded-mode flag | webhook response + log `outcome: "degraded"` | `backend_degraded` dynamic variable |
+| Service metrics (counters + latency) | `MetricsCounter` Stateful Actor, one batched update per request from the webhook and the MCP server | `python scripts/ops/metrics.py` (`metrics.snapshot` JSON line: counts, degraded rate, cache hit rate, latency) |
+
+Every `ts` is in Israel time (`LOG_TIMEZONE`, default `Asia/Jerusalem`), ISO 8601
+with the offset, e.g. `2026-10-07T01:30:15.610+03:00`.
 
 ### Log line shape
 
@@ -52,3 +56,13 @@ Alert export (optional): `telnyx-edge log-export set <fn> --endpoint <OTLP> --he
 
 Five real bugs, each with the log line or record that exposed it, are in the README:
 [What broke during development, and how I found it](../../README.md#what-broke-during-development-and-how-i-found-it).
+
+### The metrics caught a live bug
+
+After the metrics actor went live, one snapshot showed `webhook.calls 17`,
+`webhook.degraded 17`, `webhook.failed.session 17`, and `webhook.request` averaging
+1206 ms, exactly the 1.2 s budget. The webhook logs named the cause:
+`dependency budget exceeded (1.2s)` for the flags read and the session write.
+Timing Telnyx KV over REST directly gave 1.2-3.7 s per read and ~2 s per write.
+Fix: the session write moved after the response, flags are cached for 60 s, and
+only the actor call stays in the (2.5 s) budget.

@@ -30,7 +30,7 @@ greeting (speak — verbatim disclosure)
                   ├─ llm "general question"    → answer_faq     ─┬─→ search_flights
                   │                                              └─→ identify_intent
                   ├─ llm "speak to a human"    → transfer_call  ──→ farewell
-                  └─ llm "caller is finished"  → farewell (speak) → hangup_call (prompt)
+                  └─ llm "caller is finished"  → farewell (speak) → hangup_call (tool node: shared hangup tool)
    (search_flights, save_deal, list_saved and answer_faq also have a
     "caller is finished" edge to farewell)
 ```
@@ -75,7 +75,10 @@ nothing is hardcoded. The CLI runs four steps in order:
 2. **MCP server** — `/ai/mcp_servers` pointing at the deployed MCP Edge Function,
    authenticated with the secret as `api_key_ref`.
 3. **assistant** — `/ai/assistants` with the workflow, dynamic-variables
-   webhook, MCP server reference and inline `hangup`/`transfer` tools.
+   webhook (8 s timeout, Telnyx's guidance for Edge cold starts), MCP server
+   reference and the inline `transfer` tool. Ending the call is a terminal
+   **tool node** running the shared hangup tool (`HANGUP_TOOL_ID`, created on
+   first run), so no prompt node can hang up mid-conversation.
 4. **phone number** — links an owned number to the assistant's voice connection.
 
 `--dry-run` skips all API calls and prints the assistant body that *would* be
@@ -100,12 +103,16 @@ created (used by the unit test).
 | `ASSISTANT_DESCRIPTION` | … | assistant description |
 | `ASSISTANT_PHONE_NUMBER` | `` | transfer `from` (caller-id of transferred leg) |
 | `TRANSFER_TO_NUMBER` | `` | transfer `to` (human agent); empty ⇒ no transfer tool |
+| `TRANSFER_TO_NAME` | `` | the human's name the assistant offers (e.g. Ofek) |
+| `HANGUP_TOOL_ID` | `` | shared hangup tool for the End Call tool node; created if empty |
+| `ASSISTANT_ID` | `` | update this assistant instead of creating one |
+| `MCP_SERVER_ID` | `` | reuse this registered MCP server |
 | `ASSISTANT_PHONE_NUMBER_ID` | `` | number id to link to the assistant (step 4) |
 | `ASSISTANT_CONNECTION_ID` | `` | voice connection id for the link (else read from the assistant record) |
 | `MCP_API_KEY_REF` | `flytlv-mcp-key` | integration secret identifier |
 | `MCP_SERVER_NAME` | `flytlv-mcp` | MCP server name |
-| `WEBHOOK_TIMEOUT_MS` | `1500` | dynamic-variables webhook timeout |
-| `CONVERSATION_TIMEOUT_SECS` | `300` | the duration comparison for the escalation edge |
+| `WEBHOOK_TIMEOUT_MS` | `8000` | dynamic-variables webhook timeout |
+| `CONVERSATION_TIMEOUT_SECS` | `600` | the duration comparison for the escalation edge |
 
 ### Run
 

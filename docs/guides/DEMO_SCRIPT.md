@@ -30,14 +30,13 @@ done
 - [ ] Env secrets set on Edge (`TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`,
       `KV_NAMESPACE_ID`, `ACTOR_SERVICE_URL`, `INTERNAL_API_TOKEN`,
       `MCP_API_KEY`, `FLYTLV_API_KEY`).
-- [ ] The three services are shipped:
-      `telnyx-edge ship --from-dir services/webhook`,
-      `--from-dir services/mcp-server`, and `cd services/session-actor && telnyx-edge ship`.
+- [ ] The three services are shipped (GitHub Actions → *Ship Edge Functions*, or a
+      push to `master`) and `python scripts/ops/live_check.py` shows 20/20 PASS.
+- [ ] `python scripts/ops/metrics.py --reset` so the metrics start at zero.
 - [ ] `python assistant/provision.py` (assistant + workflow + MCP server + phone number) is provisioned
       and a phone number is linked.
-- [ ] KV flag `flags/assistant` exists as `{"deals_enabled": true}` (needed for
-      the flag-flip beat):
-      `telnyx-edge storage kv put flags/assistant '{"deals_enabled":true}'`.
+- [ ] KV flag `flags/assistant` is `{"deals_enabled": true, "sms_enabled": true, "promo": ""}`
+      (the flag-flip beat changes `deals_enabled`; the webhook caches flags for 60 s).
 - [ ] Right-screen log tail is running and you can see a test webhook fire
       (= green baseline).
 - [ ] Have the OpenCode config + `/telnyx` model list ready for the walkthrough.
@@ -111,7 +110,12 @@ Say: **"Save the first one."**
   shown deal.
 - Note this is the read-modify-write the actor exists for: KV has no
   compare-and-set, so two concurrent calls from one caller would race — the
-  actor serializes the write (*why Actor vs KV*).
+  actor serializes the write (*why Actor vs KV*). Proof on screen:
+  `python scripts/ops/actor_concurrency_check.py 20` → 20 concurrent updates, counts
+  1..20, none lost.
+- Optional: **"Text me that one."** (`send_deal_sms`, to the caller's own number
+  only). On this account the alphanumeric sender is blocked at the account level,
+  so the agent says it could not send; the deal is still saved.
 
 "Saved. Next time you call, I'll remind you." Hang up.
 
@@ -139,6 +143,8 @@ Pin the three deployed functions in the portal / CLI:
 - `fde-session-actor` — Stateful Actor on the Edge actor runtime
 
 `telnyx-edge metrics fde-webhook`: show request count, 2xx, p50/p95 — the canary.
+`python scripts/ops/metrics.py`: our own counters from the `MetricsCounter` actor
+(tool calls, cache hits, degraded rate, latency per tool).
 Briefly: KV reads/writes against the `fde-kv` namespace, actor storage holds
 `callCount` / `lastResults` / `savedDeals`. *Function + KV + Actor, deployed:
 requirements 4a, 4b, 4c.*
@@ -184,6 +190,12 @@ broken/disabled backend never depends on the model noticing it (decision #12).
 Flip the flag back to `true` and a redial returns to the happy path.
 *Fallback path + KV feature flag: requirements 5 (happy + fallback) & a
 stretch goal.*
+
+Escalation path: say **"Can I speak to a person?"** The assistant offers Ofek and
+transfers the call with the transfer tool (target named in the tool; the hangup
+is a separate tool node, so the model cannot end the call by mistake).
+
+Every other path is also walked over chat by `python scripts/ops/workflow_paths.py`.
 
 ### 9:30–10:00 — Close
 

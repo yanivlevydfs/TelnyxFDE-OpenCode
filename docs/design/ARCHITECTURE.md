@@ -8,7 +8,8 @@ Telnyx AI Assistant ── Conversation Workflow (speak / prompt / tool nodes, e
    │  1. conversation start                 │  2. mid-conversation tool calls
    ▼                                         ▼
 webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
-   │  ├─ KV REST: flags, session write       │  ├─ KV env.KV: session read, deals cache, flags
+   │  ├─ KV REST: flags (60 s cache),        │  ├─ KV env.KV: session read, deals cache, flags
+   │  │   session write after the response   │
    │  └─ HTTP ─┐                             │  ├─ HTTP: flytlv.app deals API, Telnyx SMS
    │           │                             │  └─ HTTP ─┐
    │           ▼                             │           ▼

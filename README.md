@@ -17,6 +17,8 @@ See [Which model built each component](#which-model-built-each-component).
   [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md)
 - Demo script: [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md)
 - How to talk to the phone agent: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)
+- All docs: [docs/README.md](docs/README.md); scripts: [scripts/README.md](scripts/README.md); tests: [tests/README.md](tests/README.md)
+- Dogfooding OpenCode + Telnyx Inference: [docs/build/DOGFOODING.md](docs/build/DOGFOODING.md)
 - Rules for the coding agent: [AGENTS.md](AGENTS.md); build prompts & status: [docs/build/PROMPTS.md](docs/build/PROMPTS.md)
 
 ## Status
@@ -541,9 +543,9 @@ docs/                                  see docs/README.md
   challenge/                           code_challenge.md (the brief), USE_CASE.md
   design/                              ARCHITECTURE.md, DECISIONS.md, OBSERVABILITY.md
   guides/                              HOW_TO_CALL.md (callers), DEMO_SCRIPT.md (demo day)
-  build/PROMPTS.md                     the OpenCode build prompts per component
+  build/PROMPTS.md, DOGFOODING.md      OpenCode build prompts; what worked and what did not
 
-tests/                              acceptance tests (not edited) + self-checks (check_*)
+tests/                                 acceptance tests (not edited) + self-checks; see tests/README.md
 ```
 
 ## OpenCode config
