@@ -1,7 +1,7 @@
 # FlyTLV Demo Script (Live Demo, 8–10 min)
 
 Run-of-show for the **Live Demo** portion of Demo Day as defined in
-[code_challenge.md](../code_challenge.md). A caller phones the FlyTLV line,
+[docs/challenge/code_challenge.md](../challenge/code_challenge.md). A caller phones the FlyTLV line,
 asks for cheap flights to Cyprus, hears the best deals from the live
 `flytlv.app` feed, saves one, and on the next call hears "Welcome back, last
 time you saved Larnaca for 64 dollars." Everything runs on Telnyx Edge
@@ -50,7 +50,7 @@ done
 > round-trip flights from Tel Aviv. Behind it: a Telnyx AI Assistant with a
 > Conversation Workflow, an MCP server, a Stateful Actor, and KV — all on Edge."
 
-Show the [architecture diagram](../README.md#architecture): the chain
+Show the [architecture diagram](../../README.md#architecture): the chain
 **Assistant → Workflow → Edge Function → KV/Actor → MCP** is the demo.
 
 ### 0:30–1:15 — First call: greeting = speak node + dynamic webhook
@@ -212,17 +212,17 @@ into the walkthrough.
 | KV flag flip → `deals_disabled` speak node | 5 (fallback path) + KV-flag stretch |
 
 After this (7–10 min Live Walkthrough & Decision Review, 5 min Q&A) — be ready
-to explain (per `code_challenge.md`):
+to explain (per `docs/challenge/code_challenge.md`):
 - The use case and why it fits workflows + a Stateful Actor.
 - Node design & edge conditions (speak for verbatim; `expression` for facts
   before the model turn; `llm` for intent; `append` vs `replace` instructions).
 - MCP server structure (3 tools, stateless Streamable HTTP per request, bearer
   auth before the manager, `ToolError` to the LLM).
 - Why Actor vs KV vs function logic for each piece of state (see
-  [README.md](../README.md#why-stateful-actor-vs-kv-vs-plain-function-logic)).
+  [README.md](../../README.md#why-stateful-actor-vs-kv-vs-plain-function-logic)).
 - How OpenCode + Telnyx Inference were used, and which model built each
   component (see
-  [README.md](../README.md#which-model-built-each-component)).
+  [README.md](../../README.md#which-model-built-each-component)).
 - The hardest bug you hit — the signal that exposed it (the observability
   trail), not vibes.
 - Edge cases handled: caller hangs up mid-deal, an anonymous caller, a degraded

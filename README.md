@@ -6,18 +6,18 @@ reads back the 2–3 cheapest deals from the live `flytlv.app` deals API, can
 save one, and on your next call says "Welcome back, last time you saved Larnaca
 for 64 dollars."
 
-Built for the Telnyx FDE coding challenge ([code_challenge.md](code_challenge.md)).
+Built for the Telnyx FDE coding challenge ([docs/challenge/code_challenge.md](docs/challenge/code_challenge.md)).
 Requirement 6: the first version of every component was built by **OpenCode powered
 by Telnyx Inference** from the spec and the acceptance tests. Deploying to Telnyx
 Edge and the features added after the first deploy were done with **Claude Code**.
 See [Which model built each component](#which-model-built-each-component).
 
-- Use case: [USE_CASE.md](USE_CASE.md)
-- Design: [spec/ARCHITECTURE.md](spec/ARCHITECTURE.md), [spec/DECISIONS.md](spec/DECISIONS.md),
-  [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md)
-- Demo script: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
-- How to talk to the phone agent: [docs/HOW_TO_CALL.md](docs/HOW_TO_CALL.md)
-- Rules for the coding agent: [AGENTS.md](AGENTS.md); build prompts & status: [PROMPTS.md](PROMPTS.md)
+- Use case: [docs/challenge/USE_CASE.md](docs/challenge/USE_CASE.md)
+- Design: [docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md), [docs/design/DECISIONS.md](docs/design/DECISIONS.md),
+  [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md)
+- Demo script: [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md)
+- How to talk to the phone agent: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)
+- Rules for the coding agent: [AGENTS.md](AGENTS.md); build prompts & status: [docs/build/PROMPTS.md](docs/build/PROMPTS.md)
 
 ## Status
 
@@ -38,7 +38,7 @@ Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python 
 
 | What | Where |
 |---|---|
-| Phone | **+972 76-567-1113** (how to talk to it: [docs/HOW_TO_CALL.md](docs/HOW_TO_CALL.md)) |
+| Phone | **+972 76-567-1113** (how to talk to it: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)) |
 | Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` (GLM-5.3-Flash) |
 | Webhook (Edge Function) | https://fde-webhook-e5907143-e.telnyxcompute.com |
 | MCP server (Edge Function) | https://fde-mcp-bc3393fa-a.telnyxcompute.com |
@@ -110,7 +110,7 @@ Functions. Only unit tests use fakes (owner's rule #14 — no local stand-ins).
 ### Why Stateful Actor vs KV vs plain function logic
 
 The challenge stresses picking the right primitive for each piece of state.
-This is the reasoning for every piece: see `spec/DECISIONS.md` (#9, #11, #13) for
+This is the reasoning for every piece: see `docs/design/DECISIONS.md` (#9, #11, #13) for
 the full rationale.
 
 | State | Primitive | Why this primitive |
@@ -126,7 +126,7 @@ so the Python webhook reaches KV through the official `telnyx` SDK REST API
 (decision #2), the TypeScript MCP server uses `env.KV`, and the actor uses
 `this.ctx.storage` directly.
 
-**Proof of the read-modify-write guarantee.** `scripts/actor_concurrency_check.py`
+**Proof of the read-modify-write guarantee.** `scripts/ops/actor_concurrency_check.py`
 fires 20 concurrent `recordCall` requests at one fresh caller actor on the live
 Edge deployment. Every count 1..20 comes back exactly once and the final
 `callCount` is 20: no lost updates. A KV counter (last-write-wins, no
@@ -264,7 +264,7 @@ Every service emits one structured JSON line per event, one latency line per
 request (`webhook.request`, `mcp.request`, `actor.request`, each with
 `duration_ms`), and a shared `trace_id` (= `telnyx_conversation_id`) that threads
 a single call through webhook → actor and MCP → actor (sent as `x-trace-id`).
-Caller numbers are masked to the last 4 digits. See [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md).
+Caller numbers are masked to the last 4 digits. See [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md).
 
 ### How I'd know within a minute that the assistant is broken
 
@@ -321,8 +321,8 @@ method turns make every increment an atomic read-modify-write.
 | latency: `webhook.request`, `tool.<name>`, `flytlv.search` | both | count, avg and max ms |
 
 ```bash
-python scripts/metrics.py          # counters, degraded rate, cache hit rate, latency
-python scripts/metrics.py --reset  # start a demo from zero
+python scripts/ops/metrics.py          # counters, degraded rate, cache hit rate, latency
+python scripts/ops/metrics.py --reset  # start a demo from zero
 ```
 
 Metrics are sent after the webhook's response (no cost to its 1.2 s budget) and
@@ -378,7 +378,7 @@ telnyx-edge storage kv create --name fde-kv   # the KV_NAMESPACE_ID goes in .env
 ## Test
 
 ```bash
-python scripts/vendor_shared.py                  # copy shared/common.py into each Python service
+python scripts/build/vendor_shared.py                  # copy shared/common.py into each Python service
 .venv/Scripts/python -m pytest UnitTest -q       # Python services (29 tests)
 cd services/session-actor && npm test           # actor (7 tests)
 ```
@@ -421,7 +421,7 @@ functions (see "What broke during development" above). The workflow vendors
 From Linux or macOS the same commands work by hand:
 
 ```bash
-python scripts/vendor_shared.py                    # copy shared/common.py into Python services
+python scripts/build/vendor_shared.py                    # copy shared/common.py into Python services
 telnyx-edge ship --from-dir services/webhook       # fde-webhook (Python)
 telnyx-edge ship --from-dir services/mcp-server    # fde-mcp (TypeScript)
 telnyx-edge ship --from-dir services/session-actor # fde-session-actor (umbrella telnyx.toml)
@@ -476,7 +476,7 @@ Deploy order is fixed (the assistant references the live webhook + MCP URLs):
 ## Which model built each component
 
 Requirement 6: the first version of each component was built with **OpenCode
-powered by Telnyx Inference**, one model per component, from the spec in `spec/`
+powered by Telnyx Inference**, one model per component, from the spec in `docs/design/`
 and the acceptance tests in `UnitTest/`. Current `/telnyx` model list for
 reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek-V4`,
 `Qwen3.x`, `MiniMax`.
@@ -506,19 +506,35 @@ features were made with Claude Code:
 ## Repository layout
 
 ```
-shared/common.py                     config, JSON logging, Kv (KV REST), ActorClient, sessions, phone
-scripts/vendor_shared.py             copy shared/common.py into each Python service as function/common.py
-services/webhook/function/func.py    Dynamic Variables webhook (Edge Function, Python)
-services/mcp-server/src/             MCP server (TypeScript): search_deals, save_deal, list_saved_deals
-services/session-actor/src/          CallerSession Stateful Actor + HTTP facade (TypeScript)
-assistant/flow.py, provision.py       Conversation Workflow + provisioning via the Telnyx SDK
-UnitTest/                             acceptance tests (do not edit — the job is done when all pass)
-spec/                                 ARCHITECTURE.md, DECISIONS.md, OBSERVABILITY.md
-docs/DEMO_SCRIPT.md                   8–10 minute demo walk-through
+README.md  AGENTS.md  .env.example     entry points: overview, rules for the coding agent, config template
+requirements-dev.txt  pyrefly.toml     Python dev dependencies, editor type-check config
+.opencode/opencode.json                OpenCode config with the @telnyx/opencode plugin
+.github/workflows/ship.yml             deploys the services to Telnyx Edge (Linux runner)
+
+services/                              LIVE: what runs on Telnyx Edge
+  webhook/                             Dynamic Variables webhook (Python Edge Function)
+  mcp-server/                          MCP server, 4 tools (TypeScript Edge Function)
+  session-actor/                       CallerSession + MetricsCounter Stateful Actors + HTTP facade
+shared/common.py                       Python code shared by the services (vendored into each)
+assistant/                             PROVISIONING: workflow (flow.py) + provision.py via the Telnyx SDK
+
+scripts/
+  build/vendor_shared.py               copy shared/common.py into each Python service
+  ops/live_check.py                    end-to-end PASS/FAIL check of the deployed services
+  ops/metrics.py                       live metrics dashboard (--reset before a demo)
+  ops/actor_concurrency_check.py       proof: concurrent actor updates lose nothing
+
+docs/
+  challenge/                           code_challenge.md (the brief), USE_CASE.md
+  design/                              ARCHITECTURE.md, DECISIONS.md, OBSERVABILITY.md
+  guides/                              HOW_TO_CALL.md (callers), DEMO_SCRIPT.md (demo day)
+  build/PROMPTS.md                     the OpenCode build prompts per component
+
+UnitTest/                              acceptance tests (not edited) + self-checks (check_*)
 ```
 
 ## OpenCode config
 
 [.opencode/opencode.json](.opencode/opencode.json) loads the `@telnyx/opencode`
-plugin. Enabled models are listed in [PROMPTS.md](PROMPTS.md). The Telnyx-hosted
+plugin. Enabled models are listed in [docs/build/PROMPTS.md](docs/build/PROMPTS.md). The Telnyx-hosted
 model id powering this coding session is `telnyx/zai-org/GLM-5.2`.

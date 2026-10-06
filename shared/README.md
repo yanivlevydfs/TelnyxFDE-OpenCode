@@ -7,12 +7,12 @@ services (`webhook`, `mcp-server`). Not an Edge service itself.
 
 Telnyx Edge builds each function folder alone — there is no shared package
 import across services. So every reusable helper lives in **one** file,
-`shared/common.py`, and `scripts/vendor_shared.py` copies it into each Python
+`shared/common.py`, and `scripts/build/vendor_shared.py` copies it into each Python
 service as `function/common.py` before `telnyx-edge ship` (or tests). One source
 of truth, no copy-paste (owner's rule #2). Re-run the vendor after any edit:
 
 ```bash
-python scripts/vendor_shared.py
+python scripts/build/vendor_shared.py
 ```
 
 TypeScript services (`services/session-actor`) have no `function/` directory and

@@ -1,10 +1,10 @@
-"""scripts/metrics.py — print the live service metrics (the MetricsCounter actor).
+"""scripts/ops/metrics.py — print the live service metrics (the MetricsCounter actor).
 
 The webhook and the MCP server add counters and latency samples to one shared
 Stateful Actor; this prints its snapshot as a small terminal dashboard.
 
-    python scripts/metrics.py           # show
-    python scripts/metrics.py --reset   # clear (e.g. before a demo)
+    python scripts/ops/metrics.py           # show
+    python scripts/ops/metrics.py --reset   # clear (e.g. before a demo)
 
 Needs ACTOR_SERVICE_URL and INTERNAL_API_TOKEN in the environment (.env).
 """

@@ -1,4 +1,4 @@
-"""scripts/actor_concurrency_check.py — prove the actor's read-modify-write is safe.
+"""scripts/ops/actor_concurrency_check.py — prove the actor's read-modify-write is safe.
 
 Fires N concurrent ``recordCall`` requests at ONE fresh CallerSession actor and
 checks that every count 1..N came back exactly once and the final count is N.
@@ -6,7 +6,7 @@ A plain KV counter (last-write-wins, no compare-and-set) would lose updates
 here; the Stateful Actor runs one method turn at a time per instance, so it
 cannot. Used in the demo for requirement 4c.
 
-    python scripts/actor_concurrency_check.py [N]
+    python scripts/ops/actor_concurrency_check.py [N]
 
 Needs ACTOR_SERVICE_URL and INTERNAL_API_TOKEN in the environment (.env).
 """

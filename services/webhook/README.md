@@ -37,7 +37,7 @@ Anonymous callers (no `telnyx_end_user_target`) skip the actor and the mapping.
 ## Files
 
 - `function/func.py` — routes, dependency fan-out, variable formatting, `new()`.
-- `function/common.py` — vendored `shared/common.py` (`python scripts/vendor_shared.py`).
+- `function/common.py` — vendored `shared/common.py` (`python scripts/build/vendor_shared.py`).
 - `pyproject.toml` — Edge-installed dependencies (hatchling).
 - `func.toml` — Edge manifest: `[telnyx]` binding + non-secret `[env_vars]`.
 
@@ -61,7 +61,7 @@ Structured JSON logs via `common`: a `webhook.request` span per call with
 The function is already registered: `func_id = "e5907143-e572-4e86-8880-0de76f057561"`, pinned in `func.toml` under `[edge_compute]`.
 
 ```bash
-python scripts/vendor_shared.py
+python scripts/build/vendor_shared.py
 .venv/Scripts/python -m pytest UnitTest/test_webhook.py -q
 telnyx-edge ship --from-dir services/webhook
 ```

@@ -51,4 +51,4 @@ Alert export (optional): `telnyx-edge log-export set <fn> --endpoint <OTLP> --he
 ## Debugging trail
 
 Five real bugs, each with the log line or record that exposed it, are in the README:
-[What broke during development, and how I found it](../README.md#what-broke-during-development-and-how-i-found-it).
+[What broke during development, and how I found it](../../README.md#what-broke-during-development-and-how-i-found-it).

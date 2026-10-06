@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       # function/common.py is gitignored; copy shared/common.py into each Python service.
-      - run: python scripts/vendor_shared.py
+      - run: python scripts/build/vendor_shared.py
 
       - name: Install telnyx-edge
         run: |
