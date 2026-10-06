@@ -1,7 +1,7 @@
 # Decision Log
 
 | # | Decision | Alternatives considered | Why |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Every component is an independently deployed microservice with its own folder and manifest | Single function with path routing | Project rule; independent deploys, scaling, logs and metrics per service. |
 | 2 | Python for the webhook; TypeScript for the MCP server | Python MCP server (built first, then ported) | Project rule is Python, but Edge builds Python 3.9 and the Python `mcp` SDK needs 3.10+. Python reaches KV through the official `telnyx` SDK (4.182.0). |
 | 3 | session-actor in TypeScript | Python-only (no actor) | Stateful Actors are TypeScript-only with no REST fallback; the actor is a required primitive. Kept as a thin HTTP facade. |

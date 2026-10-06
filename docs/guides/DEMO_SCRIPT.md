@@ -200,7 +200,7 @@ into the walkthrough.
 ## Demo checklist → requirement mapping (keep handy)
 
 | Beat | Requirement shown |
-|---|---|
+| --- | --- |
 | Greeting (speak node, dynamic webhook) | 1 (speak node), 3, 4a (webhook) |
 | "Cheap to Cyprus" → identify_intent llm edge → search_flights | 1 (multi-step workflow, conditional edges) |
 | `search_deals` MCP tool on screen | 2 (MCP, ≥3 tools available) |

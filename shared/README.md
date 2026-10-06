@@ -21,7 +21,7 @@ are skipped automatically.
 ## What is in `common.py`
 
 | Section | Provides |
-|---|---|
+| --- | --- |
 | **config** | `require` / `optional` / `integer` / `flag` env helpers, `ConfigError`. Fails loudly on missing/invalid settings so a broken deploy shows up at boot, not mid-call. |
 | **logging** | `info` / `warning` / `error` / `debug`; one JSON object per line (`level`, `event`, `trace_id`, fields, traceback). `timed(span)` context manager emits a latency `span` with `duration_ms` and `outcome`. `_trace_id` is mirrored onto the shared `common` logger object so every vendored copy sees the latest id. `LOG_LEVEL` env var. Uses `print()` via `_StdoutHandler` so pytest's `capsys` captures lines. |
 | **KV** | `Kv(client)` async JSON wrapper over `telnyx.storage.kvs.keys` (REST; Python has no KV `env` binding). `get_json` returns `None` for a missing key (`telnyx.NotFoundError`), `KvError` otherwise. `put_json` with optional `ttl_secs`. |

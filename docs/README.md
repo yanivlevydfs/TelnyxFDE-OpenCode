@@ -1,7 +1,7 @@
 # Documentation
 
 | Folder | File | What it is for |
-|---|---|---|
+| --- | --- | --- |
 | `challenge/` | [code_challenge.md](challenge/code_challenge.md) | The Telnyx FDE challenge brief (requirements, judging criteria) |
 |  | [USE_CASE.md](challenge/USE_CASE.md) | The FlyTLV Travel Line use case and why it fits the challenge |
 | `design/` | [ARCHITECTURE.md](design/ARCHITECTURE.md) | Components, data flow, and which primitive (Actor / KV / function) holds each piece of state |

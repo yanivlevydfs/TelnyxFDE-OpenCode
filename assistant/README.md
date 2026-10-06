@@ -58,7 +58,7 @@ entirely the defaults keep the expression edges from comparing against raw
 `{{placeholders}}`:
 
 | Variable | Default | Used by |
-|---|---|---|
+| --- | --- | --- |
 | `caller_known` | `false` | identify_intent prompt (welcome-back) |
 | `call_count` | `0` | — |
 | `saved_count` | `0` | — |
@@ -84,7 +84,7 @@ created (used by the unit test).
 ### Required env vars
 
 | Var | Used for |
-|---|---|
+| --- | --- |
 | `TELNYX_API_KEY` | SDK auth (injected by the `[telnyx]` Edge binding) |
 | `ASSISTANT_MODEL` | assistant `model` (Telnyx-hosted model id) |
 | `ASSISTANT_VOICE` | assistant `voice_settings.voice` |
@@ -95,7 +95,7 @@ created (used by the unit test).
 ### Optional env vars
 
 | Var | Default | Used for |
-|---|---|---|
+| --- | --- | --- |
 | `ASSISTANT_NAME` | `FlyTLV Travel Line` | assistant name |
 | `ASSISTANT_DESCRIPTION` | … | assistant description |
 | `ASSISTANT_PHONE_NUMBER` | `` | transfer `from` (caller-id of transferred leg) |

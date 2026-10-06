@@ -3,7 +3,7 @@
 ## What is instrumented
 
 | Signal | Where | How to read it |
-|---|---|---|
+| --- | --- | --- |
 | Structured JSON logs | All services (`shared/common.py`, `session-actor/src/index.ts`) | `telnyx-edge logs <fn> --type runtime --json --tail` |
 | Latency spans (`duration_ms`) | One per request: `webhook.request`, `mcp.request` (with the tool name), `actor.request` | `jq 'select(.duration_ms)'` |
 | Distributed trace id (`trace_id`) | Webhook → actor, MCP → actor (`x-trace-id` header) | one id per conversation |

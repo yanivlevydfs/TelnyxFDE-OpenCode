@@ -12,7 +12,7 @@ surface, so this service is the **thin TypeScript facade** the Python services
 ## Files
 
 | File | Purpose |
-|---|---|
+| --- | --- |
 | `src/caller-session.ts` | `CallerSession extends StatefulActor<Env>` — `recordCall`, `getProfile`, `setLastResults`, `saveDeal`, `getSaved`. Exports the `Deal`/`Profile`/`ActorInputError` types. |
 | `src/index.ts` | The Worker default export `worker.fetch(req, env)` — Bearer-guarded HTTP facade: `POST /actors/{caller}/{method}` (method allowlist) to `CallerSession`, and `POST /metrics/{add,snapshot,reset}` to the shared `MetricsCounter`. |
 | `src/metrics-counter.ts` | `MetricsCounter extends StatefulActor` — one `global` instance holding service counters and latency (`add`, `snapshot`, `reset`). |
@@ -45,12 +45,12 @@ Caller id is the digits of the phone (matches `entity_id` in
 `shared/common.py`); actor names cannot contain `+`.
 
 | Route | Body | Returns |
-|---|---|---|
-| `/actors/{callerId}/recordCall`     | *(ignored)*  | `{callCount, savedCount, lastSaved}` — full profile |
-| `/actors/{callerId}/getProfile`    | *(ignored)*  | `{callCount, savedCount, lastSaved}` |
-| `/actors/{callerId}/setLastResults`| `{deals: Deal[]}`         | `{stored: number}`  — replaces last search results |
-| `/actors/{callerId}/saveDeal`      | `{dealId: string}`        | `{callCount, savedCount, lastSaved}` |
-| `/actors/{callerId}/getSaved`      | *(ignored)*  | `{savedCount: number, deals: Deal[]}` |
+| --- | --- | --- |
+| `/actors/{callerId}/recordCall` | *(ignored)* | `{callCount, savedCount, lastSaved}` — full profile |
+| `/actors/{callerId}/getProfile` | *(ignored)* | `{callCount, savedCount, lastSaved}` |
+| `/actors/{callerId}/setLastResults` | `{deals: Deal[]}` | `{stored: number}`  — replaces last search results |
+| `/actors/{callerId}/saveDeal` | `{dealId: string}` | `{callCount, savedCount, lastSaved}` |
+| `/actors/{callerId}/getSaved` | *(ignored)* | `{savedCount: number, deals: Deal[]}` |
 
 `recordCall` returns the **full profile** (callCount, savedCount, lastSaved) on
 purpose — the webhook builds `call_count`, `saved_count` and `last_saved_deal`
@@ -59,7 +59,7 @@ purpose — the webhook builds `call_count`, `saved_count` and `last_saved_deal`
 ### Errors
 
 | Status | When |
-|---|---|
+| --- | --- |
 | `401 {error}` | missing/wrong `Authorization: Bearer <INTERNAL_API_TOKEN>` |
 | `404 {error}` | path does not match `/actors/{id}/{method}` |
 | `405 {error}` | request is not `POST` |

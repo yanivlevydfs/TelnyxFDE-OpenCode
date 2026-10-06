@@ -25,7 +25,7 @@ Assistant calls mid-conversation over stateless Streamable HTTP:
 ## Tools
 
 | Tool | What it does | Actor method |
-|---|---|---|
+| --- | --- | --- |
 | `search_deals` | Query flytlv (KV-cached), speak deals back, remember them | `setLastResults` |
 | `save_deal` | Save one of the last-shown deals (actor validates the choice) | `saveDeal` |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSavedDeals` |
