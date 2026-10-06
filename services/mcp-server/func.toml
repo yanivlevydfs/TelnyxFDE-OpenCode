@@ -1,20 +1,22 @@
-# services/mcp-server/func.toml — Telnyx Edge Function manifest.
+# services/mcp-server/func.toml — Telnyx Edge Function manifest (TypeScript).
 # Deploy:  telnyx-edge ship --from-dir services/mcp-server
 
 [edge_compute]
 func_id = "bc3393fa-a5f2-4470-b7af-137f3d9c831d"
 func_name = "fde-mcp"
 
-[telnyx]
-# String binding handle; injects TELNYX_API_KEY so the official SDK can call
-# the KV REST API (session/conversation -> caller mapping, deals cache).
-binding = "TELNYX"
+# KV binding used by src/kv.ts via `env.KV` (@telnyx/edge-runtime):
+#   await env.KV.get(key, { type: "json" })
+#   await env.KV.put(key, JSON.stringify(v), { expirationTtl: secs })
+# Holds the session/<conversation_id> -> {entity_id} map (written by the
+# webhook) and the cache/deals/<query> deals cache.
+[storage.kv.KV]
+id = "445c3e11-c172-48df-af37-3486ca3ff50c"
 
 # Non-secret configuration only. Secrets live in Edge secrets
 # (`telnyx-edge secrets add <NAME> <VALUE>`) and are injected as env vars:
 #   MCP_API_KEY          bearer token registered with Telnyx as api_key_ref
 #   FLYTLV_API_KEY       flytlv.app private deals feed (X-API-Key)
-#   KV_NAMESPACE_ID      Telnyx KV namespace id
 #   ACTOR_SERVICE_URL    session-actor Edge Function URL
 #   INTERNAL_API_TOKEN   actor facade bearer token
 [env_vars]

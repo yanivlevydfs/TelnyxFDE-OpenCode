@@ -2,7 +2,7 @@
  * HTTP facade for the CallerSession Stateful Actor.
  *
  * Telnyx Stateful Actors are TypeScript-only and have no native HTTP surface,
- * so the Python services (webhook, mcp-server) reach the actor through this
+ * so the calling services (webhook in Python, mcp-server in TypeScript) reach the actor through this
  * Edge Function. The default export `worker.fetch(req, env)` is the Worker
  * entry point the Edge runtime invokes on every request — and what the unit
  * tests import as `worker` and call directly.

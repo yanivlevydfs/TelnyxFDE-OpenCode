@@ -25,7 +25,7 @@
 import { StatefulActor, type Env } from "@telnyx/edge-runtime";
 
 /** A flight deal kept by the actor. Mirrors the camelCase shape produced
- * by the MCP server's `slim()` (services/mcp-server/function/func.py) so the
+ * by the MCP server's `slim()` (services/mcp-server/src/server.ts) so the
  * JSON stored here is independent of the flytlv.app snake_case contract. */
 export interface Deal {
   /** Stable upstream deal id (used to dedup saved deals). */
