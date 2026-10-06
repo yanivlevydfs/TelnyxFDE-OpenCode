@@ -64,3 +64,20 @@ assert.deepEqual(ids({ category: "weekend" }), ["b"]);
 assert.deepEqual(ids({ minNights: 2, maxNights: 4 }), ["a", "b"]);
 assert.deepEqual(ids({ departureWeekday: "Thursday" }), ["b"]); // from the date when no weekday field
 console.log("search argument checks OK");
+
+// flytlv GET: one retry on timeout (cold connection), none on other errors.
+import { FlytlvClient } from "../services/mcp-server/src/flytlv.ts";
+process.env.FLYTLV_API_KEY ??= "test";
+const timeout = () => Object.assign(new Error("aborted"), { name: "TimeoutError" });
+let calls = 0;
+const flaky = (async () => {
+  if (calls++ === 0) throw timeout();
+  return new Response(JSON.stringify({ currency: "USD", deals: [] }));
+}) as unknown as typeof fetch;
+assert.deepEqual((await new FlytlvClient(flaky).search({})).deals, []);
+assert.equal(calls, 2);
+calls = 0;
+const down = (async () => { calls++; throw new TypeError("network"); }) as unknown as typeof fetch;
+await assert.rejects(new FlytlvClient(down).search({}), /temporarily unavailable/);
+assert.equal(calls, 1);
+console.log("flytlv retry checks OK");

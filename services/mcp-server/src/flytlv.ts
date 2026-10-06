@@ -74,17 +74,32 @@ export class FlytlvClient {
     this.timeoutMs = config.integer("FLYTLV_TIMEOUT_MS", 3000);
   }
 
-  /**
-   * One authenticated GET; returns the parsed payload or throws FlytlvError.
-   * `params` is forwarded as URL query params (all string values).
-   */
   /** One-way flights from Tel Aviv (`/api/private/flights`, items in `flights`). */
   async searchOneWay(params: Record<string, string>): Promise<FlytlvPayload> {
     const payload = await this.search(params, this.flightsPath);
     return { ...payload, deals: (payload.flights as unknown[] | undefined) ?? payload.deals ?? [] };
   }
 
-  /** Round-trip deals (`/api/private/deals`), or another feed path. */
+  /**
+   * GET with a timeout, retried once on timeout only: the first request after a
+   * deploy or idle spell can stall on a cold connection (seen live: 3 s timeouts,
+   * then 0.4 s). A GET is safe to repeat; other errors are not retried.
+   */
+  private async get(url: string, headers: Headers): Promise<Response> {
+    try {
+      return await this.fetchImpl(url, { headers, signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "TimeoutError")) throw e;
+      warning("flytlv.retry", { error: e.message });
+      return await this.fetchImpl(url, { headers, signal: AbortSignal.timeout(this.timeoutMs) });
+    }
+  }
+
+  /**
+   * Round-trip deals (`/api/private/deals`), or another feed path: one
+   * authenticated GET, params forwarded as query params. Returns the parsed
+   * payload or throws FlytlvError.
+   */
   async search(params: Record<string, string>, path: string = this.path): Promise<FlytlvPayload> {
     const url = new URL(path, this.base);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -92,10 +107,7 @@ export class FlytlvClient {
 
     let resp: Response;
     try {
-      resp = await this.fetchImpl(url.toString(), {
-        headers,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      resp = await this.get(url.toString(), headers);
     } catch (e) {
       if (e instanceof Error && e.name === "TimeoutError") {
         warning("flytlv.timeout", { error: e.message });
