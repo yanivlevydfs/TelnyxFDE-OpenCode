@@ -394,7 +394,7 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): Mcp
         const entityId = await requireCaller(kv, conv);
         let profile: unknown;
         try {
-          profile = await actor.call(entityId, "getSavedDeals");
+          profile = await actor.call(entityId, "getSaved");
         } catch (e) {
           if (e instanceof ActorInputError) throw new ToolError(e.message);
           if (e instanceof ActorError) {
