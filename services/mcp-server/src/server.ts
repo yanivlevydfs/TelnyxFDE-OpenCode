@@ -42,6 +42,7 @@ import {
   ActorInputError,
 } from "./actor.js";
 import { FlytlvClient, FlytlvError, type FlytlvPayload } from "./flytlv.js";
+import type { SmsSender } from "./sms.js";
 
 // ------------------------------------------------------------------ public API
 
@@ -53,6 +54,8 @@ export interface Dependencies {
   actor: Actor;
   /** HTTP transport for upstream calls (flytlv; the real `ActorClient` shares it). */
   fetchImpl: typeof fetch;
+  /** Optional SMS sender; when present a 4th tool, `send_deal_sms`, is registered. */
+  sms?: SmsSender;
 }
 
 /** JSON KV wrapper interface (the real `EdgeKv` + fakes both implement it). */
@@ -172,6 +175,19 @@ export function slim(deal: RawDeal, currency: string): Deal {
       inbound: leg(deal, "inbound"),
     }),
   };
+}
+
+/** The SMS body for one deal: the details read on the call plus the booking link. */
+export function dealSms(d: Deal): string {
+  const o = d.outbound ?? {};
+  const i = d.inbound ?? {};
+  const leg = (date?: string, l: Leg = {}) =>
+    [date, l.departs, l.flightNumber].filter(Boolean).join(" ");
+  return [
+    `FlyTLV: ${d.city}, ${d.country} - ${d.price} ${d.currency} round trip${d.direct ? ", direct" : ""}.`,
+    `Out ${leg(d.departureDate, o)}. Back ${leg(d.returnDate, i)}.`,
+    `Book: ${d.url}`,
+  ].join("\n");
 }
 
 // --------------------------------------------------------------- tool helpers
@@ -330,7 +346,7 @@ async function requireCaller(kv: Kv, conv: string): Promise<string> {
 // ------------------------------------------------------------------- server
 
 /** Build the `McpServer` with the three tools, closing over dependencies. */
-export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): McpServer {
+export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?: SmsSender): McpServer {
   const server = new McpServer({
     name: config.optional("MCP_SERVER_NAME", "fde-mcp"),
     version: "0.1.0",
@@ -512,6 +528,59 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch): Mcp
     },
   );
 
+  // send_deal_sms — only when an SMS sender is wired (production index.ts).
+  // The number is the CALLER's, from the session the webhook wrote; the deal
+  // must be one the caller was offered (saveDeal validates it), so the model
+  // can neither text a stranger nor invent a link.
+  if (sms) {
+    server.registerTool(
+      "send_deal_sms",
+      {
+        description:
+          "Text the caller a deal they were just offered (details and booking link). " +
+          "Sends to the number they are calling from; the deal is also saved.",
+        inputSchema: {
+          deal_id: z.string().describe("The dealId of a deal from the last search_deals result."),
+        },
+      },
+      async (args, extra) => {
+        try {
+          const conv = conversationId(extra);
+          setTraceId(conv || undefined);
+          const entityId = await requireCaller(kv, conv);
+          const dealId = (args.deal_id ?? "").trim();
+          if (!dealId) throw new ToolError("Please choose a deal to text first.");
+          let deal: Deal | undefined;
+          try {
+            await actor.call(entityId, "saveDeal", { dealId }); // rejects deals not offered
+            const saved = (await actor.call(entityId, "getSaved")) as { deals?: Deal[] };
+            deal = saved.deals?.find((d) => d.dealId === dealId);
+          } catch (e) {
+            if (e instanceof ActorInputError) throw new ToolError(e.message);
+            if (e instanceof ActorError) {
+              error("mcp.sms_lookup_failed", { caller: entityId, deal: dealId }, e);
+              throw new ToolError("The session service is unavailable; please try again.");
+            }
+            throw e;
+          }
+          if (!deal) throw new ToolError("I couldn't find that deal; please pick one I just read out.");
+          try {
+            await sms.send(`+${entityId}`, dealSms(deal));
+          } catch (e) {
+            error("mcp.sms_failed", { caller: entityId, deal: dealId }, e);
+            throw new ToolError("I couldn't send the text message right now; the deal is saved.");
+          }
+          info("mcp.sms_sent", { caller: entityId, deal: dealId });
+          return toolOk({ sent: true, dealId });
+        } catch (e) {
+          if (e instanceof ToolError) return toolErrorResult(e.message);
+          error("mcp.send_deal_sms_failed", undefined, e);
+          return toolErrorResult("Something went wrong; please try again.");
+        }
+      },
+    );
+  }
+
   return server;
 }
 
@@ -575,7 +644,7 @@ async function handleRequest(
 
     // A fresh McpServer + stateless transport per request (Edge has no
     // request lifespan).
-    const server = createServer(deps.kv, deps.actor, deps.fetchImpl);
+    const server = createServer(deps.kv, deps.actor, deps.fetchImpl, deps.sms);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
