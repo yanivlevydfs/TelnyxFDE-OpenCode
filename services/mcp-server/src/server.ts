@@ -279,6 +279,11 @@ export function inCountry(deals: RawDeal[], country: string): RawDeal[] {
   });
 }
 
+/** Caller id for logs: last 4 digits only (matches the webhook's mask). */
+function mask(entityId: string): string {
+  return entityId ? `***${entityId.slice(-4)}` : "";
+}
+
 /** Canonical, string-only flytlv query params for a search. */
 function buildParams(
   destination: string,
@@ -305,10 +310,13 @@ function buildParams(
 /** Deterministic KV cache key for a deals query (prefix from env). */
 function cacheKey(params: Record<string, string>): string {
   const prefix = config.optional("DEALS_CACHE_PREFIX", "cache/deals/");
+  // KV keys allow only a-z A-Z 0-9 - _ / = . (a "|" or "," is a 400), so join
+  // with "/" and replace anything else (e.g. the commas in a date list) by "_".
   const sig = Object.keys(params)
     .sort()
     .map((k) => `${k}=${params[k]}`)
-    .join("|");
+    .join("/")
+    .replace(/[^A-Za-z0-9\-_/=.]/g, "_");
   return prefix + sig;
 }
 
@@ -464,14 +472,14 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         } catch (e) {
           if (e instanceof ActorInputError) throw new ToolError(e.message);
           if (e instanceof ActorError) {
-            error("mcp.remember_failed", { caller: entityId }, e);
+            error("mcp.remember_failed", { caller: mask(entityId) }, e);
             throw new ToolError("The session service is unavailable; please try again.");
           }
           throw e;
         }
 
         info("mcp.search_deals", {
-          caller: entityId,
+          caller: mask(entityId),
           deals: slimmed.length,
           destination: params.destination ?? "",
           direct: args.direct_only ?? false,
@@ -505,12 +513,12 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         } catch (e) {
           if (e instanceof ActorInputError) throw new ToolError(e.message);
           if (e instanceof ActorError) {
-            error("mcp.save_failed", { caller: entityId, deal: dealId }, e);
+            error("mcp.save_failed", { caller: mask(entityId), deal: dealId }, e);
             throw new ToolError("The session service is unavailable; please try again.");
           }
           throw e;
         }
-        info("mcp.save_deal", { caller: entityId, deal: dealId });
+        info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
         return toolOk({ saved: true, dealId });
       } catch (e) {
         if (e instanceof ToolError) return toolErrorResult(e.message);
@@ -537,12 +545,12 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         } catch (e) {
           if (e instanceof ActorInputError) throw new ToolError(e.message);
           if (e instanceof ActorError) {
-            error("mcp.list_saved_failed", { caller: entityId }, e);
+            error("mcp.list_saved_failed", { caller: mask(entityId) }, e);
             throw new ToolError("The session service is unavailable; please try again.");
           }
           throw e;
         }
-        info("mcp.list_saved_deals", { caller: entityId });
+        info("mcp.list_saved_deals", { caller: mask(entityId) });
         return toolOk(profile);
       } catch (e) {
         if (e instanceof ToolError) return toolErrorResult(e.message);
@@ -582,7 +590,7 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
           } catch (e) {
             if (e instanceof ActorInputError) throw new ToolError(e.message);
             if (e instanceof ActorError) {
-              error("mcp.sms_lookup_failed", { caller: entityId, deal: dealId }, e);
+              error("mcp.sms_lookup_failed", { caller: mask(entityId), deal: dealId }, e);
               throw new ToolError("The session service is unavailable; please try again.");
             }
             throw e;
@@ -591,10 +599,10 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
           try {
             await sms.send(`+${entityId}`, dealSms(deal));
           } catch (e) {
-            error("mcp.sms_failed", { caller: entityId, deal: dealId }, e);
+            error("mcp.sms_failed", { caller: mask(entityId), deal: dealId }, e);
             throw new ToolError("I couldn't send the text message right now; the deal is saved.");
           }
-          info("mcp.sms_sent", { caller: entityId, deal: dealId });
+          info("mcp.sms_sent", { caller: mask(entityId), deal: dealId });
           return toolOk({ sent: true, dealId });
         } catch (e) {
           if (e instanceof ToolError) return toolErrorResult(e.message);
@@ -646,7 +654,7 @@ async function handleRequest(
     }
 
     // Bearer auth FIRST — never let an unsigned request reach the transport.
-    if (req.headers.authorization !== expectedToken) {
+    if (!safeEqual(req.headers.authorization ?? "", expectedToken)) {
       warning("mcp.unauthorized", { reason: "bearer mismatch" });
       sendJson(res, 401, { error: "unauthorized" });
       return;
@@ -674,11 +682,28 @@ async function handleRequest(
       enableJsonResponse: true,
     });
     await server.connect(transport);
+    // One latency span per JSON-RPC request (tool name for tools/call).
+    const rpc = parsedBody as { method?: string; params?: { name?: string } };
+    const started = Date.now();
     await transport.handleRequest(req, res, parsedBody);
+    info("mcp.request", {
+      method: rpc.method,
+      tool: rpc.params?.name,
+      status: res.statusCode,
+      duration_ms: Date.now() - started,
+    });
   } catch (e) {
     error("mcp.request_failed", undefined, e);
     if (!res.headersSent) sendJson(res, 500, { error: "internal error" });
   }
+}
+
+/** Constant-time string compare, so response timing does not leak the token. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 /** Collect the request body as a UTF-8 string. */

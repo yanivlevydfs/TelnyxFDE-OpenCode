@@ -90,8 +90,25 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Trace id of the request being handled (from the caller's x-trace-id header),
+// added to every facade log line so one call can be followed across services.
+let currentTrace = "";
+
 export default {
+  /** One `actor.request` latency span per request, then route it. */
   async fetch(req: Request, env: Env): Promise<Response> {
+    currentTrace = req.headers.get(process.env.TRACE_HEADER ?? "x-trace-id") ?? "";
+    const started = Date.now();
+    const resp = await route(req, env);
+    const [, entity = "", method = ""] =
+      new URL(req.url).pathname.match(/^\/actors\/([^/]+)\/([^/]+)$/) ?? [];
+    log("INFO", "actor.request", { entity, method, status: resp.status, duration_ms: Date.now() - started });
+    return resp;
+  },
+};
+
+async function route(req: Request, env: Env): Promise<Response> {
+  {
     // Only POST is used by the actor facade.
     if (req.method !== "POST") {
       return error(405, `method ${req.method} not allowed`);
@@ -166,8 +183,8 @@ export default {
       });
       return json(500, { error: msg });
     }
-  },
-};
+  }
+}
 
 /**
  * Dispatch to the actor method by name. Each method receives the body the
@@ -243,7 +260,10 @@ function log(
     level,
     service: "session-actor",
     event,
+    trace_id: currentTrace,
     ...fields,
+    // Caller ids are phone digits: log the last 4 only.
+    ...(typeof fields.entity === "string" ? { entity: `***${fields.entity.slice(-4)}` } : {}),
   });
   if (level === "ERROR") console.error(line);
   else if (level === "WARNING") console.warn(line);

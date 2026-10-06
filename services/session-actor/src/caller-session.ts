@@ -120,6 +120,8 @@ function log(
     service: "session-actor",
     event,
     ...fields,
+    // Caller ids are phone digits: log the last 4 only.
+    ...(typeof fields.entity === "string" ? { entity: `***${fields.entity.slice(-4)}` } : {}),
   });
   if (level === "ERROR") console.error(line);
   else if (level === "WARNING") console.warn(line);
