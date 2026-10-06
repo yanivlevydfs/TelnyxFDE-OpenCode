@@ -1,0 +1,4 @@
+# Editor type-checking for this repo (overrides h:\GitHub\pyrefly.toml).
+# shared/ and assistant/ hold modules imported by bare name (common, flow).
+search-path = [".", "shared", "assistant", "services/webhook"]
+python-interpreter = ".venv/Scripts/python.exe"
