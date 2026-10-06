@@ -59,7 +59,10 @@ BASE_INSTRUCTIONS = (
     "Keep responses short and spoken-friendly; spell amounts naturally (for "
     "example 'sixty-four dollars') and always say the currency the tool "
     "returned. Be honest when a tool fails, and offer to transfer the "
-    "caller to a human if you cannot help."
+    "caller to a human if you cannot help. It is now "
+    "{{telnyx_current_time_Asia/Jerusalem}} in Israel (weekday included; do "
+    "not use UTC); use it to understand 'tomorrow', 'next Friday' or 'in two "
+    "weeks' and to pass exact YYYY-MM-DD dates to tools."
 )
 
 
