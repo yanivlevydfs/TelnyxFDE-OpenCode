@@ -1,15 +1,17 @@
 """scripts/vendor_shared.py — copy shared/common.py into each Python service.
 
-The Telnyx Edge build ships one function folder at a time, so shared Python
-code can't live in a package imported across services. Instead we keep ONE
-source of truth (shared/common.py) and vendor it into every Python service as
-function/common.py. Re-run after editing shared/common.py and before
-`telnyx-edge ship` or `python -m pytest UnitTest`.
+    The Telnyx Edge build ships one function folder at a time, so shared Python
+    code can't live in a package imported across services. Instead we keep ONE
+    source of truth (shared/common.py) and vendor it into every Python service as
+    function/common.py. Re-run after editing shared/common.py and before
+    `telnyx-edge ship` or `python -m pytest UnitTest`.
 
     python scripts/vendor_shared.py
 
-TypeScript services (services/session-actor) have no `function/` directory and
-are skipped automatically.
+    TypeScript services (services/session-actor, services/mcp-server) have no
+    `function/` directory and are skipped automatically — the mcp-server was
+    ported from Python to TypeScript (the Python `mcp` SDK needs 3.10+ but Edge
+    builds Python with 3.9), so it is no longer vendored here.
 """
 
 from __future__ import annotations

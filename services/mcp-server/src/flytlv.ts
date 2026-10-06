@@ -1,0 +1,138 @@
+/**
+ * src/flytlv.ts — minimal flytlv.app deals API client.
+ *
+ * Production knowledge reused from the read-only `reference/flytlv_app`
+ * (`client.py` + `config.py`) — the owner's existing flytlv.app client:
+ *
+ *   - base URL from `FLYTLV_API_BASE` (default `https://flytlv.app`);
+ *   - the deals endpoint is `/api/private/deals` (overridable via
+ *     `FLYTLV_DEALS_PATH`);
+ *   - the `X-API-Key` header carries `FLYTLV_API_KEY` (header name overridable
+ *     via `FLYTLV_API_KEY_HEADER`, default `X-API-Key`);
+ *   - the feed is **fail-closed**: a `404` means the key is unset/rejected or
+ *     the feed is off — a configuration state, not a transient error — so we
+ *     log it once at ERROR and tell the caller the deals service is
+ *     unavailable instead of retry-storming;
+ *   - timeouts are short (a live phone caller cannot wait) and configurable
+ *     via `FLYTLV_TIMEOUT_MS`.
+ *
+ * Only what a single `search_deals` tool call needs lives here. A failure is
+ * turned into a `FlytlvError` whose message is safe to surface verbatim as an
+ * MCP `isError` result (never leaks the URL, the key or a traceback).
+ */
+
+import { config } from "./config";
+import { error, warning } from "./log";
+
+/** The flytlv deals API cannot be used right now. The message is
+ * caller-friendly and safe to surface verbatim (never leaks the URL, key or
+ * a traceback). */
+export class FlytlvError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FlytlvError";
+  }
+}
+
+/** Shape of a raw flytlv deals response. Loosely typed — the feed omits
+ * fields on some deals (e.g. `is_direct`, `return_date`). */
+export interface FlytlvPayload {
+  currency?: string;
+  deals?: unknown[];
+  [k: string]: unknown;
+}
+
+/** Log the fail-closed 404 once per process instance. Edge scales to zero, so
+ * "once" is best-effort within one instance; a fresh instance logs again. */
+let offLogged = false;
+function logFeedOffOnce(): void {
+  if (offLogged) return;
+  error("flytlv.feed_off", {
+    status: 404,
+    reason: "404 fail-closed: X-API-Key unset/rejected or feed switched off",
+  });
+  offLogged = true;
+}
+
+/** Stateless async client for one authenticated `GET /api/private/deals`. */
+export class FlytlvClient {
+  private readonly base: string;
+  private readonly path: string;
+  private readonly apiKey: string;
+  private readonly headerName: string;
+  private readonly timeoutMs: number;
+
+  constructor(private readonly fetchImpl: typeof fetch) {
+    this.base = config.optional("FLYTLV_API_BASE", "https://flytlv.app").replace(/\/+$/, "");
+    this.path = config.optional("FLYTLV_DEALS_PATH", "/api/private/deals");
+    this.apiKey = config.require("FLYTLV_API_KEY");
+    this.headerName = config.optional("FLYTLV_API_KEY_HEADER", "X-API-Key");
+    // Short by default: a phone caller is on the line. Configurable up.
+    this.timeoutMs = config.integer("FLYTLV_TIMEOUT_MS", 3000);
+  }
+
+  /**
+   * One authenticated GET; returns the parsed payload or throws FlytlvError.
+   * `params` is forwarded as URL query params (all string values).
+   */
+  async search(params: Record<string, string>): Promise<FlytlvPayload> {
+    const url = new URL(this.path, this.base);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const headers = new Headers({ [this.headerName]: this.apiKey });
+
+    let resp: Response;
+    try {
+      resp = await this.fetchImpl(url.toString(), {
+        headers,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === "TimeoutError") {
+        warning("flytlv.timeout", { error: e.message });
+        throw new FlytlvError(
+          "The deals service is taking too long to respond; please try again shortly.",
+        );
+      }
+      error("flytlv.request_failed", { error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) }, e);
+      throw new FlytlvError(
+        "The deals service is temporarily unavailable; please try again.",
+      );
+    }
+
+    if (resp.status === 404) {
+      // Fail-closed feed: key unset/rejected or feed switched off.
+      logFeedOffOnce();
+      throw new FlytlvError(
+        "The deals service is unavailable right now. Please try again later.",
+      );
+    }
+
+    if (resp.status === 429) {
+      warning("flytlv.rate_limited", { status: 429 });
+      throw new FlytlvError(
+        "The deals service is busy right now; please try again shortly.",
+      );
+    }
+
+    if (resp.status >= 400) {
+      error("flytlv.http_error", { status: resp.status });
+      throw new FlytlvError(
+        "The deals service is unavailable right now. Please try again later.",
+      );
+    }
+
+    let payload: unknown;
+    try {
+      payload = await resp.json();
+    } catch (e) {
+      error("flytlv.bad_json", undefined, e);
+      throw new FlytlvError("The deals service returned an unreadable response.");
+    }
+
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      error("flytlv.unexpected_shape", { type: payload === null ? "null" : typeof payload });
+      throw new FlytlvError("The deals service returned an unexpected response.");
+    }
+    return payload as FlytlvPayload;
+  }
+}
