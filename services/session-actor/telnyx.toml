@@ -22,6 +22,12 @@ compatibility_date = "2026-05-01"
 binding = "CALLER_SESSION"
 type    = "CallerSession"
 
+# Shared service-wide metrics (counters + latency), one instance "global",
+# updated by the webhook and the MCP server through POST /metrics/add.
+[[actors]]
+binding = "METRICS"
+type    = "MetricsCounter"
+
 # Edge secrets binding. The HTTP facade reads `INTERNAL_API_TOKEN` through
 # this binding (`env.SECRETS.get("INTERNAL_API_TOKEN")`); it is the shared
 # bearer the webhook (Python) and mcp-server (TypeScript) send in their

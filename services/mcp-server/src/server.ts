@@ -43,6 +43,7 @@ import {
 } from "./actor.js";
 import { FlytlvClient, FlytlvError, type FlytlvPayload } from "./flytlv.js";
 import type { SmsSender } from "./sms.js";
+import type { Metrics } from "./actor.js";
 
 // ------------------------------------------------------------------ public API
 
@@ -56,6 +57,8 @@ export interface Dependencies {
   fetchImpl: typeof fetch;
   /** Optional SMS sender; when present a 4th tool, `send_deal_sms`, is registered. */
   sms?: SmsSender;
+  /** Optional metrics sink (the shared MetricsCounter actor). */
+  metrics?: Metrics;
 }
 
 /** JSON KV wrapper interface (the real `EdgeKv` + fakes both implement it). */
@@ -375,7 +378,19 @@ async function requireCaller(kv: Kv, conv: string): Promise<string> {
 // ------------------------------------------------------------------- server
 
 /** Build the `McpServer` with the three tools, closing over dependencies. */
-export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?: SmsSender): McpServer {
+export function createServer(
+  kv: Kv,
+  actor: Actor,
+  fetchImpl: typeof fetch,
+  sms?: SmsSender,
+  metrics?: Metrics,
+): McpServer {
+  const bump = (name: string) => metrics?.add({ [name]: 1 });
+  /** A caller-facing tool error, counted. */
+  const fail = (message: string) => {
+    bump("tool.errors");
+    return toolErrorResult(message);
+  };
   const server = new McpServer({
     name: config.optional("MCP_SERVER_NAME", "fde-mcp"),
     version: "0.1.0",
@@ -434,10 +449,15 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         if (cached) {
           payload = cached as FlytlvPayload;
           debug("mcp.cache_hit", { key });
+          bump("cache.hit");
         } else {
+          bump("cache.miss");
+          const t0 = Date.now();
           try {
             payload = await flytlv.search(params);
+            metrics?.add({ "flytlv.calls": 1 }, { "flytlv.search": Date.now() - t0 });
           } catch (e) {
+            bump("flytlv.errors");
             if (e instanceof FlytlvError) throw new ToolError(e.message);
             throw e;
           }
@@ -486,9 +506,9 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         });
         return toolOk({ deals: slimmed });
       } catch (e) {
-        if (e instanceof ToolError) return toolErrorResult(e.message);
+        if (e instanceof ToolError) return fail(e.message);
         error("mcp.search_deals_failed", undefined, e);
-        return toolErrorResult("Something went wrong; please try again.");
+        return fail("Something went wrong; please try again.");
       }
     },
   );
@@ -519,11 +539,12 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
           throw e;
         }
         info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
+        bump("deals.saved");
         return toolOk({ saved: true, dealId });
       } catch (e) {
-        if (e instanceof ToolError) return toolErrorResult(e.message);
+        if (e instanceof ToolError) return fail(e.message);
         error("mcp.save_deal_failed", undefined, e);
-        return toolErrorResult("Something went wrong; please try again.");
+        return fail("Something went wrong; please try again.");
       }
     },
   );
@@ -553,9 +574,9 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
         info("mcp.list_saved_deals", { caller: mask(entityId) });
         return toolOk(profile);
       } catch (e) {
-        if (e instanceof ToolError) return toolErrorResult(e.message);
+        if (e instanceof ToolError) return fail(e.message);
         error("mcp.list_saved_deals_failed", undefined, e);
-        return toolErrorResult("Something went wrong; please try again.");
+        return fail("Something went wrong; please try again.");
       }
     },
   );
@@ -603,11 +624,12 @@ export function createServer(kv: Kv, actor: Actor, fetchImpl: typeof fetch, sms?
             throw new ToolError("I couldn't send the text message right now; the deal is saved.");
           }
           info("mcp.sms_sent", { caller: mask(entityId), deal: dealId });
+          bump("sms.sent");
           return toolOk({ sent: true, dealId });
         } catch (e) {
-          if (e instanceof ToolError) return toolErrorResult(e.message);
+          if (e instanceof ToolError) return fail(e.message);
           error("mcp.send_deal_sms_failed", undefined, e);
-          return toolErrorResult("Something went wrong; please try again.");
+          return fail("Something went wrong; please try again.");
         }
       },
     );
@@ -676,7 +698,7 @@ async function handleRequest(
 
     // A fresh McpServer + stateless transport per request (Edge has no
     // request lifespan).
-    const server = createServer(deps.kv, deps.actor, deps.fetchImpl, deps.sms);
+    const server = createServer(deps.kv, deps.actor, deps.fetchImpl, deps.sms, deps.metrics);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -686,12 +708,12 @@ async function handleRequest(
     const rpc = parsedBody as { method?: string; params?: { name?: string } };
     const started = Date.now();
     await transport.handleRequest(req, res, parsedBody);
-    info("mcp.request", {
-      method: rpc.method,
-      tool: rpc.params?.name,
-      status: res.statusCode,
-      duration_ms: Date.now() - started,
-    });
+    const ms = Date.now() - started;
+    info("mcp.request", { method: rpc.method, tool: rpc.params?.name, status: res.statusCode, duration_ms: ms });
+    if (rpc.method === "tools/call" && rpc.params?.name) {
+      const tool = `tool.${rpc.params.name}`;
+      deps.metrics?.add({ "mcp.tool_calls": 1, [tool]: 1 }, { [tool]: ms });
+    }
   } catch (e) {
     error("mcp.request_failed", undefined, e);
     if (!res.headersSent) sendJson(res, 500, { error: "internal error" });

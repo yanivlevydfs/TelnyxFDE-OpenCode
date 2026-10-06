@@ -93,3 +93,27 @@ export class ActorClient implements Actor {
     return await resp.json();
   }
 }
+
+/** Service-wide metrics sink: the shared MetricsCounter actor behind the facade's
+ * POST /metrics/add. Fire-and-forget — a metrics failure never affects a call. */
+export interface Metrics {
+  add(counts: Record<string, number>, latency?: Record<string, number>): void;
+}
+
+export class ActorMetrics implements Metrics {
+  private readonly url: string;
+  private readonly token: string;
+
+  constructor(private readonly fetchImpl: typeof fetch) {
+    this.url = `${config.require("ACTOR_SERVICE_URL").replace(/\/+$/, "")}/metrics/add`;
+    this.token = config.require("INTERNAL_API_TOKEN");
+  }
+
+  add(counts: Record<string, number>, latency: Record<string, number> = {}): void {
+    void this.fetchImpl(this.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ counts, latency }),
+    }).catch(() => undefined);
+  }
+}

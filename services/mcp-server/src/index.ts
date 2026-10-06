@@ -17,7 +17,7 @@
 import http from "node:http";
 
 import { info } from "./log.js";
-import { ActorClient } from "./actor.js";
+import { ActorClient, ActorMetrics } from "./actor.js";
 import { EdgeKv } from "./kv.js";
 import { createHandler } from "./server.js";
 import { TelnyxSms } from "./sms.js";
@@ -29,6 +29,7 @@ function buildDependencies() {
     actor: new ActorClient(fetch),
     fetchImpl: fetch,
     sms: new TelnyxSms(),
+    metrics: new ActorMetrics(fetch),
   };
 }
 

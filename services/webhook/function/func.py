@@ -18,12 +18,14 @@ import asyncio
 import inspect
 import json
 import os
+import time
 from collections.abc import Mapping
 from typing import Any
 
 import httpx
 import telnyx
 from starlette.applications import Starlette
+from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -150,18 +152,32 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
     """Build the ASGI app with injected dependencies (tests pass fakes)."""
 
     async def handle(request: Request) -> JSONResponse:
+        started = time.perf_counter()
+        counts: dict[str, float] = {"webhook.calls": 1}
+        resp = await _handle(request, counts)
+        # Service metrics go to the shared MetricsCounter actor AFTER the response
+        # is sent, so they never eat into the dynamic-variables time budget.
+        record = getattr(actor, "metrics", None)
+        if record is not None:
+            ms = round((time.perf_counter() - started) * 1000)
+            resp.background = BackgroundTask(record, counts, {"webhook.request": ms})
+        return resp
+
+    async def _handle(request: Request, counts: dict[str, float]) -> JSONResponse:
         body = await request.body()
         with c.timed("webhook.request") as span:
             # Signature first: an unsigned body is never even parsed.
             if verify and not await _valid_signature(client, body, request.headers):
                 span["outcome"] = "rejected"
                 c.warning("webhook.rejected", reason="signature")
+                counts["webhook.rejected"] = 1
                 return JSONResponse({"error": "invalid signature"}, status_code=401)
             try:
                 event = json.loads(body)
             except ValueError:  # JSONDecodeError + UnicodeDecodeError
                 span["outcome"] = "rejected"
                 c.warning("webhook.rejected", reason="json")
+                counts["webhook.rejected"] = 1
                 return JSONResponse({"error": "invalid json"}, status_code=400)
 
             data = event.get("data") if isinstance(event, dict) else {}
@@ -181,6 +197,13 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
             span["outcome"] = "degraded" if degraded else "ok"
             span["caller"] = c.mask(phone)
             span["degraded"] = degraded
+            calls = profile.get("callCount", 0)
+            caller_kind = "anonymous" if not entity else ("returning" if calls > 1 else "new")
+            counts[f"callers.{caller_kind}"] = 1
+            if degraded:
+                counts["webhook.degraded"] = 1
+                for name in degraded:
+                    counts[f"webhook.failed.{name}"] = 1
             c.info("webhook.variables", caller=c.mask(phone), degraded=degraded)
             return JSONResponse({"dynamic_variables": _dynamic_variables(profile, flags, bool(degraded))})
 
