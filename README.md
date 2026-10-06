@@ -15,6 +15,7 @@ OpenCode/Claude only orchestrates, reviews and runs tests.
 - Design: [spec/ARCHITECTURE.md](spec/ARCHITECTURE.md), [spec/DECISIONS.md](spec/DECISIONS.md),
   [spec/OBSERVABILITY.md](spec/OBSERVABILITY.md)
 - Demo script: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+- How to talk to the phone agent: [docs/HOW_TO_CALL.md](docs/HOW_TO_CALL.md)
 - Rules for the coding agent: [AGENTS.md](AGENTS.md); build prompts & status: [PROMPTS.md](PROMPTS.md)
 
 ## Status
@@ -32,7 +33,19 @@ OpenCode/Claude only orchestrates, reviews and runs tests.
 Total: **46 tests** (39 Python + 7 TypeScript) green: `.venv/Scripts/python -m pytest UnitTest -q`
 and `cd services/session-actor && npm test`.
 
-**Live endpoints and phone number** are recorded here after the first deploy.
+**Live endpoints and phone number**
+
+| What | Where |
+|---|---|
+| Phone | **+972 76-567-1113** (how to talk to it: [docs/HOW_TO_CALL.md](docs/HOW_TO_CALL.md)) |
+| Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` (GLM-5.3-Flash) |
+| Webhook (Edge Function) | https://fde-webhook-e5907143-e.telnyxcompute.com |
+| MCP server (Edge Function) | https://fde-mcp-bc3393fa-a.telnyxcompute.com |
+| Session actor (Edge) | https://fde-session-actor-94b99eb9-4.telnyxcompute.com |
+
+Deploys run from GitHub Actions ([.github/workflows/ship.yml](.github/workflows/ship.yml)):
+the Windows `telnyx-edge` CLI zips paths with backslashes, which breaks multi-folder
+functions on the Linux builders.
 
 ## Architecture
 
