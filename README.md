@@ -518,13 +518,13 @@ services/                              LIVE: what runs on Telnyx Edge
 shared/common.py                       Python code shared by the services (vendored into each)
 assistant/                             PROVISIONING: workflow (flow.py) + provision.py via the Telnyx SDK
 
-scripts/
+scripts/                               see scripts/README.md
   build/vendor_shared.py               copy shared/common.py into each Python service
   ops/live_check.py                    end-to-end PASS/FAIL check of the deployed services
   ops/metrics.py                       live metrics dashboard (--reset before a demo)
   ops/actor_concurrency_check.py       proof: concurrent actor updates lose nothing
 
-docs/
+docs/                                  see docs/README.md
   challenge/                           code_challenge.md (the brief), USE_CASE.md
   design/                              ARCHITECTURE.md, DECISIONS.md, OBSERVABILITY.md
   guides/                              HOW_TO_CALL.md (callers), DEMO_SCRIPT.md (demo day)

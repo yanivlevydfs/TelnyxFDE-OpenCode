@@ -14,8 +14,10 @@ surface, so this service is the **thin TypeScript facade** the Python services
 | File | Purpose |
 |---|---|
 | `src/caller-session.ts` | `CallerSession extends StatefulActor<Env>` — `recordCall`, `getProfile`, `setLastResults`, `saveDeal`, `getSaved`. Exports the `Deal`/`Profile`/`ActorInputError` types. |
-| `src/index.ts` | The Worker default export `worker.fetch(req, env)` — Bearer-guarded HTTP facade with a method allowlist, dispatching to the actor via `env.CALLER_SESSION.idFromName(name)`. |
-| `telnyx.toml` | Umbrella manifest — `[[actors]] CALLER_SESSION → CallerSession` + a `[[secrets]] SECRETS` binding (no `func_id`). |
+| `src/index.ts` | The Worker default export `worker.fetch(req, env)` — Bearer-guarded HTTP facade: `POST /actors/{caller}/{method}` (method allowlist) to `CallerSession`, and `POST /metrics/{add,snapshot,reset}` to the shared `MetricsCounter`. |
+| `src/metrics-counter.ts` | `MetricsCounter extends StatefulActor` — one `global` instance holding service counters and latency (`add`, `snapshot`, `reset`). |
+| `src/log.ts` | One structured JSON logger for the actor and facade: Israel-time `ts`, per-request `trace_id`, masked caller ids. |
+| `telnyx.toml` | Umbrella manifest — `[[actors]] CALLER_SESSION → CallerSession`, `[[actors]] METRICS → MetricsCounter`, a `[[secrets]]` binding for `INTERNAL_API_TOKEN`, and the `[edge_compute] func_id`. |
 | `package.json`, `tsconfig.json` | NPM + TypeScript config. |
 
 ## Why an actor (and not KV) for this state

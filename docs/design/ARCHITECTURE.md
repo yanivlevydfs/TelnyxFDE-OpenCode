@@ -8,11 +8,13 @@ Telnyx AI Assistant ── Conversation Workflow (speak / prompt / tool nodes, e
    │  1. conversation start                 │  2. mid-conversation tool calls
    ▼                                         ▼
 webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
-   │  ├─ KV REST: feature flags              │  ├─ KV env.KV: deals cache
-   │  └─ HTTP ─┐                             │  └─ HTTP ─┐
+   │  ├─ KV REST: flags, session write       │  ├─ KV env.KV: session read, deals cache, flags
+   │  └─ HTTP ─┐                             │  ├─ HTTP: flytlv.app deals API, Telnyx SMS
+   │           │                             │  └─ HTTP ─┐
    │           ▼                             │           ▼
-   │      session-actor (TypeScript Edge Function)
-   │           └─ CallerSession Stateful Actor (one instance per caller)
+   │      session-actor (TypeScript Edge Function: HTTP facade)
+   │           ├─ CallerSession  Stateful Actor (one instance per caller)
+   │           └─ MetricsCounter Stateful Actor (one "global" instance, metrics)
    ▼
 {"dynamic_variables": {...}}  → instructions, speak nodes, variable-comparison edges
 ```
@@ -24,8 +26,8 @@ webhook  (Python Edge Function)          mcp-server  (TypeScript Edge Function)
 | Assistant + workflow | Telnyx Voice AI | Conversation flow, routing | webhook (once), mcp-server (per tool call) |
 | webhook | Edge Function, Python | Nothing (stateless) | KV, session-actor |
 | mcp-server | Edge Function, TypeScript | Nothing (stateless) | KV, session-actor |
-| session-actor | Edge Function, TypeScript | Per-caller state | Actor storage |
-| KV namespace | Telnyx KV | Flags, caches | — |
+| session-actor | Edge Function, TypeScript | Per-caller state (CallerSession), service metrics (MetricsCounter) | Actor storage |
+| KV namespace | Telnyx KV | Flags, deals cache, conversation → caller session | — |
 
 ## Choosing the primitive for each piece of state
 
@@ -62,3 +64,11 @@ Streamable HTTP, JSON response). Bearer token checked → tool runs → result r
 - Edge builds each function directory alone → `shared/common.py` is copied into each service before `telnyx-edge ship`.
 - Dynamic Variables webhook default timeout 1.5 s + cold starts → concurrent fetches, budget, degraded defaults.
 - Functions scale to zero → clients created once per instance, no in-memory state relied upon.
+
+## Where the code lives
+
+See [README.md, Repository layout](../../README.md#repository-layout): `services/`
+is what runs on Telnyx Edge, `assistant/` provisions the assistant and its
+workflow, `shared/` is vendored into the Python service, `scripts/build` and
+`scripts/ops` hold the build and live-operations scripts, and `docs/` is grouped
+into challenge, design, guides and build.
