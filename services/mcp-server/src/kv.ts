@@ -10,7 +10,7 @@
  * Any failure is raised as `KvError` so callers can degrade cleanly (the
  * MCP tools treat KV as best-effort cache and best-effort session reads).
  *
- * WIth nothing hardcoded, the binding name comes from `func.toml`; only the
+ * With nothing hardcoded, the binding name comes from `func.toml`; only the
  * production entry (`index.ts`) constructs an `EdgeKv`. Tests pass a fake
  * `Kv` and never construct this class.
  */

@@ -11,7 +11,9 @@ Workflow"):
 * a **speak node** first — the verbatim disclosure / brand greeting that must
   be delivered word-for-word with no model turn;
 * **prompt nodes** for every LLM-driven step (intent detection, flight search,
-  save, list, transfer, end);
+  save, list saved deals, answer FAQ, timeout escalation, transfer, end);
+* more **speak nodes** for the degraded notice, the deals-disabled notice and
+  the farewell;
 * **conditional edges** of all three kinds — ``llm`` for intent-based routing,
   ``expression`` (variable comparison) for deterministic routing, and
   ``default`` for the fallback that every speak node must have.
@@ -64,7 +66,7 @@ GREETING_MESSAGE = (
 )
 
 DEGRADED_MESSAGE = (
-    "I'm having trouble reaching our flight service right now. "
+    "I'm having trouble reaching our booking system right now. "
     "Please try again in a few minutes."
 )
 
@@ -151,7 +153,7 @@ FAQ_INSTRUCTIONS = (
     "flights, but you can text the deal and its booking link to the number they "
     "are calling from; saved deals are kept for that phone number and read back "
     "on later calls; a weekend means Thursday to Saturday departures; flights "
-    "leaving within three hours are not offered. For anything else (baggage, "
+    "leaving in the next few hours are not offered. For anything else (baggage, "
     "seats, visas, refunds), say the airline or flytlv.app booking page has the "
     "answer. Then ask if they would like to search for flights."
 )
@@ -170,6 +172,9 @@ HANGUP_INSTRUCTIONS = "Use the hangup tool to end the call now."
 # overrides them at call start; if the webhook fails entirely these values keep
 # the workflow's expression edges from comparing against raw ``{{placeholders}}``.
 # They mirror the webhook's degraded-mode response plus the deals feature flag.
+
+# LLM condition shared by every "caller is finished" edge to the farewell.
+_DONE = "The caller is finished, says goodbye or thanks, or wants to end the call."
 
 DEFAULT_VARIABLES: dict[str, str] = {
     "caller_known": "false",
@@ -250,7 +255,7 @@ def _expr_gte(name: str, value: int) -> dict[str, Any]:
 def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
     """Return the ``conversation_flow`` graph for the FlyTLV Travel Line.
 
-    ``conversation_timeout_secs`` is the after which the workflow escalates a
+    ``conversation_timeout_secs`` is the call length after which the workflow escalates a
     long call to a human (the conversation-duration variable-comparison edge —
     a challenge stretch goal).
     """
@@ -331,6 +336,10 @@ def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
               _llm("The question was answered and the caller has another question or request.")),
         _edge("e_list_to_intent", "list_saved", "identify_intent",
               _llm("The caller has heard their saved deals and may have another request.")),
+
+        # every task step can end the call through the verbatim farewell
+        *[_edge(f"e_{node}_to_farewell", node, "farewell", _llm(_DONE))
+          for node in ("identify_intent", "search_flights", "save_deal", "list_saved", "answer_faq")],
 
         # transfer then wrap up; farewell (speak) ends on hangup
         _edge("e_transfer_to_farewell", "transfer_call", "farewell",

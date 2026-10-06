@@ -17,6 +17,7 @@ import re
 import time
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -68,21 +69,21 @@ def flag(name: str, default: bool = False) -> bool:
 
 # -------------------------------------------------------------------- logging
 
-# Per-process trace id; flows into every log line and outbound request header.
-_trace_id: str = uuid.uuid4().hex
+# Trace id of the request being handled; flows into every log line and the
+# outbound actor header. A ContextVar keeps concurrent requests apart. It lives
+# on the shared "common" logger object so every vendored copy of this file (and
+# the formatter another copy installed) uses the same variable.
+_shared_logger = logging.getLogger("common")
+if not hasattr(_shared_logger, "_trace_var"):
+    setattr(_shared_logger, "_trace_var", ContextVar("trace_id", default=""))  # noqa: B010
+_TRACE: ContextVar[str] = getattr(_shared_logger, "_trace_var")  # noqa: B009
 
 
 def set_trace_id(tid: str | None) -> str:
-    """Set the current trace id; generate a 32-hex one if None. Returns it.
-
-    The id is mirrored onto the shared ``"common"`` logger object (one singleton
-    for every vendored copy of this file) so that the ``_JsonFormatter`` another
-    copy installed reads the latest value instead of a stale module global.
-    """
-    global _trace_id
-    _trace_id = tid or uuid.uuid4().hex
-    setattr(logger, "_trace_id", _trace_id)  # noqa: B010 (Logger has no such attr for type checkers)
-    return _trace_id
+    """Set the current request's trace id; generate a 32-hex one if None. Returns it."""
+    value = tid or uuid.uuid4().hex
+    _TRACE.set(value)
+    return value
 
 
 def _log_tz():
@@ -106,9 +107,8 @@ class _JsonFormatter(logging.Formatter):
             "ts": _local_ts(record.created),
             "level": record.levelname,
             "event": record.getMessage(),
-            # Read from the shared logger so a set_trace_id in any vendored copy
             # is visible to the formatter installed by whichever copy ran first.
-            "trace_id": getattr(logger, "_trace_id", _trace_id),
+            "trace_id": _TRACE.get(),
         }
         if hasattr(record, "fields"):
             payload.update(record.fields)
@@ -139,10 +139,6 @@ if not any(h.__class__.__name__ == "_StdoutHandler" for h in logger.handlers):
     _handler.setFormatter(_JsonFormatter())
     logger.addHandler(_handler)
 logger.propagate = False  # never bubble up to the root logger
-# Initialise the shared trace id once (first importer wins; set_trace_id updates
-# it thereafter). Lives on the logger object so every vendored copy shares it.
-if not hasattr(logger, "_trace_id"):
-    setattr(logger, "_trace_id", _trace_id)  # noqa: B010 (Logger has no such attr for type checkers)
 
 
 def info(event: str, **fields: Any) -> None:
@@ -258,7 +254,7 @@ class ActorClient:
         url = f"{self._base}/actors/{entity_id}/{method}"
         headers = {
             "authorization": f"Bearer {self._token}",
-            self._trace_header: _trace_id,
+            self._trace_header: _TRACE.get(),
             "content-type": "application/json",
         }
         try:
@@ -295,12 +291,17 @@ def _session_ttl() -> int:
 
 
 async def save_session(kv: Kv, conversation_id: str, phone: str) -> None:
-    """Write the caller's phone for a conversation id (TTL = one call window)."""
+    """Write the caller's phone for a conversation id (TTL = one call window).
+
+    Kept for the acceptance tests (UnitTest/test_common.py). Production writes
+    ``{"entity_id": digits}`` under SESSION_KEY_PREFIX in the webhook instead,
+    the shape the MCP server reads.
+    """
     await kv.put_json(f"session/{conversation_id}", phone, ttl_secs=_session_ttl())
 
 
 async def load_session(kv: Kv, conversation_id: str) -> str | None:
-    """Return the phone saved for this conversation, or None if blank/missing."""
+    """Return the phone saved by save_session (acceptance tests only), or None."""
     if not conversation_id:
         return None
     return await kv.get_json(f"session/{conversation_id}")
@@ -314,7 +315,7 @@ def entity_id(phone: str) -> str:
 
 
 def mask(phone: str) -> str:
-    """Mask a phone for logs: last 4 chars after '***'. '' if empty."""
-    if not phone:
-        return ""
-    return "***" + phone[-4:]
+    """Mask a phone for logs: '***' + its last 4 digits (same as the TypeScript
+    services). '' if it has no digits."""
+    digits = entity_id(phone)
+    return "***" + digits[-4:] if digits else ""

@@ -52,14 +52,22 @@ import flow
 # prices), voice conciseness and a currency rule. Dynamic-variable placeholders
 # are interpolated by Telnyx at call time.
 
+def _checked_flow(conversation_timeout_secs: int) -> dict[str, Any]:
+    """The workflow graph, refused before any API call if validate() finds a problem."""
+    graph = flow.build_flow(conversation_timeout_secs)
+    problems = flow.validate(graph)
+    if problems:
+        raise ValueError("invalid conversation flow: " + "; ".join(problems))
+    return graph
+
+
 BASE_INSTRUCTIONS = (
     "You are the FlyTLV Travel Line voice assistant. You help people find cheap "
     "round-trip flights from Tel Aviv over the phone, using tools for all flight "
     "data — you never invent prices, dates, airlines, cities or booking URLs. "
     "Keep responses short and spoken-friendly; spell amounts naturally (for "
     "example 'sixty-four dollars') and always say the currency the tool "
-    "returned. Be honest when a tool fails, and offer to transfer the "
-    "caller to a human if you cannot help. It is now "
+    "returned. Be honest when a tool fails. It is now "
     "{{telnyx_current_time_Asia/Jerusalem}} in Israel (weekday included; do "
     "not use UTC); use it to understand 'tomorrow', 'next Friday' or 'in two "
     "weeks' and to pass exact YYYY-MM-DD dates to tools."
@@ -117,7 +125,10 @@ def assistant_body(env: dict[str, str], mcp_id: str,
             "FlyTLV Travel Line — cheap round-trip flights from Tel Aviv by phone.",
         ),
         # Required by the CreateAssistant API.
-        "instructions": BASE_INSTRUCTIONS,
+        # Offer a human only when a transfer number (and so a transfer tool) exists.
+        "instructions": BASE_INSTRUCTIONS + (
+            " If you cannot help, offer to transfer the caller to a human." if transfer_to
+            else " No human agent is available; if asked, say so and keep helping."),
         # Telnyx-hosted model id and voice — both from env (owner rule: nothing
         # hardcoded). Voice goes under voice_settings.voice per the API schema.
         "model": _req(env, "ASSISTANT_MODEL"),
@@ -129,12 +140,12 @@ def assistant_body(env: dict[str, str], mcp_id: str,
         "dynamic_variables_webhook_url": _req(env, "WEBHOOK_URL"),
         "dynamic_variables_webhook_timeout_ms": _int(env, "WEBHOOK_TIMEOUT_MS", 1500),
         "dynamic_variables": flow.DEFAULT_VARIABLES,
-        # The MCP server supplies search_deals / save_deal / list_saved_deals.
+        # The MCP server supplies search_deals / save_deal / list_saved_deals / send_deal_sms.
         "mcp_servers": [{"id": mcp_id}],
         # Inline tools: hangup always, transfer only when a human is configured.
         "tools": flow.build_tools(transfer_from, transfer_to),
         # The conversation workflow itself.
-        "conversation_flow": flow.build_flow(conversation_timeout_secs),
+        "conversation_flow": _checked_flow(conversation_timeout_secs),
     }
 
 

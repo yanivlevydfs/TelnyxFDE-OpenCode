@@ -61,6 +61,7 @@ export class ActorClient implements Actor {
         method: "POST",
         headers,
         body: JSON.stringify(body ?? {}),
+        signal: AbortSignal.timeout(config.integer("HTTP_TIMEOUT_MS", 3000)),
       });
     } catch (e) {
       throw new ActorError(`actor ${entityId}/${method}: ${e instanceof Error ? e.message : String(e)}`);

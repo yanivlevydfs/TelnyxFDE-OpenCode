@@ -1,17 +1,18 @@
 /**
  * src/server.ts — MCP tools + the per-request HTTP handler for fde-mcp.
  *
- * Three tools (registered on an `mcp` SDK `McpServer`) that the Telnyx AI
+ * Tools (registered on an `mcp` SDK `McpServer`) that the Telnyx AI
  * Assistant calls mid-conversation over stateless Streamable HTTP:
  *
- *   - `search_deals`     — query the flytlv.app deals API (KV-cached), speak
- *                         the best deals back, and remember them on the
- *                         caller's Stateful Actor via `setLastResults` so a
- *                         later `save_deal` can only save a deal the caller
- *                         was actually offered (no invented prices or URLs).
- *   - `save_deal`        — save one of the last-shown deals to the caller's
- *                         actor.
+ *   - `search_deals`     — query the flytlv.app deals API (KV-cached) by
+ *                         destination, country, weekend or date, and remember
+ *                         the deals on the caller's Stateful Actor
+ *                         (`setLastResults`) so a later save or SMS can only use
+ *                         a deal the caller was actually offered.
+ *   - `save_deal`        — save one of the last-shown deals to the caller's actor.
  *   - `list_saved_deals` — read the deals the caller saved on previous calls.
+ *   - `send_deal_sms`    — text the caller a shown deal and its booking link
+ *                         (registered only when an SMS sender is wired).
  *
  * Every value comes from an environment variable / Edge secret — nothing is
  * hardcoded. Bearer auth (`MCP_API_KEY`) is checked in `createHandler` BEFORE
@@ -25,7 +26,7 @@
  * each tool resolves the caller from `session/<conversation_id>` in KV and
  * forwards the same `trace_id` to the actor.
  *
- * Dependencies (`kv`, `actor`, `fetchImpl`) are injected so tests pass fakes;
+ * Dependencies (`kv`, `actor`, `fetchImpl`, `sms`, `metrics`) are injected so tests pass fakes;
  * `index.ts` wires the real Telnyx clients in production.
  */
 
@@ -35,7 +36,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 import { config } from "./config.js";
-import { debug, error, info, setTraceId, warning } from "./log.js";
+import { debug, error, info, setTraceId, warning, traceContext } from "./log.js";
 import {
   Actor,
   ActorError,
@@ -323,73 +324,97 @@ function cacheKey(params: Record<string, string>): string {
   return prefix + sig;
 }
 
-/** Resolve the caller entity for a conversation, tolerating KV failure.
- * Returns the entity id, or `undefined` if the session is unmapped/blank or
- * KV is down. A missing link must not block the search itself — only the
- * "remember results" step — so this never raises; it logs and degrades. */
-async function bestEffortCaller(kv: Kv, conv: string): Promise<string | undefined> {
+/** The caller entity for a conversation, from `session/<conversation_id>`
+ * (written by the webhook). `undefined` = no session: an anonymous or hidden
+ * caller id, so nothing can be saved for them. KV failure raises ToolError. */
+async function readCaller(kv: Kv, conv: string): Promise<string | undefined> {
   if (!conv) return undefined;
-  const prefix = config.optional("SESSION_KEY_PREFIX", "session/");
-  try {
-    const session = await kv.getJson(`${prefix}${conv}`);
-    if (session && typeof session === "object" && !Array.isArray(session)) {
-      const s = session as { entity_id?: unknown };
-      if (s.entity_id) return String(s.entity_id);
-    }
-    return undefined;
-  } catch (e) {
-    warning("mcp.session_read_failed", {
-      conversation: conv,
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return undefined;
-  }
-}
-
-/** Resolve the caller entity, raising `ToolError` on any failure.
- * Used by tools that cannot work without a known caller (save / list).
- * A missing mapping -> "identify this call"; an unreachable KV -> "unavailable".
- */
-async function requireCaller(kv: Kv, conv: string): Promise<string> {
-  if (!conv) throw new ToolError("I can't identify this call; please hang up and try again.");
   const prefix = config.optional("SESSION_KEY_PREFIX", "session/");
   let session: unknown;
   try {
     session = await kv.getJson(`${prefix}${conv}`);
   } catch (e) {
-    error(
-      "mcp.session_read_failed",
-      { conversation: conv, error: e instanceof Error ? e.message : String(e) },
-      e,
-    );
+    error("mcp.session_read_failed", { conversation: conv, error: e instanceof Error ? e.message : String(e) }, e);
     throw new ToolError("The session service is unavailable; please try again later.");
   }
-  if (
-    !session ||
-    typeof session !== "object" ||
-    Array.isArray(session) ||
-    !(session as { entity_id?: unknown }).entity_id
-  ) {
-    throw new ToolError("I can't identify this call; please hang up and try again.");
-  }
-  return String((session as { entity_id: unknown }).entity_id);
+  const id = session && typeof session === "object" && !Array.isArray(session)
+    ? (session as { entity_id?: unknown }).entity_id
+    : undefined;
+  return id ? String(id) : undefined;
 }
+
+/** Like readCaller, for tools that need a known caller (save / list / SMS). */
+async function requireCaller(kv: Kv, conv: string): Promise<string> {
+  const entityId = await readCaller(kv, conv);
+  if (!entityId) throw new ToolError("I can't identify this call; please hang up and try again.");
+  return entityId;
+}
+
+/** Call the caller's actor, mapping failures to caller-safe ToolErrors: the
+ * actor's own input reason (e.g. "deal not in the last search results") is
+ * passed on; an unreachable actor is "unavailable" (and logged). */
+async function callActor(actor: Actor, entityId: string, method: string, body?: unknown): Promise<unknown> {
+  try {
+    return await actor.call(entityId, method, body);
+  } catch (e) {
+    if (e instanceof ActorInputError) throw new ToolError(e.message);
+    if (e instanceof ActorError) {
+      error("mcp.actor_failed", { caller: mask(entityId), method }, e);
+      throw new ToolError("The session service is unavailable; please try again.");
+    }
+    throw e;
+  }
+}
+
+/** The KV flag flags/assistant.sms_enabled (default on; KV failure = on). */
+async function smsEnabled(kv: Kv): Promise<boolean> {
+  try {
+    const flags = (await kv.getJson(config.optional("KV_FLAGS_KEY", "flags/assistant"))) as
+      { sms_enabled?: unknown } | undefined;
+    return flags?.sms_enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
+/** Per-request metrics, flushed to the MetricsCounter actor once at the end. */
+export class RequestMetrics {
+  readonly counts: Record<string, number> = {};
+  readonly latency: Record<string, number> = {};
+  bump(name: string, n = 1): void {
+    this.counts[name] = (this.counts[name] ?? 0) + n;
+  }
+}
+
+const TOOL_NAMES = new Set(["search_deals", "save_deal", "list_saved_deals", "send_deal_sms"]);
+const IATA = /^[A-Za-z]{3}$/;
+const DATE_LIST = /^\d{4}-\d{2}-\d{2}(,\d{4}-\d{2}-\d{2}){0,13}$/;
 
 // ------------------------------------------------------------------- server
 
-/** Build the `McpServer` with the three tools, closing over dependencies. */
+/** Build the `McpServer`: three tools, plus `send_deal_sms` when an SMS
+ * sender is wired (production). `m` collects this request's metrics. */
 export function createServer(
   kv: Kv,
   actor: Actor,
   fetchImpl: typeof fetch,
   sms?: SmsSender,
-  metrics?: Metrics,
+  m: RequestMetrics = new RequestMetrics(),
 ): McpServer {
-  const bump = (name: string) => metrics?.add({ [name]: 1 });
   /** A caller-facing tool error, counted. */
   const fail = (message: string) => {
-    bump("tool.errors");
+    m.bump("tool.errors");
     return toolErrorResult(message);
+  };
+  /** Run a tool body; ToolError -> caller-safe message, anything else -> generic. */
+  const guard = async (tool: string, body: () => Promise<ReturnType<typeof toolOk>>) => {
+    try {
+      return await body();
+    } catch (e) {
+      if (e instanceof ToolError) return fail(e.message);
+      error(`mcp.${tool}_failed`, undefined, e);
+      return fail("Something went wrong; please try again.");
+    }
   };
   const server = new McpServer({
     name: config.optional("MCP_SERVER_NAME", "fde-mcp"),
@@ -401,116 +426,83 @@ export function createServer(
     "search_deals",
     {
       description:
-        "Search flytlv.app for cheap round-trip flight deals from Tel Aviv. " +
-        "Results are cached and remembered on the caller's session so a later " +
-        "save_deal can only save a deal the caller was actually offered.",
+        "Search flytlv.app for cheap round-trip flight deals from Tel Aviv, with airports, " +
+        "dates, times, flight numbers and price. The deals are remembered for the caller so " +
+        "save_deal and send_deal_sms can only use a deal the caller was actually offered.",
       inputSchema: {
-        destination: z.string().optional().describe("Destination IATA airport code, e.g. LCA."),
-        direct_only: z.boolean().optional().describe("Limit to direct flights only."),
-        max_price: z.number().optional().describe("Maximum price in the feed's currency."),
-        departure_date: z.string().optional().describe("Departure date YYYY-MM-DD, or a comma-separated list of dates."),
+        destination: z.string().regex(IATA).optional().describe("Destination IATA airport code, e.g. LCA."),
+        country: z.string().min(2).max(60).optional()
+          .describe("Destination country, English name or ISO code (e.g. 'Greece' or 'GR'). Use instead of destination for a whole country."),
         weekend: z.enum(["upcoming", "following"]).optional()
           .describe("Weekend trips (Thu/Fri/Sat departures): 'upcoming' = this/next weekend, 'following' = the weekend after. Dates are computed by the server."),
-        country: z.string().optional()
-          .describe("Destination country, English name or ISO code (e.g. 'Greece' or 'GR'). Use instead of destination for a whole country."),
+        departure_date: z.string().regex(DATE_LIST).optional()
+          .describe("Departure date YYYY-MM-DD, or a comma-separated list of dates."),
+        max_price: z.number().positive().optional().describe("Maximum price in the feed's currency."),
+        direct_only: z.boolean().optional().describe("Limit to direct flights only."),
       },
     },
-    async (args, extra) => {
+    (args, extra) => guard("search_deals", async () => {
+      const conv = conversationId(extra);
+      setTraceId(conv || undefined); // trace follows the conversation
+      if (!conv) throw new ToolError("I can't identify this call; please hang up and try again.");
+      const entityId = await readCaller(kv, conv);
+
+      const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");
+      const params = buildParams(args.destination ?? "", args.direct_only ?? false, args.max_price ?? 0, dates, Boolean(args.country));
+      const key = cacheKey(params);
+
+      // Cache lookup — failure is non-fatal: fall through to flytlv.
+      let payload: FlytlvPayload | undefined;
       try {
-        const conv = conversationId(extra);
-        setTraceId(conv || undefined); // trace follows the conversation
-        if (!conv) throw new ToolError("I can't identify this call; please hang up and try again.");
-        const entityId = await bestEffortCaller(kv, conv);
-
-        const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");
-        const params = buildParams(
-          args.destination ?? "",
-          args.direct_only ?? false,
-          args.max_price ?? 0,
-          dates,
-          Boolean(args.country),
-        );
-        const key = cacheKey(params);
-        const ttl = config.integer("DEALS_CACHE_TTL", 300);
-
-        // Cache lookup — failure is non-fatal: fall through to flytlv.
-        let cached: unknown;
+        payload = (await kv.getJson(key)) as FlytlvPayload | undefined;
+      } catch (e) {
+        warning("mcp.cache_read_failed", { key, error: e instanceof Error ? e.message : String(e) });
+      }
+      if (payload) {
+        debug("mcp.cache_hit", { key });
+        m.bump("cache.hit");
+      } else {
+        m.bump("cache.miss");
+        const t0 = Date.now();
         try {
-          cached = await kv.getJson(key);
+          payload = await flytlv.search(params);
         } catch (e) {
-          warning("mcp.cache_read_failed", {
-            key,
-            error: e instanceof Error ? e.message : String(e),
-          });
-          cached = undefined;
-        }
-
-        let payload: FlytlvPayload;
-        if (cached) {
-          payload = cached as FlytlvPayload;
-          debug("mcp.cache_hit", { key });
-          bump("cache.hit");
-        } else {
-          bump("cache.miss");
-          const t0 = Date.now();
-          try {
-            payload = await flytlv.search(params);
-            metrics?.add({ "flytlv.calls": 1 }, { "flytlv.search": Date.now() - t0 });
-          } catch (e) {
-            bump("flytlv.errors");
-            if (e instanceof FlytlvError) throw new ToolError(e.message);
-            throw e;
-          }
-          try {
-            // cache write is best-effort
-            await kv.putJson(key, payload, ttl);
-          } catch (e) {
-            warning("mcp.cache_write_failed", {
-              key,
-              error: e instanceof Error ? e.message : String(e),
-            });
-          }
-        }
-
-        const currency = payload.currency ?? "";
-        let dealsAll = (payload.deals ?? []) as RawDeal[];
-        if (args.country) dealsAll = inCountry(dealsAll, args.country);
-        dealsAll = bookable(dealsAll);
-        // A feed row without a deal id can't be saved; the actor would reject the whole list.
-        dealsAll = dealsAll.filter((d) => typeof d.deal_id === "string" && d.deal_id.length > 0);
-        const limit = config.integer("DEALS_RESULT_LIMIT", 5);
-        const slimmed = dealsAll.slice(0, limit).map((d) => slim(d, currency));
-
-        // Remember the deals shown on this caller's actor (decision #13).
-        if (!entityId) {
-          throw new ToolError(
-            "I found deals but can't link them to your call; please try again.",
-          );
-        }
-        try {
-          await actor.call(entityId, "setLastResults", { deals: slimmed });
-        } catch (e) {
-          if (e instanceof ActorInputError) throw new ToolError(e.message);
-          if (e instanceof ActorError) {
-            error("mcp.remember_failed", { caller: mask(entityId) }, e);
-            throw new ToolError("The session service is unavailable; please try again.");
-          }
+          m.bump("flytlv.errors");
+          if (e instanceof FlytlvError) throw new ToolError(e.message);
           throw e;
         }
-
-        info("mcp.search_deals", {
-          caller: mask(entityId),
-          deals: slimmed.length,
-          destination: params.destination ?? "",
-          direct: args.direct_only ?? false,
-        });
-        return toolOk({ deals: slimmed });
-      } catch (e) {
-        if (e instanceof ToolError) return fail(e.message);
-        error("mcp.search_deals_failed", undefined, e);
-        return fail("Something went wrong; please try again.");
+        m.bump("flytlv.calls");
+        m.latency["flytlv.search"] = Date.now() - t0;
+        try {
+          await kv.putJson(key, payload, config.integer("DEALS_CACHE_TTL", 300)); // best-effort
+        } catch (e) {
+          warning("mcp.cache_write_failed", { key, error: e instanceof Error ? e.message : String(e) });
+        }
       }
-    },
+
+      const currency = payload.currency ?? "";
+      let deals = (payload.deals ?? []) as RawDeal[];
+      if (args.country) deals = inCountry(deals, args.country);
+      deals = bookable(deals)
+        // A feed row without a deal id can't be saved; the actor would reject the whole list.
+        .filter((d) => typeof d.deal_id === "string" && d.deal_id.length > 0);
+      const slimmed = deals.slice(0, config.integer("DEALS_RESULT_LIMIT", 5)).map((d) => slim(d, currency));
+
+      // Remember the deals on the caller's actor (decision #13). A hidden or
+      // anonymous caller id has no session: still read the deals, but nothing
+      // can be saved or texted for them.
+      if (entityId) await callActor(actor, entityId, "setLastResults", { deals: slimmed });
+      info("mcp.search_deals", {
+        caller: mask(entityId ?? ""),
+        deals: slimmed.length,
+        destination: params.destination ?? "",
+        country: args.country ?? "",
+        direct: args.direct_only ?? false,
+      });
+      return toolOk(entityId
+        ? { deals: slimmed }
+        : { deals: slimmed, note: "The caller id is hidden, so deals can be read but not saved or texted." });
+    }),
   );
 
   server.registerTool(
@@ -518,35 +510,19 @@ export function createServer(
     {
       description: "Save one of the deals from the last search results to the caller's profile.",
       inputSchema: {
-        deal_id: z.string().describe("The dealId of a deal from the last search_deals result."),
+        deal_id: z.string().min(1).max(100).describe("The dealId of a deal from the last search_deals result."),
       },
     },
-    async (args, extra) => {
-      try {
-        const conv = conversationId(extra);
-        setTraceId(conv || undefined);
-        const entityId = await requireCaller(kv, conv);
-        const dealId = (args.deal_id ?? "").trim();
-        if (!dealId) throw new ToolError("Please choose a deal to save first.");
-        try {
-          await actor.call(entityId, "saveDeal", { dealId });
-        } catch (e) {
-          if (e instanceof ActorInputError) throw new ToolError(e.message);
-          if (e instanceof ActorError) {
-            error("mcp.save_failed", { caller: mask(entityId), deal: dealId }, e);
-            throw new ToolError("The session service is unavailable; please try again.");
-          }
-          throw e;
-        }
-        info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
-        bump("deals.saved");
-        return toolOk({ saved: true, dealId });
-      } catch (e) {
-        if (e instanceof ToolError) return fail(e.message);
-        error("mcp.save_deal_failed", undefined, e);
-        return fail("Something went wrong; please try again.");
-      }
-    },
+    (args, extra) => guard("save_deal", async () => {
+      const conv = conversationId(extra);
+      setTraceId(conv || undefined);
+      const entityId = await requireCaller(kv, conv);
+      const dealId = args.deal_id.trim();
+      await callActor(actor, entityId, "saveDeal", { dealId });
+      info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
+      m.bump("deals.saved");
+      return toolOk({ saved: true, dealId });
+    }),
   );
 
   server.registerTool(
@@ -555,36 +531,21 @@ export function createServer(
       description: "List the deals the caller has saved on previous calls.",
       inputSchema: {},
     },
-    async (_args, extra) => {
-      try {
-        const conv = conversationId(extra);
-        setTraceId(conv || undefined);
-        const entityId = await requireCaller(kv, conv);
-        let profile: unknown;
-        try {
-          profile = await actor.call(entityId, "getSaved");
-        } catch (e) {
-          if (e instanceof ActorInputError) throw new ToolError(e.message);
-          if (e instanceof ActorError) {
-            error("mcp.list_saved_failed", { caller: mask(entityId) }, e);
-            throw new ToolError("The session service is unavailable; please try again.");
-          }
-          throw e;
-        }
-        info("mcp.list_saved_deals", { caller: mask(entityId) });
-        return toolOk(profile);
-      } catch (e) {
-        if (e instanceof ToolError) return fail(e.message);
-        error("mcp.list_saved_deals_failed", undefined, e);
-        return fail("Something went wrong; please try again.");
-      }
-    },
+    (_args, extra) => guard("list_saved_deals", async () => {
+      const conv = conversationId(extra);
+      setTraceId(conv || undefined);
+      const entityId = await requireCaller(kv, conv);
+      const profile = await callActor(actor, entityId, "getSaved");
+      info("mcp.list_saved_deals", { caller: mask(entityId) });
+      return toolOk(profile);
+    }),
   );
 
   // send_deal_sms — only when an SMS sender is wired (production index.ts).
   // The number is the CALLER's, from the session the webhook wrote; the deal
   // must be one the caller was offered (saveDeal validates it), so the model
-  // can neither text a stranger nor invent a link.
+  // can neither text a stranger nor invent a link. The KV flag sms_enabled
+  // switches it off without a redeploy.
   if (sms) {
     server.registerTool(
       "send_deal_sms",
@@ -593,45 +554,29 @@ export function createServer(
           "Text the caller a deal they were just offered (details and booking link). " +
           "Sends to the number they are calling from; the deal is also saved.",
         inputSchema: {
-          deal_id: z.string().describe("The dealId of a deal from the last search_deals result."),
+          deal_id: z.string().min(1).max(100).describe("The dealId of a deal from the last search_deals result."),
         },
       },
-      async (args, extra) => {
+      (args, extra) => guard("send_deal_sms", async () => {
+        const conv = conversationId(extra);
+        setTraceId(conv || undefined);
+        if (!(await smsEnabled(kv))) throw new ToolError("Text messages are turned off right now.");
+        const entityId = await requireCaller(kv, conv);
+        const dealId = args.deal_id.trim();
+        await callActor(actor, entityId, "saveDeal", { dealId }); // rejects deals not offered
+        const saved = (await callActor(actor, entityId, "getSaved")) as { deals?: Deal[] };
+        const deal = saved.deals?.find((d) => d.dealId === dealId);
+        if (!deal) throw new ToolError("I couldn't find that deal; please pick one I just read out.");
         try {
-          const conv = conversationId(extra);
-          setTraceId(conv || undefined);
-          const entityId = await requireCaller(kv, conv);
-          const dealId = (args.deal_id ?? "").trim();
-          if (!dealId) throw new ToolError("Please choose a deal to text first.");
-          let deal: Deal | undefined;
-          try {
-            await actor.call(entityId, "saveDeal", { dealId }); // rejects deals not offered
-            const saved = (await actor.call(entityId, "getSaved")) as { deals?: Deal[] };
-            deal = saved.deals?.find((d) => d.dealId === dealId);
-          } catch (e) {
-            if (e instanceof ActorInputError) throw new ToolError(e.message);
-            if (e instanceof ActorError) {
-              error("mcp.sms_lookup_failed", { caller: mask(entityId), deal: dealId }, e);
-              throw new ToolError("The session service is unavailable; please try again.");
-            }
-            throw e;
-          }
-          if (!deal) throw new ToolError("I couldn't find that deal; please pick one I just read out.");
-          try {
-            await sms.send(`+${entityId}`, dealSms(deal));
-          } catch (e) {
-            error("mcp.sms_failed", { caller: mask(entityId), deal: dealId }, e);
-            throw new ToolError("I couldn't send the text message right now; the deal is saved.");
-          }
-          info("mcp.sms_sent", { caller: mask(entityId), deal: dealId });
-          bump("sms.sent");
-          return toolOk({ sent: true, dealId });
+          await sms.send(`+${entityId}`, dealSms(deal));
         } catch (e) {
-          if (e instanceof ToolError) return fail(e.message);
-          error("mcp.send_deal_sms_failed", undefined, e);
-          return fail("Something went wrong; please try again.");
+          error("mcp.sms_failed", { caller: mask(entityId), deal: dealId }, e);
+          throw new ToolError("I couldn't send the text message right now; the deal is saved.");
         }
-      },
+        info("mcp.sms_sent", { caller: mask(entityId), deal: dealId });
+        m.bump("sms.sent");
+        return toolOk({ sent: true, dealId });
+      }),
     );
   }
 
@@ -646,9 +591,10 @@ export function createHandler(
   deps: Dependencies,
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
   // Bearer token expected on every request (MCP_API_KEY secret).
-  const expectedToken = `Bearer ${config.optional("MCP_API_KEY", "")}`;
+  const expectedToken = `Bearer ${config.require("MCP_API_KEY")}`; // fail at boot if unset
   return (req, res) => {
-    void handleRequest(req, res, deps, expectedToken);
+    // A fresh trace context per request (see log.ts setTraceId).
+    traceContext.run({ id: "" }, () => void handleRequest(req, res, deps, expectedToken));
   };
 }
 
@@ -698,7 +644,8 @@ async function handleRequest(
 
     // A fresh McpServer + stateless transport per request (Edge has no
     // request lifespan).
-    const server = createServer(deps.kv, deps.actor, deps.fetchImpl, deps.sms, deps.metrics);
+    const m = new RequestMetrics();
+    const server = createServer(deps.kv, deps.actor, deps.fetchImpl, deps.sms, m);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -710,10 +657,14 @@ async function handleRequest(
     await transport.handleRequest(req, res, parsedBody);
     const ms = Date.now() - started;
     info("mcp.request", { method: rpc.method, tool: rpc.params?.name, status: res.statusCode, duration_ms: ms });
-    if (rpc.method === "tools/call" && rpc.params?.name) {
-      const tool = `tool.${rpc.params.name}`;
-      deps.metrics?.add({ "mcp.tool_calls": 1, [tool]: 1 }, { [tool]: ms });
+    // One metrics update per request; only registered tool names become keys.
+    const name = rpc.params?.name;
+    if (rpc.method === "tools/call" && name && TOOL_NAMES.has(name)) {
+      m.bump("mcp.tool_calls");
+      m.bump(`tool.${name}`);
+      m.latency[`tool.${name}`] = ms;
     }
+    if (Object.keys(m.counts).length) deps.metrics?.add(m.counts, m.latency);
   } catch (e) {
     error("mcp.request_failed", undefined, e);
     if (!res.headersSent) sendJson(res, 500, { error: "internal error" });
