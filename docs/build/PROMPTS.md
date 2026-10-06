@@ -30,34 +30,34 @@ Inference is billed to the Telnyx account. If the balance goes negative, Telnyx 
 
 ## 1. Shared code
 
-Read AGENTS.md and UnitTest/test_common.py. Write shared/common.py so every test in
-UnitTest/test_common.py passes. Run `.venv/Scripts/python -m pytest UnitTest/test_common.py -q`
+Read AGENTS.md and tests/test_common.py. Write shared/common.py so every test in
+tests/test_common.py passes. Run `.venv/Scripts/python -m pytest tests/test_common.py -q`
 and fix until green. Then write scripts/build/vendor_shared.py.
 
 ## 2. Webhook
 
-Read AGENTS.md, docs/design/ and UnitTest/test_webhook.py. Build services/webhook (function/func.py,
+Read AGENTS.md, docs/design/ and tests/test_webhook.py. Build services/webhook (function/func.py,
 function/__init__.py, pyproject.toml, func.toml, README.md). Run
-`python scripts/build/vendor_shared.py` then `.venv/Scripts/python -m pytest UnitTest/test_webhook.py -q`
+`python scripts/build/vendor_shared.py` then `.venv/Scripts/python -m pytest tests/test_webhook.py -q`
 and fix until green.
 
 ## 3. MCP server
 
-Read AGENTS.md and UnitTest/test_mcp.py. Build services/mcp-server with the official mcp SDK
+Read AGENTS.md and tests/test_mcp.py. Build services/mcp-server with the official mcp SDK
 and the three tools search_deals, save_deal, list_saved_deals. Use the official `func.toml`
-format from AGENTS.md with the registered `fde-mcp` func_id. Make UnitTest/test_mcp.py pass.
+format from AGENTS.md with the registered `fde-mcp` func_id. Make tests/test_mcp.py pass.
 
 ## 4. Session actor
 
-Read AGENTS.md and UnitTest/test_session_actor.test.mts. Build services/session-actor
+Read AGENTS.md and tests/test_session_actor.test.mts. Build services/session-actor
 (src/caller-session.ts, src/index.ts, telnyx.toml, package.json with "test": "tsx --test
-../../UnitTest/test_session_actor.test.mts", tsconfig.json). `recordCall` must return the
+../../tests/test_session_actor.test.mts", tsconfig.json). `recordCall` must return the
 full profile (callCount, savedCount, lastSaved). Run npm install and npm test until green.
 
 ## 5. Assistant + workflow
 
-Read AGENTS.md and UnitTest/test_assistant.py. Build assistant/flow.py and assistant/provision.py
-(Telnyx SDK). Make UnitTest/test_assistant.py pass.
+Read AGENTS.md and tests/test_assistant.py. Build assistant/flow.py and assistant/provision.py
+(Telnyx SDK). Make tests/test_assistant.py pass.
 
 ## 6. Docs
 
@@ -67,4 +67,4 @@ assistant is broken, setup and deploy steps. Note which Telnyx model built each 
 ## Small fixes queued
 
 - shared/common.py: read the trace header name from `TRACE_HEADER` (default `x-trace-id`)
-  instead of hardcoding it. Keep UnitTest/test_common.py green.
+  instead of hardcoding it. Keep tests/test_common.py green.

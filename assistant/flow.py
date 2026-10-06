@@ -24,7 +24,7 @@ one Telnyx system variable (``telnyx_conversation_duration_secs``) for the
 timeout-escalation stretch goal — deterministic facts are evaluated before the
 model turn, so they never depend on model judgement (design decision #12).
 
-Run tests:  .venv/Scripts/python -m pytest UnitTest/test_assistant.py -q
+Run tests:  .venv/Scripts/python -m pytest tests/test_assistant.py -q
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ _NODE_IDS = (
     "answer_faq",          # prompt — general questions about the service (no tools)
     "transfer_call",       # prompt — hand off to a human (transfer tool)
     "farewell",            # speak  — goodbye
-    "hangup_call",         # prompt — end the call (hangup tool)
+    "hangup_call",         # tool   — end the call (shared hangup tool; prompt fallback)
 )
 
 # --------------------------------------------------------------- speak text
@@ -252,7 +252,7 @@ def _expr_gte(name: str, value: int) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ builders
 
-def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
+def build_flow(conversation_timeout_secs: int = 600, hangup_tool_id: str | None = None) -> dict[str, Any]:
     """Return the ``conversation_flow`` graph for the FlyTLV Travel Line.
 
     ``conversation_timeout_secs`` is the call length after which the workflow escalates a
@@ -280,8 +280,13 @@ def build_flow(conversation_timeout_secs: int = 600) -> dict[str, Any]:
         {"type": "prompt", "id": "transfer_call", "name": "Transfer To Human",
          "instructions": TRANSFER_INSTRUCTIONS, "instructions_mode": "append"},
         {"type": "speak", "id": "farewell", "name": "Farewell", "message": FAREWELL_MESSAGE},
-        {"type": "prompt", "id": "hangup_call", "name": "End Call",
-         "instructions": HANGUP_INSTRUCTIONS, "instructions_mode": "replace"},
+        # Ending the call is deterministic: a terminal tool node running the
+        # shared hangup tool (no model turn). Without a shared tool id (tests,
+        # dry runs) it falls back to a prompt node using the inline hangup tool.
+        ({"type": "tool", "id": "hangup_call", "name": "End Call", "shared_tool_id": hangup_tool_id}
+         if hangup_tool_id else
+         {"type": "prompt", "id": "hangup_call", "name": "End Call",
+          "instructions": HANGUP_INSTRUCTIONS, "instructions_mode": "replace"}),
     ]
 
     edges = [

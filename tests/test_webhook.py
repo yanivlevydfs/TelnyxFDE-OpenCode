@@ -1,6 +1,6 @@
 """Unit tests for the Dynamic Variables webhook.
 
-Run:  .venv/Scripts/python -m pytest UnitTest -q
+Run:  .venv/Scripts/python -m pytest tests -q
 """
 
 from __future__ import annotations

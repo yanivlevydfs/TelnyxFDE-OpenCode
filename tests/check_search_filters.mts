@@ -1,5 +1,5 @@
 // Self-check for search_deals filters: server-computed weekend dates and the
-// country filter. Run: cd services/mcp-server && npx tsx ../../UnitTest/check_search_filters.mts
+// country filter. Run: cd services/mcp-server && npx tsx ../../tests/check_search_filters.mts
 import assert from "node:assert/strict";
 import { weekendDates, inCountry } from "../services/mcp-server/src/server.ts";
 

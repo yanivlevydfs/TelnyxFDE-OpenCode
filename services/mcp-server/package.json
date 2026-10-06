@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "tsx --test ../../UnitTest/test_mcp.test.mts",
+    "test": "tsx --test ../../tests/test_mcp.test.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

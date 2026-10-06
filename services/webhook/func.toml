@@ -14,7 +14,7 @@ binding = "TELNYX"
 #   TELNYX_PUBLIC_KEY, KV_NAMESPACE_ID, ACTOR_SERVICE_URL, INTERNAL_API_TOKEN
 [env_vars]
 WEBHOOK_VERIFY_SIGNATURE = "true" # false ONLY for local curl testing
-WEBHOOK_BUDGET_MS = "1200"        # keep below the assistant's dynamic_variables_webhook_timeout_ms
+WEBHOOK_BUDGET_MS = "2500"        # fan-out budget; below dynamic_variables_webhook_timeout_ms (8000)
 HTTP_TIMEOUT_MS = "1000"
 KV_FLAGS_KEY = "flags/assistant"
 SESSION_KEY_PREFIX = "session/"

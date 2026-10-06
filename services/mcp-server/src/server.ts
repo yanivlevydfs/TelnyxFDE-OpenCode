@@ -444,7 +444,8 @@ export function createServer(
     (args, extra) => guard("search_deals", async () => {
       const conv = conversationId(extra);
       setTraceId(conv || undefined); // trace follows the conversation
-      if (!conv) throw new ToolError("I can't identify this call; please hang up and try again.");
+      // No conversation id (e.g. the chat channel) behaves like a hidden caller id:
+      // the deals are read, nothing is remembered.
       const entityId = await readCaller(kv, conv);
 
       const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");

@@ -5,7 +5,7 @@ loaded here under its own name (webhook_fn, mcp_fn) to test them side by side.
 
 Run all Python tests from the repo root:
     python scripts/build/vendor_shared.py
-    .venv/Scripts/python -m pytest UnitTest -q
+    .venv/Scripts/python -m pytest tests -q
 """
 
 from __future__ import annotations

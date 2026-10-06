@@ -9,7 +9,7 @@ from ``telnyx_conversation_id``). The reply is flat string-only
 routing. Any failure or timeout degrades to safe defaults with
 ``backend_degraded="true"`` instead of leaving raw ``{{placeholders}}`` on air.
 
-Run tests:  .venv/Scripts/python -m pytest UnitTest/test_webhook.py -q
+Run tests:  .venv/Scripts/python -m pytest tests/test_webhook.py -q
 """
 
 from __future__ import annotations
@@ -57,28 +57,47 @@ async def _valid_signature(client: Any, body: bytes, headers: Mapping[str, str])
 
 # -------------------------------------------------------------- dependencies
 
-async def _fetch_context(kv: Any, actor: Any, entity: str, conversation_id: str) -> tuple[dict, dict, list[str]]:
-    """Run flags-get, actor ``recordCall`` and the session mapping in parallel.
+# Flags change rarely and Telnyx KV over REST takes 1-4 s, so keep them in
+# memory per KV client for FLAGS_CACHE_SECS (keyed by client so tests stay isolated).
+_flags_cache: dict[int, tuple[float, dict]] = {}
 
-    Returns ``(flags, profile, degraded)`` where ``degraded`` is the list of
-    dependency names that failed or timed out (empty = fully healthy).
-    The whole batch is bounded by WEBHOOK_BUDGET_MS (well under Telnyx's
-    default dynamic-variables timeout of 1.5 s).
+
+async def _flags(kv: Any) -> dict:
+    """Feature flags from KV, cached in-process for FLAGS_CACHE_SECS (default 60)."""
+    hit = _flags_cache.get(id(kv))
+    if hit and hit[0] > time.monotonic():
+        return hit[1]
+    value = await kv.get_json(c.optional("KV_FLAGS_KEY", "flags/assistant"))
+    flags = value if isinstance(value, dict) else {}
+    _flags_cache[id(kv)] = (time.monotonic() + c.integer("FLAGS_CACHE_SECS", 60), flags)
+    return flags
+
+
+async def _save_session(kv: Any, conversation_id: str, entity: str) -> None:
+    """Map the conversation to the caller for the MCP tools. Runs AFTER the
+    response (a KV write takes ~2 s); the first tool call comes seconds later."""
+    try:
+        await kv.put_json(f"{c.optional('SESSION_KEY_PREFIX', 'session/')}{conversation_id}",
+                          {"entity_id": entity}, ttl_secs=c.integer("SESSION_TTL", 3600))
+    except Exception as e:  # noqa: BLE001 (logged; the MCP tools then report an unknown call)
+        c.error("webhook.session_write_failed", error=str(e), exc_info=True)
+
+
+async def _fetch_context(kv: Any, actor: Any, entity: str) -> tuple[dict, dict, list[str]]:
+    """Run the flags read and the actor ``recordCall`` in parallel.
+
+    Returns ``(flags, profile, degraded)``; ``degraded`` lists the dependencies
+    that failed or timed out and break the call (only the actor: a failed flags
+    read falls back to default flags). The batch is bounded by WEBHOOK_BUDGET_MS,
+    below the assistant's dynamic_variables_webhook_timeout_ms.
     """
-    flags_key = c.optional("KV_FLAGS_KEY", "flags/assistant")
-    session_prefix = c.optional("SESSION_KEY_PREFIX", "session/")
-    budget = c.integer("WEBHOOK_BUDGET_MS", 1200) / 1000
+    budget = c.integer("WEBHOOK_BUDGET_MS", 2500) / 1000
 
     names: list[str] = ["flags"]
-    calls = [kv.get_json(flags_key)]
-    if entity:  # anonymous/blocked caller: skip the actor and the mapping
+    calls = [_flags(kv)]
+    if entity:  # anonymous/blocked caller: skip the actor
         names.append("profile")
         calls.append(actor.call(entity, "recordCall"))
-        if conversation_id:
-            names.append("session")
-            calls.append(kv.put_json(
-                f"{session_prefix}{conversation_id}", {"entity_id": entity},
-                ttl_secs=c.integer("SESSION_TTL", 3600)))
 
     # Bound the batch by the budget but keep whatever finished in time:
     # a slow actor must not discard flags that already arrived.
@@ -96,8 +115,6 @@ async def _fetch_context(kv: Any, actor: Any, entity: str, conversation_id: str)
     failed = [name for name, result in out.items() if isinstance(result, BaseException)]
     for name in failed:
         c.error("webhook.dependency_failed", dependency=name, error=str(out[name]))
-    # Only the actor and the session mapping break the call (the MCP tools need
-    # both); a failed flags read just falls back to default flags.
     degraded = [name for name in failed if name != "flags"]
 
     flags = out.get("flags")
@@ -148,22 +165,31 @@ def _dynamic_variables(profile: dict, flags: dict, degraded: bool) -> dict[str, 
 
 # ---------------------------------------------------------------------- app
 
+async def _run_all(jobs: list[Any]) -> None:
+    """Run the post-response jobs (session write, metrics) in order."""
+    for job in jobs:
+        await job()
+
+
 def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Starlette:
     """Build the ASGI app with injected dependencies (tests pass fakes)."""
 
     async def handle(request: Request) -> JSONResponse:
         started = time.perf_counter()
         counts: dict[str, float] = {"webhook.calls": 1}
-        resp = await _handle(request, counts)
-        # Service metrics go to the shared MetricsCounter actor AFTER the response
-        # is sent, so they never eat into the dynamic-variables time budget.
+        after: list[Any] = []  # work to run after the response is sent
+        resp = await _handle(request, counts, after)
+        # The session write and the service metrics run AFTER the response, so
+        # neither eats into the dynamic-variables time budget.
         record = getattr(actor, "metrics", None)
         if record is not None:
             ms = round((time.perf_counter() - started) * 1000)
-            resp.background = BackgroundTask(record, counts, {"webhook.request": ms})
+            after.append(lambda: record(counts, {"webhook.request": ms}))
+        if after:
+            resp.background = BackgroundTask(_run_all, after)
         return resp
 
-    async def _handle(request: Request, counts: dict[str, float]) -> JSONResponse:
+    async def _handle(request: Request, counts: dict[str, float], after: list[Any]) -> JSONResponse:
         body = await request.body()
         with c.timed("webhook.request") as span:
             # Signature first: an unsigned body is never even parsed.
@@ -195,7 +221,9 @@ def create_app(client: Any, kv: Any, actor: Any, *, verify: bool = True) -> Star
             if not (phone.strip().startswith("+") and 8 <= len(entity) <= 15):
                 entity = ""
 
-            flags, profile, degraded = await _fetch_context(kv, actor, entity, conversation_id)
+            flags, profile, degraded = await _fetch_context(kv, actor, entity)
+            if entity and conversation_id:
+                after.append(lambda: _save_session(kv, conversation_id, entity))
             span["outcome"] = "degraded" if degraded else "ok"
             span["caller"] = c.mask(phone)
             span["degraded"] = degraded

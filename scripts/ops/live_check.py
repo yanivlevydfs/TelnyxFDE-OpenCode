@@ -31,7 +31,7 @@ results: list[tuple[str, bool, str]] = []
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     results.append((name, ok, detail))
-    print(f"{'PASS' if ok else 'FAIL'}  {name}  {detail}")
+    (c.info if ok else c.error)("check.pass" if ok else "check.fail", check=name, detail=detail)
 
 
 def mcp(conv: str, tool: str, args: dict | None = None) -> tuple[bool, str]:
@@ -52,7 +52,8 @@ def actor(path: str, body: dict | None = None) -> httpx.Response:
 def kv(op):
     """Run one KV operation (Telnyx SDK, async) with a fresh client."""
     async def run():
-        return await op(c.Kv(telnyx.AsyncTelnyx(api_key=E["TELNYX_API_KEY"])))
+        async with telnyx.AsyncTelnyx(api_key=E["TELNYX_API_KEY"]) as client:
+            return await op(c.Kv(client))
     return asyncio.run(run())
 
 
@@ -135,7 +136,7 @@ def main() -> int:
     check("metrics: latency recorded", "tool.search_deals" in snap.get("latency", {}))
 
     failed = [n for n, ok, _ in results if not ok]
-    print(f"\n{len(results) - len(failed)}/{len(results)} checks passed" + (f"; FAILED: {failed}" if failed else ""))
+    (c.error if failed else c.info)("check.summary", passed=len(results) - len(failed), total=len(results), failed=failed)
     return 1 if failed else 0
 
 

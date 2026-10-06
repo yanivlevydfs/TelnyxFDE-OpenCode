@@ -31,7 +31,7 @@ See [Which model built each component](#which-model-built-each-component).
 | Deploy pipeline | `.github/workflows/ship.yml` | — | Claude Code | — | GitHub Actions |
 | Phone number | — | — | — | — | linked; awaiting Telnyx regulatory approval |
 
-Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python -m pytest UnitTest -q`,
+Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python -m pytest tests -q`,
 `cd services/mcp-server && npm test` and `cd services/session-actor && npm test`.
 
 **Live endpoints and phone number**
@@ -379,7 +379,7 @@ telnyx-edge storage kv create --name fde-kv   # the KV_NAMESPACE_ID goes in .env
 
 ```bash
 python scripts/build/vendor_shared.py                  # copy shared/common.py into each Python service
-.venv/Scripts/python -m pytest UnitTest -q       # Python services (29 tests)
+.venv/Scripts/python -m pytest tests -q       # Python services (29 tests)
 cd services/session-actor && npm test           # actor (7 tests)
 ```
 
@@ -477,7 +477,7 @@ Deploy order is fixed (the assistant references the live webhook + MCP URLs):
 
 Requirement 6: the first version of each component was built with **OpenCode
 powered by Telnyx Inference**, one model per component, from the spec in `docs/design/`
-and the acceptance tests in `UnitTest/`. Current `/telnyx` model list for
+and the acceptance tests in `tests/`. Current `/telnyx` model list for
 reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek-V4`,
 `Qwen3.x`, `MiniMax`.
 
@@ -530,7 +530,7 @@ docs/                                  see docs/README.md
   guides/                              HOW_TO_CALL.md (callers), DEMO_SCRIPT.md (demo day)
   build/PROMPTS.md                     the OpenCode build prompts per component
 
-UnitTest/                              acceptance tests (not edited) + self-checks (check_*)
+tests/                              acceptance tests (not edited) + self-checks (check_*)
 ```
 
 ## OpenCode config

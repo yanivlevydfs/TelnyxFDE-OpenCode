@@ -4,7 +4,7 @@
     code can't live in a package imported across services. Instead we keep ONE
     source of truth (shared/common.py) and vendor it into every Python service as
     function/common.py. Re-run after editing shared/common.py and before
-    `telnyx-edge ship` or `python -m pytest UnitTest`.
+    `telnyx-edge ship` or `python -m pytest tests`.
 
     python scripts/build/vendor_shared.py
 
@@ -20,24 +20,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # scripts/build/ -> repo root
 SOURCE = ROOT / "shared" / "common.py"
+sys.path.insert(0, str(SOURCE.parent))
+import common as c  # noqa: E402  (shared JSON logger)
 
 
 def main() -> int:
     if not SOURCE.is_file():
-        print(f"error: source not found: {SOURCE}", file=sys.stderr)
+        c.error("vendor.source_missing", source=str(SOURCE))
         return 1
 
     # Every Python service lives in services/<name>/function/ ; TypeScript
     # services (e.g. session-actor) use src/ and won't match this glob.
     targets = sorted(p for p in (ROOT / "services").glob("*/function") if p.is_dir())
     if not targets:
-        print("no Python services found under services/*/ — nothing to vendor.")
+        c.warning("vendor.no_services", path="services/*/function")
         return 0
 
     for fn_dir in targets:
         dest = fn_dir / "common.py"
         shutil.copy2(SOURCE, dest)
-        print(f"vendored {SOURCE.relative_to(ROOT)} -> {dest.relative_to(ROOT)}")
+        c.info("vendor.copied", source=str(SOURCE.relative_to(ROOT)), dest=str(dest.relative_to(ROOT)))
     return 0
 
 

@@ -5,7 +5,7 @@ Single source of truth for Python code reused across the Edge Function services
 service as `function/common.py` so the Edge build picks it up. Keep it one file,
 no imports of repo-local modules — only the stdlib, httpx and telnyx.
 
-Run tests:  .venv/Scripts/python -m pytest UnitTest/test_common.py -q
+Run tests:  .venv/Scripts/python -m pytest tests/test_common.py -q
 """
 
 from __future__ import annotations
@@ -293,7 +293,7 @@ def _session_ttl() -> int:
 async def save_session(kv: Kv, conversation_id: str, phone: str) -> None:
     """Write the caller's phone for a conversation id (TTL = one call window).
 
-    Kept for the acceptance tests (UnitTest/test_common.py). Production writes
+    Kept for the acceptance tests (tests/test_common.py). Production writes
     ``{"entity_id": digits}`` under SESSION_KEY_PREFIX in the webhook instead,
     the shape the MCP server reads.
     """

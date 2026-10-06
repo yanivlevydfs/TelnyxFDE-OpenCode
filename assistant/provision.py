@@ -16,7 +16,7 @@ Every URL, id, model and voice comes from environment variables / Telnyx Edge
 secrets — nothing is hardcoded. ``--dry-run`` skips all API calls and prints
 the assistant body that *would* be created, which is what the unit test uses.
 
-Run tests:  .venv/Scripts/python -m pytest UnitTest/test_assistant.py -q
+Run tests:  .venv/Scripts/python -m pytest tests/test_assistant.py -q
 Run for real (from the repo root):
     TELNYX_API_KEY=... MCP_URL=... MCP_API_KEY=... WEBHOOK_URL=... \
     ASSISTANT_MODEL=... ASSISTANT_VOICE=... python assistant/provision.py
@@ -52,9 +52,9 @@ import flow
 # prices), voice conciseness and a currency rule. Dynamic-variable placeholders
 # are interpolated by Telnyx at call time.
 
-def _checked_flow(conversation_timeout_secs: int) -> dict[str, Any]:
+def _checked_flow(conversation_timeout_secs: int, hangup_tool_id: str | None = None) -> dict[str, Any]:
     """The workflow graph, refused before any API call if validate() finds a problem."""
-    graph = flow.build_flow(conversation_timeout_secs)
+    graph = flow.build_flow(conversation_timeout_secs, hangup_tool_id)
     problems = flow.validate(graph)
     if problems:
         raise ValueError("invalid conversation flow: " + "; ".join(problems))
@@ -115,6 +115,7 @@ def assistant_body(env: dict[str, str], mcp_id: str,
     if conversation_timeout_secs is None:
         conversation_timeout_secs = _int(env, "CONVERSATION_TIMEOUT_SECS", 600)
 
+    hangup_tool_id = env.get("HANGUP_TOOL_ID") or None
     transfer_from = _opt(env, "ASSISTANT_PHONE_NUMBER", "")
     transfer_to = _opt(env, "TRANSFER_TO_NUMBER", "")
 
@@ -138,14 +139,18 @@ def assistant_body(env: dict[str, str], mcp_id: str,
         # Dynamic variables: the Edge Function webhook resolves them at call
         # start; the defaults below keep expression edges safe if it fails.
         "dynamic_variables_webhook_url": _req(env, "WEBHOOK_URL"),
-        "dynamic_variables_webhook_timeout_ms": _int(env, "WEBHOOK_TIMEOUT_MS", 1500),
+        # Telnyx recommends ~8 s for Edge Functions: a cold start can exceed 1.5 s.
+        "dynamic_variables_webhook_timeout_ms": _int(env, "WEBHOOK_TIMEOUT_MS", 8000),
         "dynamic_variables": flow.DEFAULT_VARIABLES,
         # The MCP server supplies search_deals / save_deal / list_saved_deals / send_deal_sms.
         "mcp_servers": [{"id": mcp_id}],
         # Inline tools: hangup always, transfer only when a human is configured.
-        "tools": flow.build_tools(transfer_from, transfer_to),
+        # With a hangup tool node, no prompt node gets the hangup tool, so the
+        # model cannot end the call mid-conversation (tools scoped per node).
+        "tools": [t for t in flow.build_tools(transfer_from, transfer_to)
+                  if not (hangup_tool_id and t["type"] == "hangup")],
         # The conversation workflow itself.
-        "conversation_flow": _checked_flow(conversation_timeout_secs),
+        "conversation_flow": _checked_flow(conversation_timeout_secs, hangup_tool_id),
     }
 
 
@@ -190,6 +195,20 @@ async def _create_mcp_server(client: telnyx.AsyncTelnyx, env: dict[str, str],
     )
     c.info("provision.mcp_server", id=server.id, name=name, url=url)
     return server.id
+
+
+async def _hangup_tool(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> str:
+    """The shared (org-level) hangup tool the End Call tool node runs: reuse
+    HANGUP_TOOL_ID, else create it."""
+    if env.get("HANGUP_TOOL_ID"):
+        return env["HANGUP_TOOL_ID"]
+    tool = await client.ai.tools.create(
+        type="hangup",
+        display_name=_opt(env, "HANGUP_TOOL_NAME", "flytlv-end-call"),
+        extra_body={"hangup": {"description": "End the call after the farewell."}},
+    )
+    c.info("provision.hangup_tool", id=tool.id)
+    return tool.id
 
 
 def _extract_connection_id(assistant: Any) -> str | None:
@@ -259,6 +278,7 @@ async def provision(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> Any:
     secret_ref = await _create_integration_secret(client, env)
     # Re-running: reuse an already registered MCP server instead of adding another.
     mcp_id = env.get("MCP_SERVER_ID") or await _create_mcp_server(client, env, secret_ref)
+    env.setdefault("HANGUP_TOOL_ID", await _hangup_tool(client, env))
     body = assistant_body(env, mcp_id)
     if env.get("ASSISTANT_ID"):
         # Re-running: update the existing assistant (same id, same phone link).

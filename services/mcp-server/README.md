@@ -98,6 +98,6 @@ plus `flytlv.feed_off` ERROR (once per instance) and `mcp.session_read_failed`
 cd services/mcp-server
 npm install
 npm run build
-npm test          # UnitTest/test_mcp.test.mts (node:test via tsx)
+npm test          # tests/test_mcp.test.mts (node:test via tsx)
 telnyx-edge ship --from-dir services/mcp-server
 ```
