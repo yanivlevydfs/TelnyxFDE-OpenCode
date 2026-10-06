@@ -13,8 +13,8 @@ for k, v in {"ACTOR_SERVICE_URL": "https://actor.test", "INTERNAL_API_TOKEN": "t
              "KV_NAMESPACE_ID": "ns", "TELNYX_PUBLIC_KEY": "k"}.items():
     os.environ.setdefault(k, v)
 
-from conftest import load_service  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+from conftest import load_service
+from starlette.testclient import TestClient
 
 func = load_service("webhook", "webhook_fn")
 
