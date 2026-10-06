@@ -58,6 +58,8 @@ function logFeedOffOnce(): void {
 export class FlytlvClient {
   private readonly base: string;
   private readonly path: string;
+  /** One-way flights endpoint (round trips use `path`). */
+  private readonly flightsPath: string;
   private readonly apiKey: string;
   private readonly headerName: string;
   private readonly timeoutMs: number;
@@ -65,6 +67,7 @@ export class FlytlvClient {
   constructor(private readonly fetchImpl: typeof fetch) {
     this.base = config.optional("FLYTLV_API_BASE", "https://flytlv.app").replace(/\/+$/, "");
     this.path = config.optional("FLYTLV_DEALS_PATH", "/api/private/deals");
+    this.flightsPath = config.optional("FLYTLV_FLIGHTS_PATH", "/api/private/flights");
     this.apiKey = config.require("FLYTLV_API_KEY");
     this.headerName = config.optional("FLYTLV_API_KEY_HEADER", "X-API-Key");
     // Short by default: a phone caller is on the line. Configurable up.
@@ -75,8 +78,15 @@ export class FlytlvClient {
    * One authenticated GET; returns the parsed payload or throws FlytlvError.
    * `params` is forwarded as URL query params (all string values).
    */
-  async search(params: Record<string, string>): Promise<FlytlvPayload> {
-    const url = new URL(this.path, this.base);
+  /** One-way flights from Tel Aviv (`/api/private/flights`, items in `flights`). */
+  async searchOneWay(params: Record<string, string>): Promise<FlytlvPayload> {
+    const payload = await this.search(params, this.flightsPath);
+    return { ...payload, deals: (payload.flights as unknown[] | undefined) ?? payload.deals ?? [] };
+  }
+
+  /** Round-trip deals (`/api/private/deals`), or another feed path. */
+  async search(params: Record<string, string>, path: string = this.path): Promise<FlytlvPayload> {
+    const url = new URL(path, this.base);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     const headers = new Headers({ [this.headerName]: this.apiKey });
 

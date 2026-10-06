@@ -94,6 +94,14 @@ export interface Deal {
   direct: boolean;
   url: string | undefined;
   /** Flight details read aloud; present only when flytlv sends them. */
+  tripType?: string; // "round_trip" | "one_way"
+  category?: string; // flytlv trip category, e.g. "Hanukkah", "Weekend (Thu-Sun)"
+  departureWeekday?: string;
+  returnWeekday?: string;
+  discountPct?: number; // percent below the route's typical price
+  savingsAmount?: number; // typical price minus this price, in `currency`
+  typicalPrice?: number;
+  dealQuality?: string; // "exceptional" | "great" | "good"
   fromAirport?: string;
   toAirport?: string;
   nights?: number;
@@ -109,6 +117,10 @@ export interface Leg {
   flightNumber?: string;
   stops?: number;
   durationMin?: number;
+  /** Connections: airports (IATA) the leg stops in, and the longest layover. */
+  via?: string[];
+  layoverMin?: number;
+  route?: string;
 }
 
 /** A raw flytlv deal (feed may omit many fields). */
@@ -148,7 +160,18 @@ function leg(deal: RawDeal, dir: "outbound" | "inbound"): Leg | undefined {
     flightNumber: f("flight_number") as string | undefined,
     stops: f("stops") as number | undefined,
     durationMin: f("duration") as number | undefined,
+    via: Array.isArray(f("via")) && (f("via") as string[]).length ? (f("via") as string[]) : undefined,
+    layoverMin: (f("layover_minutes") as number | undefined) || undefined, // 0 = no layover
+    route: f("route") as string | undefined,
   });
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Weekday name of a YYYY-MM-DD date (the feed's own field when present). */
+function weekdayOf(date?: string): string | undefined {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+  return WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()];
 }
 
 /** Reduce a raw flytlv deal to the camelCase fields read aloud / shown.
@@ -172,10 +195,29 @@ export function slim(deal: RawDeal, currency: string): Deal {
     // Spoken flight details: airports, times, flight numbers. Added only when
     // present, so deals without them keep the original shape.
     ...present({
+      tripType: deal.trip_type as string | undefined,
+      category: deal.deal_category_label as string | undefined,
+      // One-way flights have no weekday field; round trips use the feed's own.
+      departureWeekday: (deal.departure_weekday as string | undefined)
+        ?? (deal.trip_type === "one_way" ? weekdayOf(deal.departure_date) : undefined),
+      returnWeekday: deal.return_weekday as string | undefined,
+      discountPct: deal.discount_pct as number | undefined,
+      savingsAmount: deal.savings_amount as number | undefined,
+      typicalPrice: deal.typical_price as number | undefined,
+      dealQuality: deal.deal_quality as string | undefined,
       fromAirport: airport(deal.origin),
       toAirport: airport(deal.destination_airport),
       nights: deal.nights,
-      outbound: leg(deal, "outbound"),
+      // A one-way flight (/api/private/flights) carries its times at the top level.
+      outbound: deal.trip_type === "one_way"
+        ? present({
+          departs: deal.departure_time as string | undefined,
+          arrives: deal.arrival_time as string | undefined,
+          airline: deal.airline,
+          stops: deal.stops as number | undefined,
+          durationMin: deal.duration_minutes as number | undefined,
+        })
+        : leg(deal, "outbound"),
       inbound: leg(deal, "inbound"),
     }),
   };
@@ -188,7 +230,8 @@ export function dealSms(d: Deal): string {
   const leg = (date?: string, l: Leg = {}) =>
     [date, l.departs, l.flightNumber].filter(Boolean).join(" ");
   return [
-    `FlyTLV: ${d.city}, ${d.country} - ${d.price} ${d.currency} round trip${d.direct ? ", direct" : ""}.`,
+    `FlyTLV: ${d.city}, ${d.country} - ${d.price} ${d.currency} ${d.tripType === "one_way" ? "one way" : "round trip"}${d.direct ? ", direct" : ""}.` +
+      (d.savingsAmount ? ` Save ${d.savingsAmount} ${d.currency} (${d.discountPct}% off).` : ""),
     `Out ${leg(d.departureDate, o)}. Back ${leg(d.returnDate, i)}.`,
     `Book: ${d.url}`,
   ].join("\n");
@@ -268,7 +311,8 @@ export function bookable(deals: RawDeal[], now = new Date()): RawDeal[] {
   const min = `${v("year")}-${v("month")}-${v("day")} ${v("hour")}:${v("minute")}`;
   return deals.filter((d) => {
     if (!d.departure_date) return true;
-    const time = typeof d.outbound_departure_time === "string" ? d.outbound_departure_time : "23:59";
+    const t = d.outbound_departure_time ?? d.departure_time; // round trip | one way
+    const time = typeof t === "string" ? t : "23:59";
     return `${d.departure_date} ${time}` >= min;
   });
 }
@@ -283,31 +327,92 @@ export function inCountry(deals: RawDeal[], country: string): RawDeal[] {
   });
 }
 
+/** Keep deals whose flytlv trip category matches (e.g. "hanukkah", "weekend",
+ * "weekdays", "1 month"), in English or Hebrew, case-insensitive. */
+export function inCategory(deals: RawDeal[], category: string): RawDeal[] {
+  const want = category.trim().toLowerCase();
+  return deals.filter((d) => [d.deal_category_label, d.deal_category_label_he, d.package_type]
+    .some((v) => typeof v === "string" && v.toLowerCase().includes(want)));
+}
+
+/** The caller-facing filters applied after the feed query. */
+export interface DealFilters {
+  country?: string;
+  category?: string;
+  minNights?: number;
+  maxNights?: number;
+  departureWeekday?: string;
+}
+
+/** Apply the filters the feed has no parameter for (or that we match more loosely). */
+export function applyFilters(deals: RawDeal[], f: DealFilters): RawDeal[] {
+  let out = deals;
+  if (f.country) out = inCountry(out, f.country);
+  if (f.category) out = inCategory(out, f.category);
+  if (f.minNights) out = out.filter((d) => typeof d.nights === "number" && d.nights >= f.minNights!);
+  if (f.maxNights) out = out.filter((d) => typeof d.nights === "number" && d.nights <= f.maxNights!);
+  if (f.departureWeekday) {
+    const want = f.departureWeekday.toLowerCase();
+    out = out.filter((d) => ((d.departure_weekday as string | undefined) ?? weekdayOf(d.departure_date) ?? "")
+      .toLowerCase() === want);
+  }
+  return out;
+}
+
 /** Caller id for logs: last 4 digits only (matches the webhook's mask). */
 function mask(entityId: string): string {
   return entityId ? `***${entityId.slice(-4)}` : "";
 }
 
-/** Canonical, string-only flytlv query params for a search. */
-function buildParams(
-  destination: string,
-  directOnly: boolean,
-  maxPrice: number,
-  departureDate: string,
-  byCountry = false,
-): Record<string, string> {
+/** search_deals arguments (validated by the tool's zod schema). */
+export interface SearchArgs {
+  trip_type?: "round_trip" | "one_way";
+  destination?: string;
+  country?: string;
+  category?: string;
+  weekend?: "upcoming" | "following";
+  departure_date?: string;
+  departure_weekday?: string;
+  min_nights?: number;
+  max_nights?: number;
+  max_price?: number;
+  min_discount_pct?: number;
+  direct_only?: boolean;
+  max_layover_hours?: number;
+  time_of_day?: string[];
+  sort?: "cheapest" | "best_value" | "biggest_discount" | "soonest" | "fastest";
+}
+
+/** Feed sort for a caller-facing sort ("biggest_discount" is re-sorted here). */
+const FEED_SORT: Record<string, string> = {
+  cheapest: "cheapest", best_value: "best", biggest_discount: "cheapest", soonest: "date_asc", fastest: "fastest",
+};
+
+/** Canonical, string-only flytlv query params for a search. Filters the feed
+ * cannot apply (country, category, nights, weekday) run on our side, so those
+ * searches fetch every destination's best deal (DEALS_BROAD_FETCH_LIMIT). */
+export function buildParams(a: SearchArgs, dates: string): Record<string, string> {
+  const broad = Boolean(a.country || a.category || a.min_nights || a.max_nights || a.departure_weekday
+    || a.sort === "biggest_discount");
+  const oneWay = a.trip_type === "one_way";
+  const limit = broad
+    ? config.integer("DEALS_BROAD_FETCH_LIMIT", config.integer("DEALS_COUNTRY_FETCH_LIMIT", 300))
+    : config.integer("DEALS_FETCH_LIMIT", 20);
   const params: Record<string, string> = {
-    sort: "cheapest", // cheapest first per the feed docs
+    // The one-way feed sorts only by cheapest or date and caps limit at 100.
+    sort: oneWay ? (a.sort === "soonest" ? "date_asc" : "cheapest") : FEED_SORT[a.sort ?? "cheapest"],
     one_per_destination: "true", // at most one deal per city
-    // A country filter runs on our side, so fetch every destination's best deal.
-    limit: String(byCountry
-      ? config.integer("DEALS_COUNTRY_FETCH_LIMIT", 300)
-      : config.integer("DEALS_FETCH_LIMIT", 20)),
+    limit: String(oneWay ? Math.min(limit, 100) : limit),
   };
-  if (destination.trim()) params.destination = destination.trim().toUpperCase();
-  if (directOnly) params.stops = "0"; // direct flights only
-  if (maxPrice) params.max_price = String(maxPrice);
-  if (departureDate.trim()) params.departure_date = departureDate.trim();
+  if (a.destination?.trim()) params.destination = a.destination.trim().toUpperCase();
+  if (a.direct_only) params.stops = "0";
+  if (a.max_price) params.max_price = String(a.max_price);
+  if (dates.trim()) params[oneWay ? "date" : "departure_date"] = dates.trim();
+  if (!oneWay) {
+    if (a.min_discount_pct) params.min_discount_pct = String(a.min_discount_pct);
+    if (a.max_layover_hours) params.max_layover = String(Math.round(a.max_layover_hours * 60));
+    if (a.time_of_day?.length) params.time_windows = a.time_of_day.join(",");
+  }
   return params;
 }
 
@@ -427,19 +532,35 @@ export function createServer(
     "search_deals",
     {
       description:
-        "Search flytlv.app for cheap round-trip flight deals from Tel Aviv, with airports, " +
-        "dates, times, flight numbers and price. The deals are remembered for the caller so " +
-        "save_deal and send_deal_sms can only use a deal the caller was actually offered.",
+        "Search flytlv.app for cheap flight deals from Tel Aviv (round trip by default, or one way). " +
+        "Each deal has airports, dates and weekdays, times, flight numbers, layovers, nights, price, " +
+        "discount vs the usual price, savings and deal quality. The deals are remembered for the " +
+        "caller so save_deal and send_deal_sms can only use a deal the caller was actually offered.",
       inputSchema: {
+        trip_type: z.enum(["round_trip", "one_way"]).optional().describe("Round trip (default) or one way."),
         destination: z.string().regex(IATA).optional().describe("Destination IATA airport code, e.g. LCA."),
         country: z.string().min(2).max(60).optional()
           .describe("Destination country, English name or ISO code (e.g. 'Greece' or 'GR'). Use instead of destination for a whole country."),
+        category: z.string().min(2).max(40).optional()
+          .describe("flytlv trip category: a holiday (Hanukkah, Purim, Passover, Shavuot, Sukkot, Rosh Hashanah, Sigd...) or a trip style ('Weekend' = weekend trips, 'Weekdays' = Sun-Thu style trips, 'Quick Visit' = 2 nights, 'Weekly', '2 Weeks', '1 Month', 'Midweek Saver', 'Deep Saver'). Round trips only."),
         weekend: z.enum(["upcoming", "following"]).optional()
-          .describe("Weekend trips (Thu/Fri/Sat departures): 'upcoming' = this/next weekend, 'following' = the weekend after. Dates are computed by the server."),
+          .describe("Leave on the coming weekend (Thu/Fri/Sat): 'upcoming' = this/next weekend, 'following' = the weekend after. Dates are computed by the server."),
         departure_date: z.string().regex(DATE_LIST).optional()
           .describe("Departure date YYYY-MM-DD, or a comma-separated list of dates."),
+        departure_weekday: z.enum(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]).optional()
+          .describe("Only departures on this weekday."),
+        min_nights: z.number().int().min(1).max(60).optional().describe("Minimum nights away (round trips)."),
+        max_nights: z.number().int().min(1).max(60).optional().describe("Maximum nights away (round trips)."),
         max_price: z.number().positive().optional().describe("Maximum price in the feed's currency."),
+        min_discount_pct: z.number().int().min(1).max(99).optional()
+          .describe("Only deals at least this many percent below the route's usual price (round trips)."),
         direct_only: z.boolean().optional().describe("Limit to direct flights only."),
+        max_layover_hours: z.number().positive().max(48).optional()
+          .describe("Longest acceptable layover in hours, for connecting flights (round trips)."),
+        time_of_day: z.array(z.enum(["morning", "afternoon", "evening", "night"])).min(1).max(4).optional()
+          .describe("Outbound departure time windows (round trips)."),
+        sort: z.enum(["cheapest", "best_value", "biggest_discount", "soonest", "fastest"]).optional()
+          .describe("Order of results; default cheapest."),
       },
     },
     (args, extra) => guard("search_deals", async () => {
@@ -450,8 +571,9 @@ export function createServer(
       const entityId = await readCaller(kv, conv);
 
       const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");
-      const params = buildParams(args.destination ?? "", args.direct_only ?? false, args.max_price ?? 0, dates, Boolean(args.country));
-      const key = cacheKey(params);
+      const oneWay = args.trip_type === "one_way";
+      const params = buildParams(args, dates);
+      const key = cacheKey(oneWay ? { ...params, trip: "one_way" } : params); // trip only keys the cache
 
       // Cache lookup — failure is non-fatal: fall through to flytlv.
       let payload: FlytlvPayload | undefined;
@@ -467,7 +589,7 @@ export function createServer(
         m.bump("cache.miss");
         const t0 = Date.now();
         try {
-          payload = await flytlv.search(params);
+          payload = oneWay ? await flytlv.searchOneWay(params) : await flytlv.search(params);
         } catch (e) {
           m.bump("flytlv.errors");
           if (e instanceof FlytlvError) throw new ToolError(e.message);
@@ -483,8 +605,16 @@ export function createServer(
       }
 
       const currency = payload.currency ?? "";
-      let deals = (payload.deals ?? []) as RawDeal[];
-      if (args.country) deals = inCountry(deals, args.country);
+      let deals = applyFilters((payload.deals ?? []) as RawDeal[], {
+        country: args.country,
+        category: oneWay ? undefined : args.category,
+        minNights: oneWay ? undefined : args.min_nights,
+        maxNights: oneWay ? undefined : args.max_nights,
+        departureWeekday: args.departure_weekday,
+      });
+      if (args.sort === "biggest_discount") {
+        deals = [...deals].sort((x, y) => Number(y.discount_pct ?? 0) - Number(x.discount_pct ?? 0));
+      }
       deals = bookable(deals)
         // A feed row without a deal id can't be saved; the actor would reject the whole list.
         .filter((d) => typeof d.deal_id === "string" && d.deal_id.length > 0);
@@ -499,6 +629,8 @@ export function createServer(
         deals: slimmed.length,
         destination: params.destination ?? "",
         country: args.country ?? "",
+        category: args.category ?? "",
+        trip: args.trip_type ?? "round_trip",
         direct: args.direct_only ?? false,
       });
       return toolOk(entityId

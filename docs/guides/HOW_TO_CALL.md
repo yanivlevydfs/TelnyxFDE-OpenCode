@@ -26,6 +26,14 @@ Say what you want in your own words. Examples:
 | You want | Say something like |
 | --- | --- |
 | The cheapest trip anywhere | "I need cheap deals to anywhere." |
+| A holiday trip | "Any deals for Hanukkah?" (also Purim, Passover, Shavuot, Sukkot, Rosh Hashanah, Sigd) |
+| A weekend or weekdays trip | "A weekend trip in December" / "Weekdays only" |
+| A trip length | "Three nights" / "A week" / "Two weeks" / "A month" |
+| A departure day | "Leaving on a Friday" |
+| One way | "A one-way flight to Athens" |
+| A big discount | "At least half price" / "The biggest discount" |
+| Short layovers | "Layovers under three hours" |
+| Time of day | "Morning flights" |
 | A trip this coming weekend | "Any cheap deals for next weekend?" |
 | The weekend after that | "What about the weekend after?" |
 | A whole country | "Cheap flights to Greece." |
@@ -52,7 +60,11 @@ The agent reads out two or three of the cheapest deals. For each one you hear:
 - **Return flight**: date, departure and arrival time, airline, flight number
 - **Trip length**: number of nights
 - **Stops**: direct, or how many stops
-- **Price**: the total round-trip price and currency
+- **Price**: the total price and currency (round trip, or one way)
+- **How good the deal is**: how many percent below the usual price, how much you
+  save, and the rating (exceptional, great or good)
+- **Connections**: where you change planes and how long the layover is
+- **Category**: the holiday or trip style, and the departure and return weekdays
 
 Example:
 
@@ -103,8 +115,8 @@ same full details.
 
 ## Good to know
 
-- **From Tel Aviv only, round trips only.** One-way trips and other departure
-  cities are not supported.
+- **From Tel Aviv only.** Round trips and one-way flights; other departure cities
+  are not supported.
 - **Your phone number is your account.** Saved deals are tied to the number
   you call from, so call from the same number to hear them again.
 - **Long calls:** after about 10 minutes the agent offers to wrap up.

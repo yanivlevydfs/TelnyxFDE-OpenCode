@@ -40,3 +40,27 @@ const kept = bookable([
 ] as never, now).map((d: { deal_id: string }) => d.deal_id);
 assert.deepEqual(kept, ["ok", "later"]);
 console.log("bookable check OK");
+
+// Caller requests -> feed params and our own filters (category, nights, weekday).
+import { buildParams, applyFilters } from "../services/mcp-server/src/server.ts";
+const rt = buildParams({ min_discount_pct: 50, max_layover_hours: 3, time_of_day: ["morning"], sort: "best_value" }, "");
+assert.equal(rt.min_discount_pct, "50");
+assert.equal(rt.max_layover, "180");
+assert.equal(rt.time_windows, "morning");
+assert.equal(rt.sort, "best");
+assert.equal(buildParams({ category: "Hanukkah" }, "").limit, "300"); // broad fetch for local filters
+const ow = buildParams({ trip_type: "one_way", min_discount_pct: 50, sort: "soonest" }, "2026-11-18");
+assert.equal(ow.date, "2026-11-18");
+assert.equal(ow.sort, "date_asc");
+assert.equal(ow.min_discount_pct, undefined); // not a one-way feed parameter
+const pool = [
+  { deal_id: "a", deal_category_label: "Hanukkah", nights: 3, departure_weekday: "Friday" },
+  { deal_id: "b", deal_category_label: "Weekend (Thu-Sun)", nights: 3, departure_date: "2026-10-08" },
+  { deal_id: "c", deal_category_label: "1 Month", nights: 28, departure_weekday: "Monday" },
+] as never;
+const ids = (f: object) => applyFilters(pool, f).map((d: { deal_id: string }) => d.deal_id);
+assert.deepEqual(ids({ category: "hanukkah" }), ["a"]);
+assert.deepEqual(ids({ category: "weekend" }), ["b"]);
+assert.deepEqual(ids({ minNights: 2, maxNights: 4 }), ["a", "b"]);
+assert.deepEqual(ids({ departureWeekday: "Thursday" }), ["b"]); // from the date when no weekday field
+console.log("search argument checks OK");

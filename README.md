@@ -157,7 +157,7 @@ is the greeting speak node.
 | `search_flights` | prompt | append | Calls the `search_deals` MCP tool; reads back the top 2–3 deals (city, price, dates, airline, direct); offers to save one. Never invents data. |
 | `save_deal` | prompt | append | Calls `save_deal` to save one of the deals just read out; the caller picks by position. |
 | `list_saved` | prompt | append | Calls `list_saved_deals` to read back deals saved on previous calls. |
-| `answer_faq` | prompt | append | Answers general questions about the service (booking, one-way, weekends) from fixed facts; no tools. |
+| `answer_faq` | prompt | append | Answers general questions from a 23-entry knowledge base (`FAQ_ENTRIES` in flow.py): departure city, one way, holidays, weekends, trip lengths, discount and deal quality, layovers, booking, SMS, saved deals, privacy, what is not covered; no tools. |
 | `transfer_call` | prompt | append | Calls the inline `transfer` tool to hand off to a human. |
 | `farewell` | speak | — | Verbatim goodbye. |
 | `hangup_call` | prompt | replace | Calls the inline `hangup` tool to end the call. |
@@ -247,7 +247,7 @@ nodes call mid-conversation over stateless Streamable HTTP:
 
 | Tool | Does | Actor method |
 | --- | --- | --- |
-| `search_deals` | Query flytlv (KV-cached) and read deals back with airports, dates, times, flight numbers, nights and price; remember them. Arguments: `destination`, `country`, `weekend` (`upcoming`/`following`; Thu-Sat dates computed on the server), `departure_date`, `max_price`, `direct_only`. Flights leaving within 3 hours are dropped. | `setLastResults` |
+| `search_deals` | Query flytlv (KV-cached) for round trips (`/api/private/deals`) or one-way flights (`/api/private/flights`) and read deals back with airports, weekdays, dates, times, flight numbers, nights, connections and layovers, price, **discount vs the usual price, savings and deal quality**; remember them. Arguments: `trip_type`, `destination`, `country`, `category` (holidays such as Hanukkah or Purim, and trip styles such as Weekend, Weekdays, 1 Month), `weekend` (Thu-Sat dates computed on the server), `departure_date`, `departure_weekday`, `min_nights`/`max_nights`, `max_price`, `min_discount_pct`, `direct_only`, `max_layover_hours`, `time_of_day`, `sort` (cheapest, best_value, biggest_discount, soonest, fastest). Flights leaving within 3 hours are dropped. | `setLastResults` |
 | `save_deal` | Save one of the last-shown deals (the actor validates the choice) | `saveDeal` |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
 | `send_deal_sms` | Text the caller a shown deal and its booking link from the alphanumeric sender `FlyTLV` (Telnyx Israeli numbers are voice-only). Only to the number the caller is calling from, only a deal they were offered. | `saveDeal`, `getSaved` |

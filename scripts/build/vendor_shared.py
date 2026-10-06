@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]  # scripts/build/ -> repo root
 SOURCE = ROOT / "shared" / "common.py"
 sys.path.insert(0, str(SOURCE.parent))
-import common as c  # noqa: E402  (shared JSON logger)
+import common as c
 
 
 def main() -> int:
