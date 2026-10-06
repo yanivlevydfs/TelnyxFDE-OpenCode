@@ -26,10 +26,14 @@ See [Which model built each component](#which-model-built-each-component).
 | Shared code | `shared/common.py` | GLM-5.2 | Claude Code | 13/13 | vendored into each Python service |
 | Dynamic Variables webhook | `services/webhook` | Kimi-K3 | Claude Code | 9/9 | live, `fde-webhook` |
 | MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code | 11/11 | live, `fde-mcp` |
-| CallerSession Stateful Actor | `services/session-actor` | GLM-5.2 | Claude Code | 7/7 | live, `fde-session-actor` |
+| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 | Claude Code | 7/7 | live, `fde-session-actor` |
 | Assistant + Conversation Workflow | `assistant/` | GLM-5.2 | Claude Code | 7/7 | live (`provision.py`) |
 | Deploy pipeline | `.github/workflows/ship.yml` | — | Claude Code | — | GitHub Actions |
 | Phone number | — | — | — | — | linked; awaiting Telnyx regulatory approval |
+
+Live checks: `scripts/ops/live_check.py` (20/20 PASS), `scripts/ops/workflow_paths.py`
+(every workflow path over the chat API) and `scripts/ops/actor_concurrency_check.py`
+(20 concurrent updates, none lost). See [scripts/README.md](scripts/README.md).
 
 Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python -m pytest tests -q`,
 `cd services/mcp-server && npm test` and `cd services/session-actor && npm test`.
@@ -355,6 +359,15 @@ Each of these was found from logs, deploy records or a live check, not by guessi
 5. **"Pick a deal I read out" came back as "service unavailable".** Signal: the
    actor facade's `dispatch_failed` ERROR showed the actor's `ActorInputError`
    arriving as an RPC 500. Fix: the facade recovers it and returns 400.
+6. **Every call was degraded.** Signal: the new metrics showed `webhook.calls 17`,
+   `webhook.degraded 17`, `webhook.failed.session 17`, and the logs showed
+   `dependency budget exceeded (1.2s)` for the flags read and the session write.
+   Measured Telnyx KV over REST: 1.2-3.7 s per read, ~2 s per write. Fix: write the
+   session after the response, cache flags for 60 s, 2.5 s budget for the actor.
+7. **Test assistants hit the account's TeXML app cap.** Signal: `403 Account Level
+   Limit Reached ... 10 TeXML Application(s)`. Deleting an assistant does not delete
+   the TeXML application Telnyx created for it. The workflow-path script now uses one
+   test copy and deletes both.
 
 ## Setup
 

@@ -128,7 +128,8 @@ def assistant_body(env: dict[str, str], mcp_id: str,
         # Required by the CreateAssistant API.
         # Offer a human only when a transfer number (and so a transfer tool) exists.
         "instructions": BASE_INSTRUCTIONS + (
-            " If you cannot help, offer to transfer the caller to a human." if transfer_to
+            f" If you cannot help, or the caller asks for a person, offer to transfer them to "
+            f"{_opt(env, 'TRANSFER_TO_NAME', 'a human agent')} with the transfer tool." if transfer_to
             else " No human agent is available; if asked, say so and keep helping."),
         # Telnyx-hosted model id and voice — both from env (owner rule: nothing
         # hardcoded). Voice goes under voice_settings.voice per the API schema.
@@ -147,7 +148,7 @@ def assistant_body(env: dict[str, str], mcp_id: str,
         # Inline tools: hangup always, transfer only when a human is configured.
         # With a hangup tool node, no prompt node gets the hangup tool, so the
         # model cannot end the call mid-conversation (tools scoped per node).
-        "tools": [t for t in flow.build_tools(transfer_from, transfer_to)
+        "tools": [t for t in flow.build_tools(transfer_from, transfer_to, _opt(env, "TRANSFER_TO_NAME", ""))
                   if not (hangup_tool_id and t["type"] == "hangup")],
         # The conversation workflow itself.
         "conversation_flow": _checked_flow(conversation_timeout_secs, hangup_tool_id),

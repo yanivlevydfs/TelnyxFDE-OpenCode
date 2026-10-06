@@ -39,6 +39,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The build scripts log through shared/common.py (needs httpx + telnyx).
+      - run: pip install -r requirements-dev.txt
+
       # function/common.py is gitignored; copy shared/common.py into each Python service.
       - run: python scripts/build/vendor_shared.py
 

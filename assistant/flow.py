@@ -424,14 +424,15 @@ def validate(flow: dict[str, Any]) -> list[str]:
     return problems
 
 
-def build_tools(transfer_from: str, transfer_to: str) -> list[dict[str, Any]]:
+def build_tools(transfer_from: str, transfer_to: str, transfer_name: str = "") -> list[dict[str, Any]]:
     """Return the assistant-level inline tools.
 
     The hangup tool is always present (every call should be able to end). The
     transfer tool — which hands the call to a human — is only added when a
     destination is configured (``transfer_to``), so a build without a human
     agent number simply omits it. ``transfer_from`` is the caller-id the
-    transferred leg uses (the assistant's own number) and is optional.
+    transferred leg uses (the assistant's own number) and ``transfer_name`` names
+    the human (TRANSFER_TO_NAME); both optional.
 
     Tool shapes follow the Telnyx Assistant API ``TransferTool`` / ``HangupTool``.
     """
@@ -442,10 +443,15 @@ def build_tools(transfer_from: str, transfer_to: str) -> list[dict[str, Any]]:
 
     to = (transfer_to or "").strip()
     if to:
+        if not to.startswith(("+", "sip:")):
+            to = "+" + to  # E.164
         target: dict[str, Any] = {"to": to}
+        if transfer_name.strip():
+            target["name"] = transfer_name.strip()  # the model says who it transfers to
+        transfer: dict[str, Any] = {"targets": [target]}
         frm = (transfer_from or "").strip()
         if frm:
-            target["from"] = frm
-        tools.append({"type": "transfer", "transfer": {"targets": [target]}})
+            transfer["from"] = frm  # caller id of the transferred leg (sibling of targets)
+        tools.append({"type": "transfer", "transfer": transfer})
 
     return tools
