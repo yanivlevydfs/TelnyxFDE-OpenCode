@@ -41,6 +41,8 @@ import {
 // Re-export the actor class so the Edge bundler ships it with the function —
 // the [[actors]].type entry must be reachable from the bundle.
 export { CallerSession } from "./caller-session";
+export { MetricsCounter } from "./metrics-counter";
+import type { MetricsCounter } from "./metrics-counter";
 
 // --------------------------------------------------------------- public API
 
@@ -72,6 +74,8 @@ interface Env {
    * `idFromName(name).<method>(args)` invokes the actor — Telnyx serializes
    * on (type, name), giving us effective ACID per caller. */
   CALLER_SESSION: ActorNamespace<CallerSession>;
+  /** Shared metrics actor (binding = "METRICS"), one instance named "global". */
+  METRICS?: ActorNamespace<MetricsCounter>;
   /** Edge secrets declared via `[[secrets]]`. Used to fetch
    * `INTERNAL_API_TOKEN` through Dapr. */
   SECRETS?: Secrets & { get(handle: string): Promise<string | undefined> };
@@ -83,6 +87,22 @@ interface Env {
  * Default Worker export. `worker.fetch(req, env)` is the Edge entry point;
  * tests import this object as `worker` and call `worker.fetch(request, env)`.
  */
+/** POST /metrics/{add|snapshot|reset} on the shared "global" MetricsCounter. */
+async function metrics(req: Request, env: Env, op: string): Promise<Response> {
+  if (!env.METRICS) return error(404, "metrics not configured");
+  const stub = env.METRICS.idFromName("global") as unknown as Pick<MetricsCounter, "add" | "snapshot" | "reset">;
+  try {
+    if (op === "snapshot") return json(200, await stub.snapshot());
+    if (op === "reset") return json(200, await stub.reset());
+    const body = (await req.json().catch(() => ({}))) as { counts?: unknown; latency?: unknown };
+    return json(200, await stub.add(body));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log("ERROR", "metrics_failed", { op, error: msg });
+    return json(/ActorInputError/.test(msg) ? 400 : 500, { error: "metrics update failed" });
+  }
+}
+
 /** Constant-time string compare, so response timing does not leak the token. */
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -103,7 +123,8 @@ export default {
     const resp = await route(req, env);
     const [, entity = "", method = ""] =
       new URL(req.url).pathname.match(/^\/actors\/([^/]+)\/([^/]+)$/) ?? [];
-    log("INFO", "actor.request", { entity, method, status: resp.status, duration_ms: Date.now() - started });
+    const op = method || new URL(req.url).pathname; // e.g. "/metrics/add"
+    log("INFO", "actor.request", { entity, method: op, status: resp.status, duration_ms: Date.now() - started });
     return resp;
   },
 };
@@ -115,11 +136,11 @@ async function route(req: Request, env: Env): Promise<Response> {
       return error(405, `method ${req.method} not allowed`);
     }
 
-    // Path must be POST /actors/{entity}/{method}.
-    const match = new URL(req.url).pathname.match(/^\/actors\/([^/]+)\/([^/]+)$/);
-    if (!match) return error(404, "not found");
-
-    const [, entityRaw, methodName] = match;
+    // Path must be POST /actors/{entity}/{method} or POST /metrics/{op}.
+    const pathname = new URL(req.url).pathname;
+    const metricsOp = pathname.match(/^\/metrics\/(add|snapshot|reset)$/)?.[1];
+    const match = pathname.match(/^\/actors\/([^/]+)\/([^/]+)$/);
+    if (!match && !metricsOp) return error(404, "not found");
 
     // Auth first — never leak routing reasons to an unauthenticated caller.
     const expectedToken = await internalTokenFor(env);
@@ -129,6 +150,10 @@ async function route(req: Request, env: Env): Promise<Response> {
     ) {
       return error(401, "unauthorized");
     }
+
+    if (metricsOp) return await metrics(req, env, metricsOp);
+    if (!match) return error(404, "not found");
+    const [, entityRaw, methodName] = match;
 
     // Decode after auth: a malformed escape ("%E0") is a 400, not a crash.
     let entity: string;
@@ -264,7 +289,7 @@ function log(
     trace_id: currentTrace,
     ...fields,
     // Caller ids are phone digits: log the last 4 only.
-    ...(typeof fields.entity === "string" ? { entity: `***${fields.entity.slice(-4)}` } : {}),
+    ...(typeof fields.entity === "string" && fields.entity ? { entity: `***${fields.entity.slice(-4)}` } : {}),
   });
   if (level === "ERROR") console.error(line);
   else if (level === "WARNING") console.warn(line);

@@ -276,6 +276,18 @@ class ActorClient:
         return resp.json()
 
 
+    async def metrics(self, counts: dict[str, float], latency: dict[str, float] | None = None) -> None:
+        """Add to the shared MetricsCounter actor (POST /metrics/add). Never raises:
+        a metrics failure must not affect a call."""
+        try:
+            await self._http.post(
+                f"{self._base}/metrics/add",
+                json={"counts": counts, "latency": latency or {}},
+                headers={"authorization": f"Bearer {self._token}", "content-type": "application/json"},
+            )
+        except httpx.HTTPError as e:
+            warning("metrics.add_failed", error=str(e))
+
 # ------------------------------------------------------------------ sessions
 
 def _session_ttl() -> int:
