@@ -222,6 +222,15 @@ nodes call mid-conversation over stateless Streamable HTTP:
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
 | `send_deal_sms` | Text the caller a shown deal and its booking link from the alphanumeric sender `FlyTLV` (Telnyx Israeli numbers are voice-only). Only to the number the caller is calling from, only a deal they were offered. | `saveDeal`, `getSaved` |
 
+**Tool scoping per node.** Telnyx scopes tools per workflow node through
+`shared_tool_ids` (+ `tools_mode`), which take only org-level shared tools
+(webhook, function, handoff, retrieval, pay, ...). An MCP server is attached at
+the assistant level (`mcp_servers`) and is not a shared-tool type, so all four
+MCP tools are visible at every prompt node. Each node's instructions name the one
+tool that step should call, and the server enforces the safety rules itself:
+`save_deal` and `send_deal_sms` only accept a deal the caller was offered, and
+the SMS only goes to the caller's own number.
+
 Tool failures raise `ToolError` → the LLM receives `isError: true` with a
 caller-friendly message (never a traceback, URL or API key).
 
