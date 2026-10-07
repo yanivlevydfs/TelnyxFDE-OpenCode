@@ -231,11 +231,10 @@ Every other path is also walked over chat by `python scripts/ops/workflow_paths.
 ### 9:30–10:00 — Close
 
 > "Everything you saw runs on Telnyx: the workflow, the MCP server, the
-> Stateful Actor, KV. OpenCode with Telnyx-hosted models (GLM-5.2, Kimi-K3)
-> built the first version of every component from the spec and the tests.
-> Getting it live on Edge exposed platform bugs the tests couldn't, and those
-> fixes and the later features were done with Claude Code. Here's the config,
-> and the comparison."
+> Stateful Actor, KV. OpenCode with Telnyx-hosted models built the first
+> version of every component and every change since 7 Oct (steps 7-13). Which
+> tool built which part — and the platform fixes made with another AI coding
+> tool, for comparison — are in [README "Tool comparison"](../../README.md#tool-comparison). Here's the config."
 
 Optional one-liner: show `opencode.json` + the `/telnyx` model list to bridge
 into the walkthrough.

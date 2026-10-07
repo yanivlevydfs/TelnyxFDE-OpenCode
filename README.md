@@ -7,10 +7,9 @@ save one, and on your next call says "Welcome back, last time you saved Larnaca
 for 64 dollars."
 
 Built for the Telnyx FDE coding challenge ([docs/challenge/code_challenge.md](docs/challenge/code_challenge.md)).
-Requirement 6: the first version of every component was built by **OpenCode powered
-by Telnyx Inference** from the spec and the acceptance tests. Deploying to Telnyx
-Edge and the features added after the first deploy were done with **Claude Code**.
-See [Which model built each component](#which-model-built-each-component).
+Requirement 6: the first version of every component was built by **OpenCode
+powered by Telnyx Inference** from the spec and the acceptance tests. See
+[Tool comparison](#tool-comparison) for what each AI coding tool built.
 
 - Use case: [docs/challenge/USE_CASE.md](docs/challenge/USE_CASE.md)
 - Design: [docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md), [docs/design/DECISIONS.md](docs/design/DECISIONS.md),
@@ -23,15 +22,15 @@ See [Which model built each component](#which-model-built-each-component).
 
 ## Status
 
-| Component | Folder | First version (OpenCode) | Since first deploy | Tests | Deployed |
-| --- | --- | --- | --- | --- | --- |
-| Shared code | `shared/common.py` | GLM-5.2 | Claude Code | 13/13 | vendored into each Python service |
-| Dynamic Variables webhook | `services/webhook` | Kimi-K3 | Claude Code | 9/9 | live, `fde-webhook` |
-| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code; OpenCode GLM-5.2 (shared actor — step 8) | 11/11 | live, `fde-mcp` |
-| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 | Claude Code; OpenCode GLM-5.2 (itinerary + alarm — step 7) | 7/7 | live, `fde-session-actor` |
-| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 | Claude Code; OpenCode GLM-5.2 (flow upgrade — step 9) | 7/7 | live (`provision.py`) |
-| Deploy pipeline | `.github/workflows/ship.yml` | — | Claude Code | — | GitHub Actions |
-| Phone number | — | — | — | — | linked; awaiting Telnyx regulatory approval |
+| Component | Folder | Built with OpenCode (Telnyx model) | Tests | Deployed |
+| --- | --- | --- | --- | --- |
+| Shared code | `shared/common.py` | GLM-5.2 (v1) | 13/13 | vendored into each Python service |
+| Dynamic Variables webhook | `services/webhook` | Kimi-K3 (v1) | 9/9 | live, `fde-webhook` |
+| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (v1; shared actor — step 8; live config fix — step 11) | 11/11 | live, `fde-mcp` |
+| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 (v1; itinerary + alarm — step 7; live config fix — step 11) | 7/7 | live, `fde-session-actor` |
+| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 (v1; flow upgrade — step 9) | 7/7 | live (`provision.py`) |
+| Deploy pipeline | `.github/workflows/ship.yml` | — | — | GitHub Actions |
+| Phone number | — | — | — | linked; awaiting Telnyx regulatory approval |
 
 Live checks: `scripts/ops/live_check.py` (20/20 PASS), `scripts/ops/workflow_paths.py`
 (every workflow path over the chat API) and `scripts/ops/actor_concurrency_check.py`
@@ -548,13 +547,19 @@ It runs four ordered steps (each logged as structured JSON):
 Deploy order is fixed (the assistant references the live webhook + MCP URLs):
 **secrets → KV → `ship` webhook · mcp-server · session-actor → `provision.py`**.
 
-## Which model built each component
+## Tool comparison
 
-Requirement 6: the first version of each component was built with **OpenCode
-powered by Telnyx Inference**, one model per component, from the spec in `docs/design/`
-and the acceptance tests in `tests/`. Current `/telnyx` model list for
-reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek-V4`,
-`Qwen3.x`, `MiniMax`.
+<a id="which-model-built-each-component"></a>
+
+The challenge allows comparing AI coding tools, and two were used. **OpenCode
++ Telnyx Inference (hosted models)** built the first version of every
+component from the spec in `docs/design/` and the acceptance tests in
+`tests/`, one model per component, and built every change from 7 Oct 2026
+(steps 7-13, all with `zai-org/GLM-5.2`); **Claude Code** (another AI coding
+tool, for comparison) made the platform fixes and features between the first
+deploy (6 Oct 2026, 18:00 Israel time) and 7 Oct morning. Current `/telnyx`
+model list for reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family,
+`deepseek-ai/DeepSeek-V4`, `Qwen3.x`, `MiniMax`.
 
 | Component | Folder | First version built by |
 | --- | --- | --- |
@@ -565,37 +570,24 @@ reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family, `deepseek-ai/DeepSeek
 | Assistant + Conversation Workflow + provisioning | `assistant/` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 | Webhook fix for Edge's Python 3.9 build | `services/webhook` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
 
-The OpenCode session history (`opencode.db`) records each of these runs and its model.
+The OpenCode session history (`opencode.db`) records each run and its model.
+Steps 7-13 (all with `zai-org/GLM-5.2`): step 7 — itinerary HTML in Cloud
+Storage + reminder alarm (`session-actor`); step 8 — the MCP server binds
+`CallerSession` directly through the shared `SESSIONS` actor binding; step 9
+— assistant flow upgrade (capabilities + safety rules; the first attempt
+with `moonshotai/Kimi-K3` hung and was stopped); steps 10-13 — README and
+docs sweep and a live-bug fix (umbrella `[env_vars]` do not reach actor
+instances; itinerary/reminder config now travels with the `saveDeal` call).
 
-**After the first deploy (Claude Code, from 6 Oct ~15:00 UTC).** Shipping to Telnyx
-Edge exposed platform problems the tests could not, and those fixes plus the later
-features were made with Claude Code:
+What Claude Code shipped in the 6 Oct 18:00 Israel → 7 Oct morning window:
 
-- Deploys moved to GitHub Actions: the Windows `telnyx-edge` CLI zips paths with
-  backslashes, so the Linux builders saw flat files instead of folders.
-- MCP `/health/*` probe routes, an expired org API-key binding (KV returned 401),
-  actor input errors arriving as RPC 500s, `provision.py` API-shape fixes.
-- Features: full flight details, weekend and country search, departure filter,
-  SMS deal links, and fixes from a cross-service review.
-
-**Steps 7–9 (OpenCode with Telnyx `telnyx/zai-org/GLM-5.2`).** Three later
-features were built back in OpenCode with the hosted model, after the
-challenge asked for more capability:
-
-- **Step 7 — itinerary + follow-up** (`services/session-actor`): `saveDeal`
-  renders a mobile-friendly itinerary HTML page into the Telnyx Cloud Storage
-  bucket `flytlv-itineraries`, served at `GET /itineraries/<uuid>.html`, and
-  arms the actor's single alarm to send a follow-up SMS
-  `REMINDER_DELAY_SECONDS` later; never couples the side-effects to the save.
-- **Step 8 — shared actor** (`services/mcp-server`): the MCP server binds
-  `CallerSession` directly through the `SESSIONS` binding (Telnyx "shared
-  actors" — no HTTP hop, no bearer); the Python webhook keeps the HTTP facade.
-  The metrics counter still goes over HTTP, so `ACTOR_SERVICE_URL` and
-  `INTERNAL_API_TOKEN` stay required for the MCP server.
-- **Step 9 — assistant flow upgrade** (`assistant/`): the workflow and
-  instructions now cover the full capability list and the safety rules above.
-  The first step 9 attempt with `moonshotai/Kimi-K3` hung and was stopped;
-  the rerun with `zai-org/GLM-5.2` completed.
+- Deploys moved to GitHub Actions: the Windows `telnyx-edge` CLI zips paths
+  with backslashes, so the Linux builders saw flat files instead of folders.
+- MCP `/health/*` probe routes, an expired org API-key binding (KV returned
+  401), actor input errors arriving as RPC 500s, `provision.py` API-shape
+  fixes.
+- Features: full flight details, weekend and country search, departure
+  filter, SMS deal links, and fixes from a cross-service review.
 
 ## Repository layout
 
