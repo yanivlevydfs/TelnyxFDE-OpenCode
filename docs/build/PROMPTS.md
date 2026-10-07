@@ -367,3 +367,13 @@ A read-only fact check against the code found 23 wrong or overstated claims; the
 evidence is in logs/factcheck-step15.md. Fix each one in docs/design/PRODUCT.md and
 docs/guides/INTEGRATION.md (and the same wording in services/mcp-server/README.md if it repeats
 item 4). Verify each fix against the cited code. Change no code.
+
+## 16. Add ruff to requirements-dev.txt
+
+The repo was cleaned of Ruff errors (commit a04dafd) but `ruff` is not in requirements-dev.txt,
+so `python -m ruff check .` fails with "No module named ruff". Add a pinned `ruff==<latest>` line
+under a new "# --- lint ---" group with a short comment, install it
+(`uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt`), run
+`.venv/Scripts/python -m ruff check .` and fix any NEW Ruff errors in our Python files (not in
+.venv, node_modules or reference/). Mention `ruff check .` in the README setup/test commands.
+Keep all Python tests green. Do not commit.

@@ -12,3 +12,6 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 cryptography==50.0.2        # signs test webhooks with Ed25519 (tests/test_webhook.py)
 
+# --- lint ---------------------------------------------------------------------
+ruff==0.16.10               # linter/formatter for Python (run: python -m ruff check .)
+
