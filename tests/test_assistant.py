@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "assistant"))
 sys.path.insert(0, str(ROOT / "scripts"))
-import flow  # noqa: E402
-import provision  # noqa: E402
+import flow
+import provision
 
 FLOW = flow.build_flow(300)
 

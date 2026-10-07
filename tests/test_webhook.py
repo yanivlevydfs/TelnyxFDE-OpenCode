@@ -11,11 +11,10 @@ import json
 import time
 
 import pytest
+from conftest import load_service
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from starlette.testclient import TestClient
-
-from conftest import load_service
 
 func = load_service("webhook", "webhook_fn")
 
@@ -142,5 +141,5 @@ def test_new_fails_loudly_without_config(monkeypatch) -> None:
     for name in ("KV_NAMESPACE_ID", "ACTOR_SERVICE_URL", "INTERNAL_API_TOKEN"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("TELNYX_API_KEY", "x")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match="missing required env var"):
         func.new()
