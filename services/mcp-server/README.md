@@ -107,9 +107,12 @@ into the pending reminder so the `alarm()` turn never relies on
 ## flytlv client (`src/flytlv.ts`)
 
 Minimal async client for `GET {FLYTLV_API_BASE}/api/private/deals`. The
-`FLYTLV_API_KEY` Edge secret is **required** — the server refuses to start
-without it (`config.require` at boot) — and is sent as the `X-API-Key` header
-on **every** request (header name overridable via `FLYTLV_API_KEY_HEADER`).
+`FLYTLV_API_KEY` Edge secret is **required** and sent as the `X-API-Key`
+header on **every** request (header name overridable via
+`FLYTLV_API_KEY_HEADER`). `FlytlvClient` is built per request in
+`createServer`, so a missing/rejected key makes every request fail before
+the feed is called; the function still boots — only `MCP_API_KEY` is
+checked at boot, in `createHandler`.
 
 **Fail-closed** is the failure case only: a wrong or missing key returns
 `404`, which the client logs once at ERROR as `flytlv.feed_off` and surfaces as
