@@ -652,10 +652,19 @@ export function createServer(
       setTraceId(conv || undefined);
       const entityId = await requireCaller(kv, conv);
       const dealId = args.deal_id.trim();
-      await callActor(actor, entityId, "saveDeal", { dealId });
+      const profile = (await callActor(actor, entityId, "saveDeal", { dealId })) as
+        | { itineraryUrl?: string }
+        | undefined;
       info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
       m.bump("deals.saved");
-      return toolOk({ saved: true, dealId });
+      // The actor adds `itineraryUrl` to the profile when Cloud Storage is
+      // configured; surface it back to the model so the caller hears the
+      // link on the call (and can read it in the saved-deals list later).
+      return toolOk({
+        saved: true,
+        dealId,
+        ...(profile?.itineraryUrl ? { itineraryUrl: profile.itineraryUrl } : {}),
+      });
     }),
   );
 
@@ -697,12 +706,20 @@ export function createServer(
         if (!(await smsEnabled(kv))) throw new ToolError("Text messages are turned off right now.");
         const entityId = await requireCaller(kv, conv);
         const dealId = args.deal_id.trim();
-        await callActor(actor, entityId, "saveDeal", { dealId }); // rejects deals not offered
+        // `saveDeal` rejects deals the caller was not offered, so the model
+        // can neither text a stranger nor invent a link. Its response carries
+        // the just-written itinerary URL (when Cloud Storage is configured),
+        // which we surface in the SMS body for the caller to tap.
+        const saveResult = (await callActor(actor, entityId, "saveDeal", { dealId })) as
+          | { itineraryUrl?: string }
+          | undefined;
         const saved = (await callActor(actor, entityId, "getSaved")) as { deals?: Deal[] };
         const deal = saved.deals?.find((d) => d.dealId === dealId);
         if (!deal) throw new ToolError("I couldn't find that deal; please pick one I just read out.");
+        let smsText = dealSms(deal);
+        if (saveResult?.itineraryUrl) smsText += `\nItinerary: ${saveResult.itineraryUrl}`;
         try {
-          await sms.send(`+${entityId}`, dealSms(deal));
+          await sms.send(`+${entityId}`, smsText);
         } catch (e) {
           error("mcp.sms_failed", { caller: mask(entityId), deal: dealId }, e);
           throw new ToolError("I couldn't send the text message right now; the deal is saved.");

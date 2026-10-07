@@ -27,9 +27,9 @@ See [Which model built each component](#which-model-built-each-component).
 | --- | --- | --- | --- | --- | --- |
 | Shared code | `shared/common.py` | GLM-5.2 | Claude Code | 13/13 | vendored into each Python service |
 | Dynamic Variables webhook | `services/webhook` | Kimi-K3 | Claude Code | 9/9 | live, `fde-webhook` |
-| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code | 11/11 | live, `fde-mcp` |
-| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 | Claude Code | 7/7 | live, `fde-session-actor` |
-| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 | Claude Code | 7/7 | live (`provision.py`) |
+| MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (Python, then the TypeScript port) | Claude Code; OpenCode GLM-5.2 (shared actor — step 8) | 11/11 | live, `fde-mcp` |
+| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 | Claude Code; OpenCode GLM-5.2 (itinerary + alarm — step 7) | 7/7 | live, `fde-session-actor` |
+| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 | Claude Code; OpenCode GLM-5.2 (flow upgrade — step 9) | 7/7 | live (`provision.py`) |
 | Deploy pipeline | `.github/workflows/ship.yml` | — | Claude Code | — | GitHub Actions |
 | Phone number | — | — | — | — | linked; awaiting Telnyx regulatory approval |
 
@@ -45,7 +45,7 @@ Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python 
 | What | Where |
 | --- | --- |
 | Phone | **+972 76-567-1113** (how to talk to it: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)) |
-| Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` (GLM-5.3-Flash) |
+| Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` — talks on calls with `zai-org/GLM-5.3-Flash` on Telnyx Inference (verified by `GET /v2/ai/assistants/{id}`: model `zai-org/GLM-5.3-Flash`, `external_llm` null); its code (`assistant/flow.py`, `provision.py`) was written by OpenCode with Telnyx `GLM-5.2` |
 | Webhook (Edge Function) | https://fde-webhook-e5907143-e.telnyxcompute.com |
 | MCP server (Edge Function) | https://fde-mcp-bc3393fa-a.telnyxcompute.com |
 | Session actor (Edge) | https://fde-session-actor-94b99eb9-4.telnyxcompute.com |
@@ -61,8 +61,16 @@ KV/Actor → MCP**. The conversation *workflow* is the orchestrator: at call
 start it fires the **dynamic-variables webhook** (an Edge Function) which talks
 to **KV** and the **Stateful Actor**; mid-conversation the **prompt tool nodes**
 call the **MCP server** (an Edge Function), which itself reads **KV** (cache +
-session map) and the **Actor** (last results / saved deals) and the
-**flytlv.app** deals feed.
+session map), the **flytlv.app** deals feed and the per-caller **Stateful
+Actor**. The MCP server calls `CallerSession` through the **shared actor**
+`SESSIONS` binding (no HTTP hop — the production path; the HTTP facade is a
+`USE_SHARED_ACTOR=false` fallback and is also used for the MCP server's
+per-request metrics `POST /metrics/add` to the shared `MetricsCounter`). The
+Python webhook can't bind actors, so it uses the HTTP facade for `recordCall`.
+When the caller picks a deal the actor also writes a mobile-friendly
+**itinerary HTML page** to a Telnyx Cloud Storage bucket (served at
+`GET /itineraries/<uuid>.html`) and arms its single actor **alarm** to send a
+follow-up SMS `REMINDER_DELAY_SECONDS` later.
 
 ```
 Caller (phone)
@@ -90,7 +98,18 @@ mcp-server (TypeScript Edge Function · fde-mcp)
    │  ├─ Bearer auth (MCP_API_KEY)
    │  ├─ KV  env.KV: cache/deals/<sig>  (TTL'd search cache)  +  session/<conv_id> → caller
    │  ├─ HTTP:  flytlv.app  GET /api/private/deals  (X-API-Key)                 ──▶ flytlv feed
-   │  └─ HTTP ─▶ session-actor: setLastResults / saveDeal / getSaved
+   │  ├─ shared actor env.SESSIONS.idFromName(caller)[method] ─▶ CallerSession:
+   │  │     setLastResults / saveDeal (returns itineraryUrl) / getSaved  (no HTTP hop)
+   │  └─ HTTP ─▶ session-actor /metrics/add  (MetricsCounter actor; fire-and-forget)
+
+session-actor (TypeScript Edge Function · fde-session-actor):
+   ├─ HTTP facade POST /actors/{caller}/{method}  (Bearer INTERNAL_API_TOKEN) — webhook only
+   ├─ public  GET /itineraries/<uuid>.html        (no bearer; the random UUID is the capability)
+   ├─ CallerSession.saveDeal: renders a mobile-friendly itinerary HTML page → Cloud Storage
+   │    bucket `flytlv-itineraries` under itineraries/<uuid>.html (reused on a re-save)
+   └─ arms the single actor alarm; after REMINDER_DELAY_SECONDS the alarm() override sends
+      a follow-up SMS via env.TELNYX.messages.send ("Still thinking about <city> for
+      <price> <currency>? Your itinerary: <url>")
 
 Built using:
 ┌─────────────────────────────────────────────────────────────┐
@@ -108,10 +127,11 @@ Functions. Only unit tests use fakes (owner's rule #14 — no local stand-ins).
 | Component | Runtime | Owns | Talks to |
 | --- | --- | --- | --- |
 | Assistant + workflow | Telnyx Voice AI | conversation flow, routing | webhook (once/call), mcp-server (per tool call) |
-| `webhook` | Edge Function · Python | nothing (stateless) | KV REST, session-actor HTTP |
-| `mcp-server` | Edge Function · TypeScript | nothing (stateless) | KV binding, flytlv HTTP, session-actor HTTP |
-| `session-actor` | Edge Actor · TypeScript | per-caller state | actor storage |
+| `webhook` | Edge Function · Python | nothing (stateless) | KV REST, session-actor HTTP facade |
+| `mcp-server` | Edge Function · TypeScript | nothing (stateless) | KV binding, flytlv HTTP, shared actor `env.SESSIONS` → `CallerSession`, session-actor HTTP `/metrics/add` |
+| `session-actor` | Edge Actor · TypeScript | per-caller state, itinerary HTML files | actor storage, Cloud Storage `ITINERARIES` bucket, `env.TELNYX` messaging (alarm SMS) |
 | KV namespace | Telnyx KV | flags, caches, session map | — |
+| Cloud Storage `flytlv-itineraries` | Telnyx Cloud Storage | itinerary HTML pages written by `saveDeal` | served at `GET /itineraries/<uuid>.html` on the session-actor function |
 
 ### Why Stateful Actor vs KV vs plain function logic
 
@@ -140,10 +160,15 @@ compare-and-set) cannot guarantee that.
 
 ## Conversation Workflow
 
-11 nodes, 4 speak + 7 prompt; edges use all three documented condition kinds
-(`default`, `expression` for deterministic facts, `llm` for intent). Built in
-`assistant/flow.py` (`build_flow`) and validated by `validate()`. The start node
-is the greeting speak node.
+12 nodes, 4 speak + 7 prompt + 1 tool node (a prompt fallback in tests/dry
+runs); 26 edges, using all three documented condition kinds (`default`,
+`expression` for deterministic facts, `llm` for intent). Built in
+`assistant/flow.py` (`build_flow`) and validated by `validate()`. The start
+node is the greeting speak node. The step 9 upgrade added named-destination,
+global-discovery ("anywhere"), one-way, direct/connecting, cheapest-first and
+travel-pattern coverage with natural follow-ups — see
+[Capabilities and safety rules (step 9)](#capabilities-and-safety-rules-step-9)
+below.
 
 ### Nodes
 
@@ -207,6 +232,38 @@ has exactly one outgoing `default` edge.
 - **default edges** for every speak node (required) and to close the
   greeting → identify_intent hop.
 
+### Capabilities and safety rules (step 9)
+
+The step 9 upgrade taught the `search_flights` and `save_deal` prompt nodes
+the full capability list, each mapped only to `search_deals` arguments the
+tool really exposes (`tests/check_flow_capabilities.py` keeps that invariant):
+
+- **Flight search:** from TLV; a named destination (IATA); global discovery
+  ("anywhere"); one-way and round trip; direct and connecting; cheapest first
+  (or best-value / biggest-discount / soonest / fastest); flexible dates and
+  date ranges.
+- **Travel patterns:** mid-week, weekend, long weekend, short break, 4–5 day
+  trip, 7-day trip, flexible — each mapped to concrete `search_deals` args
+  (dates/weekdays/`weekend`, `min_nights`/`max_nights`, `category`, `sort`).
+- **Conversation:** natural follow-up questions, context kept for the whole
+  call, refine preferences, compare prices and destinations, offer
+  alternatives when nothing matches.
+- **Actions:** give the booking link, text it with `send_deal_sms` (only when
+  `flag_sms_enabled` and after a read-back + yes), transfer to a human, end
+  the call.
+
+**Safety / accuracy rules** (in the step instructions, enforced by the actor
+validating every save against the deals it was actually offered — decision #13):
+
+- Never invent availability or prices — every detail spoken must come from the
+  tool result.
+- Never claim a booking was completed — say "I found a flight", never "you are
+  booked"; the caller books themselves on flytlv.app through `deal_url`.
+- Make clear that deals come from the live feed and prices can change until the
+  caller books.
+- Read back destination, dates, price with currency and direct/connecting, and
+  get a clear yes before sending a link (by voice or SMS).
+
 ## Dynamic variables
 
 The webhook (`fde-webhook`) overrides the assistant's `flow.DEFAULT_VARIABLES`
@@ -248,9 +305,9 @@ nodes call mid-conversation over stateless Streamable HTTP:
 | Tool | Does | Actor method |
 | --- | --- | --- |
 | `search_deals` | Query flytlv (KV-cached) for round trips (`/api/private/deals`) or one-way flights (`/api/private/flights`) and read deals back with airports, weekdays, dates, times, flight numbers, nights, connections and layovers, price, **discount vs the usual price, savings and deal quality**; remember them. Arguments: `trip_type`, `destination`, `country`, `category` (holidays such as Hanukkah or Purim, and trip styles such as Weekend, Weekdays, 1 Month), `weekend` (Thu-Sat dates computed on the server), `departure_date`, `departure_weekday`, `min_nights`/`max_nights`, `max_price`, `min_discount_pct`, `direct_only`, `max_layover_hours`, `time_of_day`, `sort` (cheapest, best_value, biggest_discount, soonest, fastest). Flights leaving within 3 hours are dropped. | `setLastResults` |
-| `save_deal` | Save one of the last-shown deals (the actor validates the choice) | `saveDeal` |
+| `save_deal` | Save one of the last-shown deals (the actor validates the choice); the actor returns `itineraryUrl` when Cloud Storage is bound, surfaced back to the model. | `saveDeal` |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
-| `send_deal_sms` | Text the caller a shown deal and its booking link from the alphanumeric sender `FlyTLV` (Telnyx Israeli numbers are voice-only). Only to the number the caller is calling from, only a deal they were offered. | `saveDeal`, `getSaved` |
+| `send_deal_sms` | Text the caller a shown deal and its booking link (and `Itinerary: <url>` when the actor returned one) from the alphanumeric sender `FlyTLV` (Telnyx Israeli numbers are voice-only). Only to the number the caller is calling from, only a deal they were offered. | `saveDeal`, `getSaved` |
 
 **Tool scoping per node.** Telnyx scopes tools per workflow node through
 `shared_tool_ids` (+ `tools_mode`), which take only org-level shared tools
@@ -396,6 +453,9 @@ telnyx-edge storage kv create --name fde-kv   # the KV_NAMESPACE_ID goes in .env
 python scripts/build/vendor_shared.py                  # copy shared/common.py into each Python service
 .venv/Scripts/python -m pytest tests -q       # Python services (29 tests)
 cd services/session-actor && npm test           # actor (7 tests)
+cd services/session-actor && npm run check      # itinerary + alarm self-check (step 7)
+cd services/mcp-server && npm test               # MCP server (11 tests)
+.venv/Scripts/python -m pytest tests/check_flow_capabilities.py -q   # step 9 capability self-check
 ```
 
 ## Deploy
@@ -517,6 +577,25 @@ features were made with Claude Code:
   actor input errors arriving as RPC 500s, `provision.py` API-shape fixes.
 - Features: full flight details, weekend and country search, departure filter,
   SMS deal links, and fixes from a cross-service review.
+
+**Steps 7–9 (OpenCode with Telnyx `telnyx/zai-org/GLM-5.2`).** Three later
+features were built back in OpenCode with the hosted model, after the
+challenge asked for more capability:
+
+- **Step 7 — itinerary + follow-up** (`services/session-actor`): `saveDeal`
+  renders a mobile-friendly itinerary HTML page into the Telnyx Cloud Storage
+  bucket `flytlv-itineraries`, served at `GET /itineraries/<uuid>.html`, and
+  arms the actor's single alarm to send a follow-up SMS
+  `REMINDER_DELAY_SECONDS` later; never couples the side-effects to the save.
+- **Step 8 — shared actor** (`services/mcp-server`): the MCP server binds
+  `CallerSession` directly through the `SESSIONS` binding (Telnyx "shared
+  actors" — no HTTP hop, no bearer); the Python webhook keeps the HTTP facade.
+  The metrics counter still goes over HTTP, so `ACTOR_SERVICE_URL` and
+  `INTERNAL_API_TOKEN` stay required for the MCP server.
+- **Step 9 — assistant flow upgrade** (`assistant/`): the workflow and
+  instructions now cover the full capability list and the safety rules above.
+  The first step 9 attempt with `moonshotai/Kimi-K3` hung and was stopped;
+  the rerun with `zai-org/GLM-5.2` completed.
 
 ## Repository layout
 

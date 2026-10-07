@@ -35,7 +35,11 @@
  */
 
 import { log, traceContext } from "./log.js";
-import type { ActorNamespace, Secrets } from "@telnyx/edge-runtime";
+import type {
+  ActorNamespace,
+  CloudStorageBucket,
+  Secrets,
+} from "@telnyx/edge-runtime";
 import {
   CallerSession,
   ActorInputError,
@@ -69,9 +73,9 @@ type CallerSessionStub = Pick<
 >;
 
 /** Bindings environment — declared by `telnyx.toml` (`[[actors]]`,
- * `[[secrets]]`). The runtime-generated `telnyx-env.d.ts` would augment the
- * base `Env`; we declare the minimal hand-written form here so the code also
- * compiles without codegen. */
+ * `[[secrets]]`, `[storage.cloudstorage.ITINERARIES]`). The runtime-generated
+ * `telnyx-env.d.ts` would augment the base `Env`; we declare the minimal
+ * hand-written form here so the code also compiles without codegen. */
 interface Env {
   /** Binding declared in telnyx.toml `[[actors]]` (binding = "CALLER_SESSION").
    * `idFromName(name).<method>(args)` invokes the actor — Telnyx serializes
@@ -79,6 +83,10 @@ interface Env {
   CALLER_SESSION: ActorNamespace<CallerSession>;
   /** Shared metrics actor (binding = "METRICS"), one instance named "global". */
   METRICS?: ActorNamespace<MetricsCounter>;
+  /** Cloud Storage bucket (binding = "ITINERARIES") holding the itinerary
+   * HTML pages the actor writes on `saveDeal`. Held by `CallerSession`
+   * too; here it serves the public `GET /itineraries/<uuid>.html` route. */
+  ITINERARIES?: CloudStorageBucket;
   /** Edge secrets declared via `[[secrets]]`. Used to fetch
    * `INTERNAL_API_TOKEN` through Dapr. */
   SECRETS?: Secrets & { get(handle: string): Promise<string | undefined> };
@@ -137,13 +145,25 @@ async function handle(req: Request, env: Env): Promise<Response> {
 
 async function route(req: Request, env: Env): Promise<Response> {
   {
+    const pathname = new URL(req.url).pathname;
+
+    // Public GET route for itinerary HTML files. The random UUID in the path
+    // is the capability — no bearer token required (AGENTS.md step 7). The
+    // path is validated against a strict UUID regex; anything else is 404.
+    if (req.method === "GET" && pathname.startsWith("/itineraries/")) {
+      const m = pathname.match(
+        /^\/itineraries\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/i,
+      );
+      if (!m) return error(404, "not found");
+      return serveItinerary(env, m[1]);
+    }
+
     // Only POST is used by the actor facade.
     if (req.method !== "POST") {
       return error(405, `method ${req.method} not allowed`);
     }
 
     // Path must be POST /actors/{entity}/{method} or POST /metrics/{op}.
-    const pathname = new URL(req.url).pathname;
     const metricsOp = pathname.match(/^\/metrics\/(add|snapshot|reset)$/)?.[1];
     const match = pathname.match(/^\/actors\/([^/]+)\/([^/]+)$/);
     if (!match && !metricsOp) return error(404, "not found");
@@ -267,6 +287,32 @@ async function internalTokenFor(env: Env): Promise<string | undefined> {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * Serve one itinerary HTML file from `env.ITINERARIES` to the public
+ * (`GET /itineraries/<uuid>.html`). The random UUID in the URL is the capability —
+ * the route accepts no bearer token; a bad id is 404, a missing object is 404,
+ * a missing binding is 404 (so the route stays up while the bucket is being
+ * provisioned). Streams the object body with its stored content type.
+ */
+async function serveItinerary(env: Env, uuid: string): Promise<Response> {
+  const bucket = env.ITINERARIES;
+  if (!bucket) return error(404, "not found");
+  const key = `itineraries/${uuid}.html`;
+  try {
+    const obj = await bucket.get(key);
+    if (!obj || !("body" in obj)) return error(404, "not found");
+    const headers = new Headers();
+    obj.writeHttpMetadata(headers);
+    return new Response(obj.body, { status: 200, headers });
+  } catch (e) {
+    log("ERROR", "itinerary.read_failed", {
+      key,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return error(500, "itinerary read failed");
+  }
+}
 
 /** JSON response body. */
 function json(status: number, body: unknown): Response {

@@ -9,6 +9,39 @@ Assistant calls mid-conversation over stateless Streamable HTTP:
 > MCP server cannot deploy. This service is the behaviour-identical TypeScript
 > port (an Edge Function built on `node:http` + the MCP SDK).
 
+## CallerSession binding (shared actor)
+
+The MCP server reaches the per-caller Stateful Actor through the **`SESSIONS`**
+binding declared in `func.toml`:
+
+```toml
+[[actors]]
+binding = "SESSIONS"
+type    = "CallerSession"
+```
+
+This is Telnyx "shared actors": one function (`fde-session-actor`) owns the
+`CallerSession` class; this function declares the same `type` under its own
+`binding` and **ships no class code**. The Edge runtime resolves the actor
+over an RPC hop to the owning function. `src/actor.ts`'s `EdgeActor` calls
+
+```ts
+env.SESSIONS.idFromName(entityId)[method](body)
+```
+
+directly — no HTTP hop, no bearer. `index.ts` wires `EdgeActor` when
+`USE_SHARED_ACTOR=true` (the production default in `func.toml` `[env_vars]`),
+and falls back to `ActorClient` against `ACTOR_SERVICE_URL` when the flag is
+`false`. The HTTP facade in `services/session-actor` stays for the **Python
+webhook**, which cannot bind actors and still needs the HTTP surface.
+
+Over the RPC hop an actor's `ActorInputError` arrives as a plain `Error` whose
+message embeds `{"name":"ActorInputError"}`; `EdgeActor` maps that marker back
+to the MCP `ActorInputError` (caller's fault, e.g. "deal not in the last search
+results") and everything else to a transient `ActorError`. `callActor` then
+turns those into caller-safe MCP tool results exactly as it did for the HTTP
+client, so the two transports are interchangeable.
+
 ## Request flow
 
 1. **Bearer auth** — `createHandler` checks `Authorization: Bearer <MCP_API_KEY>`
@@ -28,7 +61,7 @@ Assistant calls mid-conversation over stateless Streamable HTTP:
 | --- | --- | --- |
 | `search_deals` | Query flytlv (KV-cached), speak deals back, remember them | `setLastResults` |
 | `save_deal` | Save one of the last-shown deals (actor validates the choice) | `saveDeal` |
-| `list_saved_deals` | Read the deals saved on previous calls | `getSavedDeals` |
+| `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
 
 Tool failures return `{ content:[{type:"text",text:msg}], isError:true }` so the
 LLM gets `isError: true` with a caller-friendly message (never a traceback,
@@ -52,26 +85,39 @@ read-only `reference/flytlv_app` client.
 
 ## Files
 
-- `src/index.ts` — production entry: `node:http` server, wires real deps, listens on `PORT || 8080`.
-- `src/server.ts` — `createServer(kv, actor, fetchImpl, sms?, metrics?)` (4 tools + zod schemas; `send_deal_sms` only when an SMS sender is wired) and `createHandler(deps)` (auth + health + per-request MCP). Also `slim()` and the `Kv` / `KvError` contracts.
+- `src/index.ts` — production entry: `node:http` server. Wires the real deps,
+  choosing `EdgeActor` (`USE_SHARED_ACTOR=true`, default) or `ActorClient`
+  (HTTP facade) inside `buildDependencies()`.
+- `src/server.ts` — `createServer(kv, actor, fetch, sms?, m?)` (the four
+  tools + zod schemas; `send_deal_sms` only when an SMS sender is wired) and
+  `createHandler(deps)` (auth + health + per-request MCP). The `actor` dep is
+  the `Actor` interface — both `EdgeActor` and `ActorClient` satisfy it.
+  Also `slim()` and the `Kv` / `KvError` contracts.
 - `src/flytlv.ts` — flytlv.app deals API client (`FlytlvClient` / `FlytlvError`).
-- `src/actor.ts` — HTTP client for the session-actor facade (`ActorClient` / `ActorError` / `ActorInputError`; 400 → input error with the message) and `ActorMetrics` (one batched `/metrics/add` per request).
+- `src/actor.ts` — `Actor` interface plus two implementations:
+  `ActorClient` (HTTP facade, used by the Python webhook) and `EdgeActor`
+  (direct `env.SESSIONS` binding, used by this service in production). Plus
+  `ActorError` / `ActorInputError` and `ActorMetrics` (one batched
+  `/metrics/add` per request).
 - `src/kv.ts` — thin JSON wrapper over the `env.KV` Edge binding (`EdgeKv`).
 - `src/config.ts` — lazy env reading (`require` / `optional` / `integer` / `flag`).
 - `src/log.ts` — structured JSON logging: Israel-time `ts`, per-request `trace_id` (AsyncLocalStorage).
 - `src/sms.ts` — sends a deal by SMS through the `env.TELNYX` binding (alphanumeric sender `FlyTLV`).
-- `func.toml` — Edge manifest: `[edge_compute]` id/name, `[storage.kv.KV]` binding, `[env_vars]`.
+- `func.toml` — Edge manifest: `[edge_compute]` id/name, `[storage.kv.KV]`
+  binding, `[[actors]]` `SESSIONS` binding for the shared `CallerSession`,
+  and `[env_vars]` (incl. `USE_SHARED_ACTOR`).
 - `package.json` / `tsconfig.json` — `npm run build` (tsc → `dist/`), `npm start`, `npm test`.
 
 ## Configuration
 
 Everything from env vars / Edge secrets — nothing hardcoded:
 `MCP_API_KEY`, `FLYTLV_API_KEY`, `ACTOR_SERVICE_URL`, `INTERNAL_API_TOKEN`
-(secrets); `MCP_SERVER_NAME`, `FLYTLV_API_BASE`, `FLYTLV_DEALS_PATH`,
-`FLYTLV_API_KEY_HEADER`, `FLYTLV_TIMEOUT_MS`, `DEALS_FETCH_LIMIT`,
-`DEALS_RESULT_LIMIT`, `DEALS_CACHE_TTL`, `DEALS_CACHE_PREFIX`,
-`SESSION_KEY_PREFIX`, `HTTP_TIMEOUT_MS`, `TRACE_HEADER`, `LOG_LEVEL`
-(`func.toml` `[env_vars]`).
+(secrets; `ACTOR_SERVICE_URL` and `INTERNAL_API_TOKEN` only required when
+`USE_SHARED_ACTOR=false`); `MCP_SERVER_NAME`, `USE_SHARED_ACTOR`,
+`FLYTLV_API_BASE`, `FLYTLV_DEALS_PATH`, `FLYTLV_API_KEY_HEADER`,
+`FLYTLV_TIMEOUT_MS`, `DEALS_FETCH_LIMIT`, `DEALS_RESULT_LIMIT`,
+`DEALS_CACHE_TTL`, `DEALS_CACHE_PREFIX`, `SESSION_KEY_PREFIX`,
+`HTTP_TIMEOUT_MS`, `TRACE_HEADER`, `LOG_LEVEL` (`func.toml` `[env_vars]`).
 
 ## KV usage
 
@@ -87,7 +133,8 @@ Everything from env vars / Edge secrets — nothing hardcoded:
 Structured JSON logs (`src/log.ts`): `mcp.search_deals` / `mcp.save_deal` /
 `mcp.list_saved_deals` INFO spans with `trace_id` (= `telnyx_conversation_id`),
 plus `flytlv.feed_off` ERROR (once per instance) and `mcp.session_read_failed`
-/ `mcp.remember_failed` ERROR (with stack).
+/ `mcp.remember_failed` ERROR (with stack). A WARNING `mcp.actor.http_fallback`
+is emitted on boot when `USE_SHARED_ACTOR=false`.
 
 ## Test & deploy
 

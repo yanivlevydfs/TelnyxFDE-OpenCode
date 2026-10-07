@@ -18,14 +18,36 @@ binding = "TELNYX"
 [storage.kv.KV]
 id = "445c3e11-c172-48df-af37-3486ca3ff50c"
 
+# Shared Stateful Actor (Telnyx "shared actors"). The `fde-session-actor`
+# function owns the `CallerSession` class; this function declares the same
+# `type` under the SESSIONS binding and ships no class code (AGENTS.md step 8).
+# src/actor.ts's `EdgeActor` calls `env.SESSIONS.idFromName(entityId)[method](body)`
+# directly, bypassing the HTTP facade the Python webhook still needs (Python
+# Edge functions cannot bind actors). The facade stays up at ACTOR_SERVICE_URL
+# for the webhook (`[[actors]] binding = "CALLER_SESSION" type = "CallerSession"`
+# already lives in services/session-actor/telnyx.toml).
+[[actors]]
+binding = "SESSIONS"
+type    = "CallerSession"
+
 # Non-secret configuration only. Secrets live in Edge secrets
 # (`telnyx-edge secrets add <NAME> <VALUE>`) and are injected as env vars:
 #   MCP_API_KEY          bearer token registered with Telnyx as api_key_ref
 #   FLYTLV_API_KEY       flytlv.app private deals feed (X-API-Key)
-#   ACTOR_SERVICE_URL    session-actor Edge Function URL
-#   INTERNAL_API_TOKEN   actor facade bearer token
+#   ACTOR_SERVICE_URL    session-actor Edge Function URL (HTTP facade). Always
+#                       required by this function: the per-request metrics
+#                       update POSTs to /metrics/add (the shared MetricsCounter
+#                       actor) over HTTP even when USE_SHARED_ACTOR="true" — the
+#                       SESSIONS binding is CallerSession-only.
+#   INTERNAL_API_TOKEN   facade bearer — sent on every /metrics/add POST and on
+#                       the ActorClient fallback path (USE_SHARED_ACTOR="false")
 [env_vars]
 MCP_SERVER_NAME = "fde-mcp"
+# When "true" (default) src/index.ts wires `EdgeActor`, which binds the shared
+# CallerSession actor directly via `env.SESSIONS` (no HTTP hop). Set to "false"
+# to fall back to `ActorClient` against ACTOR_SERVICE_URL — used by the
+# Python webhook, which cannot bind actors, and useful for local debugging.
+USE_SHARED_ACTOR = "true"
 FLYTLV_API_BASE = "https://flytlv.app"
 FLYTLV_DEALS_PATH = "/api/private/deals"
 FLYTLV_API_KEY_HEADER = "X-API-Key"

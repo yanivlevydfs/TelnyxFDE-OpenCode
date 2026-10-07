@@ -13,6 +13,66 @@ CLI that provisions it through the official `telnyx` Python SDK.
   from env vars + `flow`; the `provision()` coroutine and `main()` CLI create the
   integration secret, MCP server, assistant and link a phone number via the SDK.
 
+## Capabilities (step 9 upgrade)
+
+The workflow and assistant instructions together cover the full capability list
+from `docs/build/PROMPTS.md` step 9. Each capability is realised by a node, an
+edge or an instruction line; the dedicated self-check
+`tests/check_flow_capabilities.py` asserts every one of them.
+
+| Capability | Covered by |
+| --- | --- |
+| Search from TLV | base + `search_flights` prompt ("flights from Tel Aviv (TLV)") |
+| Named destination | `search_flights` instructions (`destination` IATA, e.g. `ATH`) |
+| Global discovery ("anywhere cheap") | `search_flights` instructions ("no destination and no country", "search everywhere") |
+| One-way and round trip | `trip_type='one_way'` mapping in `search_flights` |
+| Direct and connecting | `direct_only` and `max_layover_hours` mappings |
+| Cheapest first | default `sort='cheapest'` mapping |
+| Flexible dates and date ranges | `departure_date` YYYY-MM-DD list mapping |
+| Travel patterns (mid-week, weekend, long weekend, short break, 4–5 day, 7-day, flexible) | "Travel patterns" paragraph in `search_flights` instructions, each mapped only to args the `search_deals` tool really accepts (see table below) |
+| Natural follow-ups | "Keep context for the whole call" paragraph in `search_flights` |
+| Refine preferences | same paragraph ("refine the search when the caller changes mind") |
+| Compare prices & destinations | same paragraph ("compare prices and destinations when the caller asks which is cheaper") |
+| Offer alternatives when nothing matches | same paragraph ("offer alternative destinations or dates when the first search returns nothing") |
+| Give the booking link | `save_deal`/`search_flights` instructions ("booking link is the deal_url returned by the tool") |
+| Send by SMS | `save_deal` instructions call `send_deal_sms` only when `{{flag_sms_enabled}}` is `true`, after a read-back + yes |
+| Transfer to a human | `transfer_call` prompt node + the inline `transfer` tool (`build_tools` when a `TRANSFER_TO_NUMBER` is set) |
+| End the call | `hangup_call` tool node + the inline `hangup` tool (always present) |
+| Never invent availability or prices | base + `search_flights` instructions ("never invent ... every detail you mention must come from the tool result") |
+| Never claim a booking was completed | base + `search_flights`/`save_deal` instructions ("'I found a flight', never 'you are booked'") |
+| Prices can change until booked | base + `search_flights`/`save_deal` instructions ("deals come from the live feed and prices can change") |
+| Read back + confirm before sending link | `search_flights` and `save_deal` instructions ("read back the chosen deal: destination, dates, price with currency, and direct vs connecting ... only call save_deal (or send_deal_sms) after a clear yes") |
+
+### Travel patterns → `search_deals` arguments
+
+Each pattern maps only to arguments the tool actually accepts in
+`services/mcp-server/src/server.ts` (`search_deals` zod schema). Days ↔ nights:
+a *N-day trip* is *N-1 nights* (you fly home on the last day).
+
+| Pattern | Mapping | Notes |
+| --- | --- | --- |
+| mid-week | `category='Midweek Saver'` or `departure_weekday='Tuesday'`/`'Wednesday'` | flytlv exposes a mid-week saver category; the weekday filter is the explicit alternative |
+| weekend | `category='Weekend'` and `weekend='upcoming'` when the caller means this/next weekend | the server computes weekend dates |
+| long weekend | `min_nights=3, max_nights=3` + `weekend='upcoming'` (Thu–Sun / Fri–Mon style) | 3 nights |
+| short break | `min_nights=2, max_nights=2` (or `category='Quick Visit'`) | 2-night trips |
+| 4–5 day trip | `min_nights=3, max_nights=4` | 4 days = 3 nights, 5 days = 4 nights |
+| 7-day trip | `min_nights=6, max_nights=6` (or `category='Weekly'`) | 7 days = 6 nights |
+| flexible | omit `departure_date`/`departure_weekday`/`weekend`; use `sort='cheapest'` | express absence, not a fake arg |
+
+## MCP gaps
+
+None: every capability from step 9 maps to an existing `search_deals`
+argument (the ones zod accepts in `services/mcp-server/src/server.ts` —
+`trip_type`, `destination`, `country`, `category`, `weekend`, `departure_date`,
+`departure_weekday`, `min_nights`, `max_nights`, `max_price`, `min_discount_pct`,
+`direct_only`, `max_layover_hours`, `time_of_day`, `sort`) or is an
+instruction-level capacity (natural follow-ups, comparisons, alternatives,
+read-back confirmation, "I found a flight" framing, prices-can-change disclaimer).
+`flexible` is expressed as the *absence* of date constraints, not a fictional
+argument. No instruction in `flow.py` references a `search_deals` argument that
+the tool does not expose; `tests/check_flow_capabilities.py::test_travel_patterns_map_to_real_args`
+keeps that invariant.
+
 ## Conversation workflow
 
 ```

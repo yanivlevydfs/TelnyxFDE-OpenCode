@@ -28,6 +28,20 @@ type    = "CallerSession"
 binding = "METRICS"
 type    = "MetricsCounter"
 
+# Pre-authenticated Telnyx SDK client. `env.TELNYX.messages.send(...)` is used
+# by `CallerSession.alarm()` to text the follow-up reminder to the caller; the
+# Messaging profile and sender come from [env_vars] below.
+[telnyx]
+binding = "TELNYX"
+
+# Cloud Storage bucket where `CallerSession.saveDeal` writes the itinerary
+# HTML pages the public `GET /itineraries/<uuid>.html` route in src/index.ts
+# then streams back. The bucket is created from outside the function (console
+# or `telnyx-edge storage`) and referenced here by name + region.
+[storage.cloudstorage.ITINERARIES]
+bucket_name = "flytlv-itineraries"
+region      = "us-central-1"
+
 # Edge secrets binding. The HTTP facade reads `INTERNAL_API_TOKEN` through
 # this binding (`env.SECRETS.get("INTERNAL_API_TOKEN")`); it is the shared
 # bearer the webhook (Python) and mcp-server (TypeScript) send in their
@@ -38,12 +52,22 @@ binding = "INTERNAL_API_TOKEN"   # handle: env.SECRETS.get("INTERNAL_API_TOKEN")
 name    = "INTERNAL_API_TOKEN"   # the key stored with `telnyx-edge secrets add`
 
 # Non-secret runtime knobs are read via `process.env`:
-#   INTERNAL_API_TOKEN  bearer token (Edge secret, see [[secrets]])
-#   LOG_LEVEL           DEBUG | INFO (default) | WARNING | ERROR
-#   LOG_TIMEZONE        log timestamp timezone (default Asia/Jerusalem)
-#   TRACE_HEADER        inbound trace header (default x-trace-id)
-#   MAX_SAVED_DEALS     saved deals kept per caller (default 50)
-# Their defaults suffice, so no [env_vars] block is needed.
+#   INTERNAL_API_TOKEN          bearer token (Edge secret, see [[secrets]])
+#   LOG_LEVEL                   DEBUG | INFO (default) | WARNING | ERROR
+#   LOG_TIMEZONE                log timestamp timezone (default Asia/Jerusalem)
+#   TRACE_HEADER                inbound trace header (default x-trace-id)
+#   MAX_SAVED_DEALS             saved deals kept per caller (default 50)
+# Itinerary + reminder (added step 7):
+#   ITINERARY_BASE_URL          public prefix for itinerary pages (served by
+#                               this function at /itineraries/<uuid>.html).
+#   REMINDER_DELAY_SECONDS      delay before the follow-up SMS fires (default 600).
+#   SMS_FROM                    alphanumeric Telnyx messaging sender id.
+#   MESSAGING_PROFILE_ID        Telnyx messaging profile for the reminder SMS.
+[env_vars]
+ITINERARY_BASE_URL     = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
+REMINDER_DELAY_SECONDS = "600"
+SMS_FROM              = "FlyTLV"
+MESSAGING_PROFILE_ID  = "4001a112-28fd-40f5-a0de-226b1bad6b80"
 
 # Function identity, written by `telnyx-edge new-func --actor` (ship requires it).
 [edge_compute]
