@@ -63,6 +63,18 @@ name    = "INTERNAL_API_TOKEN"   # the key stored with `telnyx-edge secrets add`
 #   REMINDER_DELAY_SECONDS      delay before the follow-up SMS fires (default 600).
 #   SMS_FROM                    alphanumeric Telnyx messaging sender id.
 #   MESSAGING_PROFILE_ID        Telnyx messaging profile for the reminder SMS.
+#
+# ***Live finding (step 11, 7 Oct 08:52 UTC):*** these `[env_vars]` do NOT reach
+# actor instances' `process.env` in production (logs showed
+# `itinerary_skipped reason=noITINERARY_BASE_URL`). The bound
+# `[storage.cloudstorage.ITINERARIES]` bucket DOES reach the actor, but the
+# umbrella `telnyx.toml [env_vars]` are not honoured by the actor runtime.
+# (The MCP `func.toml [env_vars]` for `fde-mcp` ARE honoured — verified live —
+# so the MCP server forwards the four itinerary/reminder values on every
+# `saveDeal` call in `config`, and `CallerSession.saveDeal` resolves
+# `config.X ?? process.env.X`.) The entries below stay as the source of truth
+# for unit tests, local dev, and as the fallback path once the platform
+# honours the actor umbrella.
 [env_vars]
 ITINERARY_BASE_URL     = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
 REMINDER_DELAY_SECONDS = "600"

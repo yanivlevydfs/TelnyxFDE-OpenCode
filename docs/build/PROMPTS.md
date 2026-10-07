@@ -187,3 +187,60 @@ the model that BUILT it. Make it say the assistant TALKS on calls with `zai-org/
 Telnyx Inference (verified by GET /v2/ai/assistants/{id}: model zai-org/GLM-5.3-Flash,
 external_llm null), and that its code (assistant/flow.py, provision.py) was written by OpenCode with
 Telnyx GLM-5.2. Change nothing else.
+
+## 11. Fix: actor config arrives with the call (live bug)
+
+Live finding after the step 7-8 deploy (actor log, 7 Oct 08:52 UTC):
+`itinerary_skipped reason=noITINERARY_BASE_URL`. The `[storage.cloudstorage.ITINERARIES]` binding
+reaches the actor, but the umbrella telnyx.toml `[env_vars]` do NOT reach actor instances'
+`process.env`, while the MCP server's func.toml `[env_vars]` do work.
+
+Fix (keep it small):
+- services/mcp-server/func.toml `[env_vars]`: add `ITINERARY_BASE_URL`, `REMINDER_DELAY_SECONDS`
+  (move the values from services/session-actor/telnyx.toml); `SMS_FROM` and
+  `MESSAGING_PROFILE_ID` are already there.
+- services/mcp-server/src/server.ts: every `saveDeal` actor call sends
+  `{dealId, config: {itineraryBaseUrl, reminderDelaySeconds, smsFrom, messagingProfileId}}` read
+  with `config.optional(...)` (omit empty values).
+- services/session-actor/src/caller-session.ts: `saveDeal(input: {dealId, config?})` uses
+  `input.config.X ?? process.env.X` for each value; validate types (strings, a positive number) and
+  ignore bad ones. Store `smsFrom` and `messagingProfileId` inside the pending reminder so `alarm()`
+  reads them from storage, falling back to process.env.
+- services/session-actor/telnyx.toml: keep `[env_vars]` but add a comment with the live finding.
+- Extend tests/check_itinerary.mts (it is our own self-check, not an acceptance test) with a case:
+  no process.env, config passed in the call -> itineraryUrl returned and alarm sends the SMS
+  with the passed smsFrom/messagingProfileId.
+- Update both READMEs and docs/design/DECISIONS.md (new row: why config travels with the call).
+Run npm test, npm run check, npm run typecheck in services/session-actor and npm test +
+npm run typecheck in services/mcp-server until green. Do not commit.
+
+## 12. Docs sweep for steps 7-11
+
+Read the code changes of steps 7-11 (`git diff a04dafd -- services assistant tests`) and update
+every Markdown file that is now out of date. Keep each file's structure and tone; be factual.
+- docs/design/DECISIONS.md: rows for the itinerary in Cloud Storage (UUID link as capability, served
+  by the actor function because the runtime has no signed URLs), the alarm reminder (one alarm per
+  actor, at-least-once, never throw), the shared actor binding (webhook stays on HTTP: Python
+  cannot bind actors; metrics still over HTTP).
+- docs/design/OBSERVABILITY.md: the new log events (itinerary_skipped, itinerary_write_failed,
+  reminder_scheduled, alarm.sms_sent, alarm.failed, alarm.sms_config_missing,
+  mcp.actor.http_fallback) and what each tells an on-call engineer.
+- docs/guides/DEMO_SCRIPT.md: a demo beat - pick a flight, get the SMS with the itinerary link,
+  open it, then receive the reminder text after REMINDER_DELAY_SECONDS.
+- docs/guides/HOW_TO_CALL.md: what the caller receives (itinerary link, reminder text).
+- docs/build/DOGFOODING.md: today's notes - two parallel `opencode run` processes sharing one
+  XDG_DATA_HOME hang silently (fix: one data dir per process); a Kimi-K3 run hung and was replaced
+  by GLM-5.2; the live bug that umbrella `[env_vars]` do not reach actor instances.
+- tests/README.md: the new self-checks check_itinerary.mts and check_flow_capabilities.py.
+- AGENTS.md "Platform facts (verified)": actor alarms API, `[storage.cloudstorage.<NAME>]`
+  binding, shared actors (owner vs reference), `[env_vars]` not reaching actor instances.
+- docs/README.md if it indexes files.
+Attribution: steps 7-12 were built by OpenCode with Telnyx zai-org/GLM-5.2. Change no code.
+- services/mcp-server/README.md (the flytlv client paragraph, around line 110) and the matching
+  doc comment in services/mcp-server/src/flytlv.ts: reword so it is clear the API key is REQUIRED
+  and sent on every request (`FLYTLV_API_KEY` Edge secret in the `X-API-Key` header; the server
+  refuses to start without it). Then explain fail-closed as the failure case only: a wrong or
+  missing key returns 404, which the client logs once as `flytlv.feed_off` ERROR. Comment-only
+  change in flytlv.ts.
+- services/mcp-server/func.toml comment: it says the actor's "own env still wins"; the code does
+  `config.X ?? process.env.X`, so the value sent with the call wins. Fix the comment only.

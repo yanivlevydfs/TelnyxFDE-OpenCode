@@ -49,7 +49,7 @@ Caller id is the digits of the phone (matches `entity_id` in
 | `/actors/{callerId}/recordCall` | *(ignored)* | `{callCount, savedCount, lastSaved}` — full profile |
 | `/actors/{callerId}/getProfile` | *(ignored)* | `{callCount, savedCount, lastSaved}` |
 | `/actors/{callerId}/setLastResults` | `{deals: Deal[]}` | `{stored: number}`  — replaces last search results |
-| `/actors/{callerId}/saveDeal` | `{dealId: string}` | `{callCount, savedCount, lastSaved, itineraryUrl?}` |
+| `/actors/{callerId}/saveDeal` | `{dealId: string, config?: SaveDealConfig}` | `{callCount, savedCount, lastSaved, itineraryUrl?}` |
 | `/actors/{callerId}/getSaved` | *(ignored)* | `{savedCount: number, deals: Deal[]}` |
 | `GET /itineraries/<uuid>.html` | *(none)* | **no bearer** — random UUID is the capability; the HTML page from Cloud Storage (404 on bad id / missing object) |
 
@@ -92,6 +92,40 @@ If any of the prerequisites (`env.ITINERARIES`, `ctx.storage.setAlarm`,
 ctx without `setAlarm`** — `saveDeal` logs a `WARNING`, skips the side-effects
 and still returns the profile, just without `itineraryUrl`. The save itself
 is never coupled to the Cloud Storage write or the alarm schedule.
+
+### Itinerary + reminder config travels with the call (step 11)
+
+**Live finding (7 Oct 08:52 UTC):** the umbrella `telnyx.toml` `[env_vars]`
+for this service do **NOT** reach actor instances' `process.env`
+(`alarm`-time logs showed `itinerary_skipped reason=noITINERARY_BASE_URL`),
+while the MCP server's `func.toml` `[env_vars]` do. The Cloud Storage bucket
+binding (`[storage.cloudstorage.ITINERARIES]`) does reach the actor.
+
+So the MCP server forwards `ITINERARY_BASE_URL`, `REMINDER_DELAY_SECONDS`,
+`SMS_FROM`, `MESSAGING_PROFILE_ID` on every `saveDeal` call inside `config`:
+
+```jsonc
+{ "dealId": "tlv-lca-1", "config": { "itineraryBaseUrl": "https://…",
+  "reminderDelaySeconds": 600, "smsFrom": "FlyTLV",
+  "messagingProfileId": "4001a112-…" } }
+```
+
+`saveDeal(input: {dealId, config?})` resolves each value as
+`config.X ?? process.env.X` with type validation: `itineraryBaseUrl`,
+`smsFrom` and `messagingProfileId` must be non-empty trimmed strings;
+`reminderDelaySeconds` a finite positive number. Bad-typed values are
+ignored (dropped, not let through), so a broken `config` never breaks the
+save or shadows a good `process.env` fallback.
+
+`smsFrom` and `messagingProfileId` (resolved from either source) are
+captured onto the pending reminder in actor storage, so `alarm()` reads
+them back from storage rather than `process.env` — the alarm turn sees the
+same blind `process.env` the save turn did. `REMINDER_DELAY_SECONDS` is
+used only at scheduling time (not stored), since it has no role at fire
+time. The values in this service's `telnyx.toml [env_vars]` stay — they are
+the source of truth for unit tests, local dev, and the fallback path once
+the platform honours the actor umbrella (see `docs/design/DECISIONS.md`
+#28).
 
 ### `GET /itineraries/<uuid>.html`
 

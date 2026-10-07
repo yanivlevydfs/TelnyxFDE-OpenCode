@@ -41,6 +41,20 @@ type    = "CallerSession"
 #                       SESSIONS binding is CallerSession-only.
 #   INTERNAL_API_TOKEN   facade bearer — sent on every /metrics/add POST and on
 #                       the ActorClient fallback path (USE_SHARED_ACTOR="false")
+#
+# Itinerary + reminder config. Live finding (step 11, 7 Oct 08:52 UTC): the
+# umbrella telnyx.toml `[env_vars]` for `fde-session-actor` do NOT reach actor
+# instances' `process.env` (logged `itinerary_skipped reason=noITINERARY_BASE_URL`),
+# while this function's `func.toml` `[env_vars]` do. So the four values below
+# are read here on every save_call and forwarded to the actor inside the
+# `saveDeal` body as `config` (see src/server.ts). The actor resolves
+# `config.X ?? process.env.X` — the value sent with the call wins (the call
+# is authoritative here, since this function's [env_vars] are honoured by the
+# runtime); the actor's own `process.env` is the fallback for unit tests /
+# local dev / once the platform honours the actor umbrella). SMS_FROM and
+# MESSAGING_PROFILE_ID were already here for `send_deal_sms`; the other two
+# moved here from services/session-actor/telnyx.toml (whose values stay as
+# the unit-test / fallback source of truth).
 [env_vars]
 MCP_SERVER_NAME = "fde-mcp"
 # When "true" (default) src/index.ts wires `EdgeActor`, which binds the shared
@@ -62,3 +76,9 @@ TRACE_HEADER = "x-trace-id"      # outbound trace header to the actor
 LOG_LEVEL = "INFO"
 SMS_FROM = "FlyTLV"                # alphanumeric sender (Israeli numbers are voice-only)
 MESSAGING_PROFILE_ID = "4001a112-28fd-40f5-a0de-226b1bad6b80"  # profile flytlv-sms: IL only, $5/day cap
+# Itinerary + reminder — forwarded on every saveDeal actor call (live finding,
+# see the [env_vars] header above for the why). The actor builds the reminder
+# delay and the public itinerary URL from these (with its own process.env
+# fallback for unit tests / local dev).
+ITINERARY_BASE_URL = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
+REMINDER_DELAY_SECONDS = "600"

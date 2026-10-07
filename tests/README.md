@@ -22,6 +22,8 @@ they are not edited to make code pass (see [AGENTS.md](../AGENTS.md)). The
 | `check_search_filters.mts` | Weekend dates (Asia/Jerusalem), country filter, departure cutoff, SMS text | `cd services/mcp-server && npx tsx ../../tests/check_search_filters.mts` |
 | `check_metrics.mts` | MetricsCounter actor and the facade's `/metrics` routes | `cd services/session-actor && npx tsx ../../tests/check_metrics.mts` |
 | `check_webhook_metrics.py` | The webhook reports metrics after responding | `.venv/Scripts/python tests/check_webhook_metrics.py` |
+| `check_itinerary.mts` (step 7) | Itinerary file in Cloud Storage (write + reuse the same key on re-save), actor alarm (`reminder_scheduled`, `alarm.sms_sent`, at-least-once), the public `GET /itineraries/<uuid>.html` route with UUID validation and `404` on a bad id, the step-11 "config travels with the call" path (no `process.env`, `config` only → `itineraryUrl` returned and the SMS sent with the passed `smsFrom` / `messagingProfileId`), and bad-typed config being dropped in favour of the `process.env` fallback | `cd services/session-actor && npm run check` |
+| `check_flow_capabilities.py` (step 9) | The upgraded Conversation Workflow covers every capability the step-9 prompt lists (named destination, "anywhere", one-way, direct/connecting, cheapest-first, travel patterns, follow-ups, send-by-SMS, transfer, hangup, the safety rules), each mapped only to `search_deals` arguments the tool actually exposes; unacknowledged MCP gaps must be listed in `assistant/README.md` under "MCP gaps" | `.venv/Scripts/python -m pytest tests/check_flow_capabilities.py -q` |
 
 Run `python scripts/build/vendor_shared.py` first: the Python tests import each
 service's vendored `function/common.py`.

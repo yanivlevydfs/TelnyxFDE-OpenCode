@@ -288,3 +288,113 @@ test("saveDeal degrades safely when the bucket/alarm/url is unconfigured", async
   assert.equal(profile.itineraryUrl, undefined);
   assert.equal(noTelnyx.sent.length, 0);
 });
+
+test("saveDeal with config in the call survives absent process.env (step 11 live fix)", async () => {
+  // Live finding (7 Oct 08:52 UTC): the actor's umbrella telnyx.toml
+  // [env_vars] do NOT reach actor instances' process.env (logged
+  // `itinerary_skipped reason=noITINERARY_BASE_URL`), while the MCP
+  // server's func.toml [env_vars] do. The MCP server therefore forwards
+  // itinerary/reminder config on every saveDeal call as `config`. Strip
+  // the env vars here, hand the values over in `config` and assert:
+  //   - itineraryUrl is still returned (uses config.itineraryBaseUrl)
+  //   - alarm() sends exactly one SMS using the passed smsFrom /
+  //     messagingProfileId (captured into the pending reminder at save
+  //     time, since the alarm turn won't see process.env either)
+  //   - a second alarm sends nothing (at-least-once reminder drained)
+  const names = [
+    "ITINERARY_BASE_URL",
+    "REMINDER_DELAY_SECONDS",
+    "SMS_FROM",
+    "MESSAGING_PROFILE_ID",
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+  for (const name of names) {
+    saved[name] = process.env[name];
+    delete process.env[name];
+  }
+  try {
+    const bucket = fakeBucket();
+    const telnyx = fakeTelnyx();
+    const actor = new CallerSession(
+      fakeCtx("97250") as never,
+      { ITINERARIES: bucket, TELNYX: telnyx } as never,
+    );
+    await actor.setLastResults({ deals: [deal("a", "Budapest", 120)] });
+    const profile = await actor.saveDeal({
+      dealId: "a",
+      config: {
+        itineraryBaseUrl: "https://cfg.example",
+        reminderDelaySeconds: 2,
+        smsFrom: "ConfigFrom",
+        messagingProfileId: "cfg-profile",
+      },
+    });
+    assert.ok(
+      profile.itineraryUrl,
+      "itineraryUrl returned with config + no process.env",
+    );
+    assert.ok(
+      profile.itineraryUrl!.startsWith("https://cfg.example/itineraries/"),
+      "itineraryUrl uses the passed itineraryBaseUrl",
+    );
+
+    await actor.alarm({ retryCount: 0, isRetry: false });
+    assert.equal(telnyx.sent.length, 1, "alarm sends exactly one SMS");
+    const sms = telnyx.sent[0];
+    assert.equal(sms.from, "ConfigFrom", "SMS uses the passed smsFrom");
+    assert.equal(sms.to, "+97250");
+    assert.equal(
+      sms.messaging_profile_id,
+      "cfg-profile",
+      "SMS uses the passed messagingProfileId",
+    );
+    assert.match(
+      sms.text,
+      /Still thinking about Budapest for 120 USD\? Your itinerary: /,
+    );
+    assert.ok(
+      sms.text.endsWith(profile.itineraryUrl!),
+      "SMS ends with the itinerary URL",
+    );
+
+    // at-least-once: a second alarm after the reminder is drained sends none.
+    await actor.alarm({ retryCount: 0, isRetry: false });
+    assert.equal(telnyx.sent.length, 1, "second alarm sends no SMS");
+  } finally {
+    for (const name of names) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  }
+});
+
+test("saveDeal ignores bad-typed config values and falls back to process.env", async () => {
+  // Requirements of step 11: validate types (strings, a positive number) and
+  // ignore bad ones — so a broken config field can never break the save or
+  // shadow a good process.env fallback. With process.env.ITINERARY_BASE_URL
+  // still set at the file scope, a number-typed `itineraryBaseUrl` in the
+  // config must be dropped and `https://itinerary.test` must win.
+  const bucket = fakeBucket();
+  const actor = new CallerSession(
+    fakeCtx() as never,
+    { ITINERARIES: bucket, TELNYX: fakeTelnyx() } as never,
+  );
+  await actor.setLastResults({ deals: [deal("a")] });
+  const profile = await actor.saveDeal({
+    dealId: "a",
+    config: {
+      itineraryBaseUrl: 42 as unknown as string,
+      reminderDelaySeconds: "abc" as unknown as number,
+      smsFrom: 99 as unknown as string,
+      messagingProfileId: { id: "x" } as unknown as string,
+    },
+  });
+  assert.ok(
+    profile.itineraryUrl,
+    "saveDeal still resolves itineraryUrl from the process.env fallback",
+  );
+  assert.ok(
+    profile.itineraryUrl!.startsWith("https://itinerary.test/itineraries/"),
+    "itineraryUrl uses process.env.ITINERARY_BASE_URL (bad config ignored)",
+  );
+});
