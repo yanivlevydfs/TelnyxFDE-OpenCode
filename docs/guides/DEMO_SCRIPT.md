@@ -101,7 +101,7 @@ computed on the server) and **"Cheap flights to Greece"** (`country`).
 > actor write all on screen in one `trace_id`. *Workflow: requirement 1.*
 > *Edge in action: requirement 4.*
 
-### 3:30–4:30 — Save a deal = actor read-modify-write
+### 3:30–4:30 — Save a deal = actor read-modify-write (+ itinerary page + reminder alarm)
 
 Say: **"Save the first one."**
 
@@ -113,11 +113,42 @@ Say: **"Save the first one."**
   actor serializes the write (*why Actor vs KV*). Proof on screen:
   `python scripts/ops/actor_concurrency_check.py 20` → 20 concurrent updates, counts
   1..20, none lost.
+- **New (step 7):** `saveDeal` also renders a small **itinerary HTML page** to
+  the Telnyx Cloud Storage bucket `flytlv-itineraries` (`itineraries/<uuid>.html`,
+  re-used on re-saves) and arms the actor's single **alarm** to send a
+  follow-up SMS `REMINDER_DELAY_SECONDS` (default 600 = 10 min) later. The
+  profile comes back with `itineraryUrl`, which `save_deal` surfaces to the
+  model so the caller hears the link. Point at the new log lines: an
+  `itinerary_skipped` WARNING (and a missing `itineraryUrl` in the profile) is
+  the bug we caught live on 7 Oct — `reason=noITINERARY_BASE_URL` (umbrella
+  `[env_vars]` do not reach actor instances; see DECISIONS #28); an
+  `reminder_scheduled` INFO with `delay_ms: 600000` is the alarm arming.
 - Optional: **"Text me that one."** (`send_deal_sms`, to the caller's own number
   only). On this account the alphanumeric sender is blocked at the account level,
-  so the agent says it could not send; the deal is still saved.
+  so the agent says it could not send; the deal is still saved. When SMS works,
+  the body ends with `Itinerary: https://fde-session-actor-<id>.telnyxcompute.com/itineraries/<uuid>.html`
+  — open it on screen: a mobile-friendly page with city, dates, airline, direct
+  vs stops, price and a "Book this flight" button.
 
 "Saved. Next time you call, I'll remind you." Hang up.
+
+**Off-screen beat (after the demo):** note that because `REMINDER_DELAY_SECONDS`
+default is 600, the reminder SMS does not arrive during the 10-minute demo:
+it lands ~10 minutes after the save. Point at where it will show up:
+
+```
+{"event":"reminder_scheduled","entity":"***0100","dealId":"tlv-lca-1","delay_ms":600000}
+... (10 minutes later) ...
+{"event":"alarm.sms_sent","entity":"***0100","dealId":"tlv-lca-1"}
+```
+
+The caller text:
+
+> Still thinking about Larnaca for 64 USD? Your itinerary:
+> https://fde-session-actor-94b99eb9-4.telnyxcompute.com/itineraries/<uuid>.html
+
+If you want the reminder live in the demo, set `REMINDER_DELAY_SECONDS=60` in
+`services/mcp-server/func.toml` and re-ship for the day; flip it back afterwards.
 
 ### 4:30–6:00 — Second call: "Welcome back" = the whole chain, personalized
 
@@ -217,7 +248,8 @@ into the walkthrough.
 | "Cheap to Cyprus" → identify_intent llm edge → search_flights | 1 (multi-step workflow, conditional edges) |
 | `search_deals` MCP tool on screen | 2 (MCP, ≥3 tools available) |
 | KV cache read/write + flytlv call | 4b (KV) |
-| `save_deal` → actor `saveDeal` | 4c (Actor read-modify-write) |
+| `save_deal` → actor `saveDeal` (itinerary HTML in Cloud Storage + reminder alarm) | 4c (Actor read-modify-write) + Actor-alarm stretch |
+| Reminder SMS after `REMINDER_DELAY_SECONDS` (`alarm.sms_sent`) | 5 (observability + the alarm stretch lands) |
 | Redial → "Welcome back, you saved Larnaca for 64 dollars" | 3 (dynamic vars personalize) |
 | Three deployed Edge Functions + metrics | 4a, 4b, 4c (deployed, public) |
 | One `trace_id` across webhook/mcp/actor + the debugging beat | 5 (observability + evidence) |

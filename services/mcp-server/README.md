@@ -73,15 +73,54 @@ URL or API key).
 `setLastResults`; `save_deal` may only save a deal the caller was actually
 offered — the model cannot invent a price or URL.
 
+## Itinerary + reminder config travels with the call (step 11)
+
+**Live finding (7 Oct 08:52 UTC, after the step 7-8 deploy):** the actor's
+umbrella `telnyx.toml [env_vars]` for `fde-session-actor` do **NOT** reach
+actor instances' `process.env` (actor log:
+`itinerary_skipped reason=noITINERARY_BASE_URL`). The Cloud Storage bucket
+binding (`[storage.cloudstorage.ITINERARIES]`) *does* reach the actor, but
+the four string knobs do not.
+
+This function's own `func.toml [env_vars]` do work, so every `saveDeal`
+actor call now ships a `config` field built from them — empty values are
+omitted (the actor falls back to `process.env`, its own fallback path for
+unit tests / local dev / once the platform honours the actor umbrella):
+
+```jsonc
+{ "dealId": "tlv-lca-1",
+  "config": {
+    "itineraryBaseUrl": "https://fde-session-actor-94b99eb9-4.telnyxcompute.com",
+    "reminderDelaySeconds": 600,
+    "smsFrom": "FlyTLV",
+    "messagingProfileId": "4001a112-28fd-40f5-a0de-226b1bad6b80" } }
+```
+
+`save_deal` and `send_deal_sms` both forward it (`saveDealBody` in
+`src/server.ts` reads with `config.optional(...)`). The actor resolves
+`config.X ?? process.env.X` with type validation (strings, a positive
+number; bad ones dropped), and captures `smsFrom` / `messagingProfileId`
+into the pending reminder so the `alarm()` turn never relies on
+`process.env` at fire time. See `docs/design/DECISIONS.md` (#28) and the
+`services/session-actor` README.
+
 ## flytlv client (`src/flytlv.ts`)
 
-Minimal async client for `GET {FLYTLV_API_BASE}/api/private/deals` with an
-`X-API-Key` header. The feed is **fail-closed**: a `404` means the key is
-unset/rejected or the feed is off — logged once at ERROR and surfaced as
-"unavailable" to the caller. Timeouts are short and configurable
-(`FLYTLV_TIMEOUT_MS`). No pool/refresh/cooldown machinery (that belongs to
-the flytlv.app side, not this stateless function). Knowledge reused from the
-read-only `reference/flytlv_app` client.
+Minimal async client for `GET {FLYTLV_API_BASE}/api/private/deals`. The
+`FLYTLV_API_KEY` Edge secret is **required** — the server refuses to start
+without it (`config.require` at boot) — and is sent as the `X-API-Key` header
+on **every** request (header name overridable via `FLYTLV_API_KEY_HEADER`).
+
+**Fail-closed** is the failure case only: a wrong or missing key returns
+`404`, which the client logs once at ERROR as `flytlv.feed_off` and surfaces as
+"unavailable" to the caller. A `404` is a configuration state, not a
+transient error — a retry-storm would not fix it — so it is logged once per
+instance and not retried. Other 4xx/5xx and timeouts are surfaced as separate
+caller-friendly errors. Timeouts are short and configurable
+(`FLYTLV_TIMEOUT_MS`, with one retry on a timeout only). No
+pool/refresh/cooldown machinery (that belongs to the flytlv.app side, not
+this stateless function). Knowledge reused from the read-only
+`reference/flytlv_app` client.
 
 ## Files
 
@@ -118,6 +157,15 @@ Everything from env vars / Edge secrets — nothing hardcoded:
 `FLYTLV_TIMEOUT_MS`, `DEALS_FETCH_LIMIT`, `DEALS_RESULT_LIMIT`,
 `DEALS_CACHE_TTL`, `DEALS_CACHE_PREFIX`, `SESSION_KEY_PREFIX`,
 `HTTP_TIMEOUT_MS`, `TRACE_HEADER`, `LOG_LEVEL` (`func.toml` `[env_vars]`).
+
+Itinerary + reminder config — `SMS_FROM`, `MESSAGING_PROFILE_ID`,
+`ITINERARY_BASE_URL`, `REMINDER_DELAY_SECONDS` (`func.toml` `[env_vars]`).
+Forwarded on every `saveDeal` actor call in `config` (step 11): the actor's
+umbrella `telnyx.toml [env_vars]` do not reach actor instances'
+`process.env`, while this function's `func.toml [env_vars]` do — so the
+itinerary base URL, reminder delay and SMS sender/profile are read here
+and shipped over the actor RPC on every save (see "## Itinerary + reminder
+config travels with the call" below).
 
 ## KV usage
 

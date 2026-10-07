@@ -113,6 +113,32 @@ same full details.
 - New search: *"Show me something else"*, *"What about Spain?"*
 - Finish: *"That's all, thanks."* The agent says goodbye and ends the call.
 
+## 8. Your itinerary link and a later reminder
+
+When you save a deal, the agent reads back a short **itinerary link** (a public
+web page hosted on the session-actor Edge Function):
+
+> https://fde-session-actor-94b99eb9-4.telnyxcompute.com/itineraries/<uuid>.html
+
+It is a small, mobile-friendly page with the destination, dates, airline,
+direct vs stops, price and a **Book this flight** button that takes you to the
+flytlv.app booking link. The link has a long random UUID in it — whoever has
+the link can open it (no password); give it only to people you want to see the
+deal. A re-save of the same deal reuses the same page.
+
+A few minutes after you hang up — about `REMINDER_DELAY_SECONDS` (default
+10 minutes) — the agent sends you a short **reminder text** from **FlyTLV** to
+the number you called from, in case the deal slipped your mind:
+
+> Still thinking about Larnaca for 64 USD? Your itinerary:
+> https://fde-session-actor-94b99eb9-4.telnyxcompute.com/itineraries/<uuid>.html
+
+- The reminder is sent only to the number you called from.
+- One reminder per call: a newer save replaces an earlier pending reminder.
+- If the agent could not write the itinerary page (or SMS is turned off on the
+  account), you still hear "saved" — the reminder and the link are
+  best-effort, the save is not.
+
 ## Good to know
 
 - **From Tel Aviv only.** Round trips and one-way flights; other departure cities

@@ -66,3 +66,39 @@ After the metrics actor went live, one snapshot showed `webhook.calls 17`,
 Timing Telnyx KV over REST directly gave 1.2-3.7 s per read and ~2 s per write.
 Fix: the session write moved after the response, flags are cached for 60 s, and
 only the actor call stays in the (2.5 s) budget.
+
+## New log events from steps 7-11
+
+Steps 7-11 added the itinerary file in Cloud Storage, the actor-alarm reminder
+SMS, the shared-actor binding, and the per-call config that works around the
+umbrella-[env_vars] bug. The structured JSON log events those changes emit
+(all on `fde-session-actor` unless noted), and what each tells an on-call
+engineer:
+
+| Event | Level | Service | What it tells on-call |
+| --- | --- | --- | --- |
+| `itinerary_skipped` | WARNING | `fde-session-actor` | `saveDeal` did not write the itinerary file. The `reason` field is `noITINERARIES` (the `[storage.cloudstorage.ITINERARIES]` binding is missing on this deploy), `noITINERARY_BASE_URL` (the public URL prefix is not configured — this is the live bug from step 11), or `noSetAlarm` (the ctx has no `setAlarm`, e.g. a unit test environment). The save still succeeded; only `itineraryUrl` is dropped from the profile. Storm of these in production = the binding or env-var drifted. |
+| `itinerary_write_failed` | WARNING | `fde-session-actor` | `bucket.put` threw (network/permission/quota). `dealId` and the `error` text are logged. The save still succeeded. A persistent stream means the bucket binding is misconfigured or the region is wrong; a one-off is transient. |
+| `itinerary.read_failed` | ERROR | `fde-session-actor` | The public `GET /itineraries/<uuid>.html` route failed to read the object back. `key` and `error` are logged. A 500 back to the caller; investigate the bucket binding. |
+| `reminder_scheduled` | INFO | `fde-session-actor` | `saveDeal` armed the alarm (`delay_ms` in the payload). The reminder is now pending; `alarm()` will fire in `delay_ms`. Useful for tracing save → reminder latency. |
+| `alarm.sms_sent` | INFO | `fde-session-actor` | The follow-up reminder SMS was delivered to Telnyx. The pending reminder is drained, so a redrive sends nothing. This is the success signal for the whole step-7 reminder feature. |
+| `alarm.failed` | ERROR | `fde-session-actor` | Any uncaught error inside `alarm()`. `error` and `stack` are logged. The reminder is **not** drained (left for a redrive) unless it was already — see `alarm.sms_sent`. Three redrives drop the alarm; persistent `alarm.failed` means the SMS provider or the actor storage is degraded. |
+| `alarm.sms_config_missing` | WARNING | `fde-session-actor` | `alarm()` had no way to send the reminder: `env.TELNYX` binding, `smsFrom` or `messagingProfileId` all missing (the values the MCP server forwards in `config`; the actor itself cannot read them from `process.env` — decision #28). The reminder is drained to stop the alarm cycling. Indicates a config gap (MCP `func.toml` lost the values, or the `TELNYX` binding changed). |
+| `alarm.deal_missing` | WARNING | `fde-session-actor` | The reminder points at a `dealId` no longer in `savedDeals` (caller saved it, then a newer save overwrote the actor state — `MAX_SAVED_DEALS` eviction, or the caller is testing). Reminder drained; not an error. |
+| `alarm_schedule_failed` | WARNING | `fde-session-actor` | `setAlarm` itself threw (e.g. the actor runtime rejected it). The reminder is drained. Rare; points at the actor runtime. |
+| `mcp.actor.http_fallback` | WARNING | `fde-mcp` | `USE_SHARED_ACTOR=false` was set, so the MCP server is going through the session-actor HTTP facade (`ActorClient`) instead of the `SESSIONS` binding. Not an error; intentional for local debugging. Unexpected in production = the `SESSIONS` binding declaration is missing or broken in `func.toml`. |
+
+The related span `actor.request` (one per facade call) timestamps and times
+both the inbound `saveDeal` and the outbound `alarm()` turn, so the
+`reminder_scheduled → alarm.sms_sent` distance is measurable end-to-end.
+
+Cheat-sheet for triage:
+
+- Reminder never arrives: search for `reminder_scheduled` (did `saveDeal` arm
+  the alarm?); if present, look for `alarm.sms_sent`, `alarm.failed`,
+  `alarm.sms_config_missing`, `alarm.deal_missing` shortly after
+  `REMINDER_DELAY_SECONDS`.
+- No itinerary URL on a save: search for `itinerary_skipped` /
+  `itinerary_write_failed` on that `entity` (last-4 of phone).
+- MCP server falls off the shared actor: `mcp.actor.http_fallback` once per
+  cold start; service otherwise keeps working over HTTP.

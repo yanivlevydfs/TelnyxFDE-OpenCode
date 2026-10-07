@@ -6,15 +6,20 @@
  *
  *   - base URL from `FLYTLV_API_BASE` (default `https://flytlv.app`);
  *   - the deals endpoint is `/api/private/deals` (overridable via
- *     `FLYTLV_DEALS_PATH`);
- *   - the `X-API-Key` header carries `FLYTLV_API_KEY` (header name overridable
+ *     `FLYTLV_DEALS_PATH`); one-way flights at `/api/private/flights`
+ *     (overridable via `FLYTLV_FLIGHTS_PATH`);
+ *   - the `FLYTLV_API_KEY` Edge secret is **REQUIRED**: the server refuses to
+ *     start without it (`config.require` at construction time), and it is sent
+ *     as the `X-API-Key` header on **every** request (header name overridable
  *     via `FLYTLV_API_KEY_HEADER`, default `X-API-Key`);
- *   - the feed is **fail-closed**: a `404` means the key is unset/rejected or
- *     the feed is off — a configuration state, not a transient error — so we
- *     log it once at ERROR and tell the caller the deals service is
- *     unavailable instead of retry-storming;
+ *   - **fail-closed** is the failure case only: a wrong or missing key
+ *     (or a feed that has been switched off) returns `404`, which the client
+ *     logs once at ERROR as `flytlv.feed_off` and surfaces as "unavailable" to
+ *     the caller. A `404` is a configuration state, not a transient error, so
+ *     it is not retried;
  *   - timeouts are short (a live phone caller cannot wait) and configurable
- *     via `FLYTLV_TIMEOUT_MS`.
+ *     via `FLYTLV_TIMEOUT_MS`, with a single retry on a timeout (a cold
+ *     connection after a deploy can stall; verified live).
  *
  * Only what a single `search_deals` tool call needs lives here. A failure is
  * turned into a `FlytlvError` whose message is safe to surface verbatim as an

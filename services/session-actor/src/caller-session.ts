@@ -94,7 +94,7 @@ const K_LAST_RESULTS = "lastResults";
 const K_SAVED_DEALS = "savedDeals";
 /** map<dealId, itinerary storage key> — re-saving a deal reuses its file. */
 const K_ITINERARY_KEYS = "itineraryKeys";
-/** Pending follow-up reminder `{dealId, itineraryUrl}` consumed by `alarm()`. */
+/** Pending follow-up reminder consumed by `alarm()`. */
 const K_PENDING_REMINDER = "pendingReminder";
 
 /** Whether v looks structurally like a Deal. Only `dealId` is required to be a
@@ -105,6 +105,61 @@ function isDeal(v: unknown): v is Deal {
   return (
     typeof v === "object" && v !== null && typeof (v as Deal).dealId === "string"
   );
+}
+
+/**
+ * Per-call config the MCP server forwards to `saveDeal` because the actor's
+ * umbrella `telnyx.toml` `[env_vars]` do NOT reach actor instances'
+ * `process.env` (live finding, step 11, 7 Oct 08:52 UTC: `itinerary_skipped
+ * reason=noITINERARY_BASE_URL`). Each value is resolved as
+ * `input.config.X ?? process.env.X`; bad-typed ones are ignored. Exported so
+ * `src/index.ts`'s dispatch can type the `saveDeal` body.
+ */
+export interface SaveDealConfig {
+  /** Public prefix for itinerary pages: `${itineraryBaseUrl}/itineraries/<uuid>.html`. */
+  itineraryBaseUrl?: string;
+  /** Delay before the follow-up reminder SMS fires, in seconds (positive). */
+  reminderDelaySeconds?: number;
+  /** Alphanumeric Telnyx messaging sender id, captured for `alarm()`. */
+  smsFrom?: string;
+  /** Telnyx messaging profile id, captured for `alarm()`. */
+  messagingProfileId?: string;
+}
+
+/** Resolved string config value: `cfg` (when a non-empty trimmed string),
+ * else `process.env[name]` (when a non-empty trimmed string), else
+ * `undefined`. Bad-typed values (numbers, objects…) are dropped; an empty /
+ * whitespace-only string counts as bad — the actor never writes a "config"
+ * without a value behind it. */
+function pickString(v: unknown, name: string): string | undefined {
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s) return s;
+  }
+  const env = process.env[name];
+  if (typeof env === "string") {
+    const s = env.trim();
+    if (s) return s;
+  }
+  return undefined;
+}
+
+/** Resolved positive-number reminder delay: `cfg` (when a finite positive
+ * number), else `process.env[name]` parsed as a number (when finite &
+ * positive), else `def`. Anything else (strings in `cfg`, unparseable or
+ * non-positive env values, …) is ignored so a bad config never disrupts the
+ * alarm. */
+function pickPositiveNumber(v: unknown, name: string, def: number): number {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  const env = process.env[name];
+  if (typeof env === "string") {
+    const s = env.trim();
+    if (s) {
+      const n = Number(s);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return def;
 }
 
 // ----------------------------------------------- actor Env binding types
@@ -136,6 +191,14 @@ export interface SessionActorEnv extends Env {
 interface PendingReminder {
   dealId: string;
   itineraryUrl: string;
+  /** Reminder SMS sender id resolved at `saveDeal` time (from the call `config`
+   * or `process.env.SMS_FROM`). Captured into storage because the actor's
+   * `alarm()` may not see the same `process.env` at fire time (live finding,
+   * step 11). Absent → `alarm()` falls back to `process.env.SMS_FROM`. */
+  smsFrom?: string;
+  /** Reminder messaging profile id resolved at `saveDeal` time, same as
+   * `smsFrom`. Absent → `alarm()` falls back to `process.env.MESSAGING_PROFILE_ID`. */
+  messagingProfileId?: string;
 }
 
 // --------------------------------------------------------------- the actor
@@ -216,11 +279,19 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    * `itineraryUrl` (AGENTS.md step 7). One alarm per actor: a newer save
    * replaces the pending reminder.
    *
+   * `config` is the per-call override the MCP server forwards (live finding,
+   * step 11: the actor's umbrella `telnyx.toml` `[env_vars]` do not reach
+   * actor instances' `process.env`). Each field is resolved as
+   * `config.X ?? process.env.X`; bad-typed values are ignored. The resolved
+   * `smsFrom` / `messagingProfileId` are captured into the pending reminder
+   * so `alarm()` reads them from storage (no longer relying on `process.env`
+   * at fire time).
+   *
    * Returns the **full profile** so `save_deal` can speak the new
    * `lastSaved` immediately; `itineraryUrl` is present when the side-effects
    * all succeeded.
    */
-  async saveDeal(input: { dealId?: string }): Promise<Profile> {
+  async saveDeal(input: { dealId?: string; config?: SaveDealConfig }): Promise<Profile> {
     const dealId = input?.dealId;
     if (typeof dealId !== "string" || dealId.length === 0) {
       throw new ActorInputError("dealId is required");
@@ -242,8 +313,12 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
 
     // Itinerary file + reminder side-effects. Aggregated into `itineraryUrl`,
     // which the profile surfaces only when every required binding/env var
-    // is present and the writes/alarms succeed.
-    const itineraryUrl = await this._writeItineraryAndScheduleReminder(found);
+    // is present and the writes/alarms succeed. The per-call `config`
+    // overrides process.env (live finding, step 11).
+    const itineraryUrl = await this._writeItineraryAndScheduleReminder(
+      found,
+      input?.config,
+    );
 
     log("INFO", "saveDeal", {
       entity: this.ctx.id,
@@ -264,6 +339,12 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    * reminder and arm the alarm. All best-effort: returns `undefined` when
    * any prerequisite is missing or fails, so a save never breaks.
    *
+   * `cfg` is the per-call config the MCP server forwards (live finding,
+   * step 11). Each value is resolved as `cfg.X ?? process.env.X` (validated,
+   * bad ones ignored); the resolved `smsFrom` / `messagingProfileId` are
+   * stored on the pending reminder so `alarm()` reads them back from storage
+   * (it can no longer rely on `process.env` at fire time).
+   *
    * ponytail: one alarm per actor — a newer save replaces the pending
    * reminder, so the last save wins. If a caller accumulates many saved
    * deals and we want a reminder per deal, move scheduling into a CronTick
@@ -271,9 +352,10 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    */
   private async _writeItineraryAndScheduleReminder(
     deal: Deal,
+    cfg?: SaveDealConfig,
   ): Promise<string | undefined> {
     const bucket = this.env.ITINERARIES;
-    const baseUrl = process.env.ITINERARY_BASE_URL;
+    const baseUrl = pickString(cfg?.itineraryBaseUrl, "ITINERARY_BASE_URL");
     const hasAlarm = typeof this.ctx.storage.setAlarm === "function";
     if (!bucket || !baseUrl || !hasAlarm) {
       log("WARNING", "itinerary_skipped", {
@@ -307,14 +389,32 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
     }
     const itineraryUrl = `${baseUrl}/${key}`;
 
+    // Resolve the reminder config once: per-call `config` first, then
+    // `process.env` (validated). Captured into the pending reminder so the
+    // `alarm()` turn does not depend on `process.env` — which the actor
+    // umbrella [env_vars] do not honour (live finding, step 11).
+    const smsFrom = pickString(cfg?.smsFrom, "SMS_FROM");
+    const messagingProfileId = pickString(
+      cfg?.messagingProfileId,
+      "MESSAGING_PROFILE_ID",
+    );
+    const reminderDelaySeconds = pickPositiveNumber(
+      cfg?.reminderDelaySeconds,
+      "REMINDER_DELAY_SECONDS",
+      600,
+    );
+
     // Schedule the follow-up SMS. The pending reminder is what alarm() reads
     // back, so it (not the alarm-time snapshot) is the source of truth.
     try {
       await this.ctx.storage.put(K_PENDING_REMINDER, {
         dealId: deal.dealId,
         itineraryUrl,
+        // Captured at save time so alarm() reads them from storage:
+        ...(smsFrom ? { smsFrom } : {}),
+        ...(messagingProfileId ? { messagingProfileId } : {}),
       } satisfies PendingReminder);
-      const delay = Number(process.env.REMINDER_DELAY_SECONDS ?? 600) * 1000;
+      const delay = reminderDelaySeconds * 1000;
       await this.ctx.storage.setAlarm(Date.now() + delay);
       log("INFO", "reminder_scheduled", {
         entity: this.ctx.id,
@@ -369,8 +469,13 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
         return;
       }
       const client = this.env.TELNYX;
-      const smsFrom = process.env.SMS_FROM;
-      const profileId = process.env.MESSAGING_PROFILE_ID;
+      // Read the SMS identity captured at save time first (the actor's
+      // `alarm()` turn cannot rely on `process.env` — the umbrella
+      // telnyx.toml [env_vars] do not reach actor instances, live finding
+      // step 11 — so saveDeal stores these on the pending reminder); fall
+      // back to process.env for unit tests / local dev.
+      const smsFrom = rem.smsFrom ?? process.env.SMS_FROM;
+      const profileId = rem.messagingProfileId ?? process.env.MESSAGING_PROFILE_ID;
       if (!client || !smsFrom || !profileId) {
         // No way to ever deliver — drop the reminder so the alarm stops.
         await this.ctx.storage.delete(K_PENDING_REMINDER);

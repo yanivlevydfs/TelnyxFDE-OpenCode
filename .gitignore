@@ -229,3 +229,4 @@ telnyx-env.d.ts
 reference/
 # uv lockfiles in a service would be shipped to Edge and change how it builds
 services/*/uv.lock
+logs/

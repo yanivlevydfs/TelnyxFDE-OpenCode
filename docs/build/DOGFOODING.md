@@ -48,3 +48,35 @@ this build. Which model built what is in the
 GLM-5.3 is not `recommended_for_assistants` in `/v2/ai/models`, and the API
 rejects it for an assistant; GLM-5.3-Flash is the closest allowed model and is
 fast enough for voice.
+
+## Today (7 Oct 2026) — building steps 7-12 in OpenCode with GLM-5.2
+
+Steps 7-12 (itinerary file + reminder alarm, shared actor binding, the
+assistant flow upgrade, the root README updates, the live `[env_vars]` bug fix
+and this docs sweep) were all built with OpenCode powered by Telnyx Inference
+on `zai-org/GLM-5.2`.
+
+- **Two parallel `opencode run` processes sharing one `XDG_DATA_HOME` hang
+  silently.** Running a second `opencode run` alongside a first one with the
+  same data directory froze both: no progress, no error, no output, until one
+  was killed. The fix is one data dir per process — point each `opencode run`
+  at its own `XDG_DATA_HOME` (and `XDG_CONFIG_HOME`) so they do not contend on
+  the shared SQLite/AntiSync files. Worth a note in the agent's environment
+  setup the next time we run multi-step builds in parallel.
+- **A Kimi-K3 run hung and was replaced by GLM-5.2.** The first attempt at
+  step 9 (assistant flow upgrade) on `moonshotai/Kimi-K3` produced no output
+  for several minutes; stopping it and rerunning on `zai-org/GLM-5.2`
+  completed the step cleanly. (The earlier Kimi-K3 stops in the build were
+  credit stops — error 20015 — this one was a hang, distinct.) Recorded in
+  `PROMPTS.md`.
+- **The live bug: umbrella `[env_vars]` do not reach actor instances' `process.env`.**
+  After the step 7-8 deploy the `fde-session-actor` logs showed
+  `itinerary_skipped reason=noITINERARY_BASE_URL` on every save, even though
+  `[env_vars] ITINERARY_BASE_URL = "..."` was set in the umbrella `telnyx.toml`.
+  The Cloud Storage bucket binding (`[storage.cloudstorage.ITINERARIES]`) *did*
+  reach the actor, and the MCP `func.toml [env_vars]` *did* reach the MCP
+  function — only the actor umbrella `[env_vars]` were silently dropped. The
+  fix (step 11) keeps the actor's `telnyx.toml [env_vars]` as the unit-test /
+  local-dev fallback, but the MCP server now forwards the four
+  itinerary/reminder values on every `saveDeal` call in a `config` field, and
+  the actor resolves `config.X ?? process.env.X`. See DECISIONS #28 and #29.

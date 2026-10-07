@@ -92,6 +92,33 @@ Read the tests first: they define the exact function names, classes, variables a
 - Workflow schema: `conversation_flow = {start_node_id, nodes, edges}`; node types `prompt`,
   `speak` (exactly one default edge), `tool`; edge `{id, start_node_id, target:{type:"node",node_id},
   condition}` with condition `llm` / `expression` / `default`.
+- Actor alarms (`ctx.storage.setAlarm(ms) / getAlarm() / deleteAlarm()`): one
+  alarm per instance, at-least-once delivery, dropped after 3 redrives
+  (`import type { AlarmInfo } from "@telnyx/edge-runtime"`). A throw from
+  `alarm()` loses the alarm after the redrives — always catch, log `ERROR` with
+  the stack, and return.
+- Cloud Storage binding (`[storage.cloudstorage.<NAME>]` in `telnyx.toml`,
+  `bucket_name` + `region`): `await env.<NAME>.put(key, body, { httpMetadata:
+  { contentType } })`, `const obj = await env.<NAME>.get(key)` returns
+  `{ body: ReadableStream, writeHttpMetadata(headers) }` or `null`. The bucket
+  reaches actor instances; named env vars do not (next bullet).
+- "Shared actors": one function owns the class and declares it with
+  `[[actors]] binding = "<X>" type = "ClassName"`; another function on the
+  same account declares the same `type` under its own `binding`
+  (`[[actors]] binding = "<Y>" type = "ClassName"`) and **ships no class code**
+  — the runtime forwards the call over an RPC hop to the owning function.
+  Reference side calls `env.<Y>.idFromName(name)[method](body)`. Over the RPC
+  hop an `ActorInputError` arrives as a plain `Error` whose message embeds
+  `{"name":"ActorInputError","message":"..."}` — recover the marker to map
+  it back to a 4xx-class error.
+- Umbrella `telnyx.toml` `[env_vars]` **do not** reach actor instances'
+  `process.env` (live finding, step 11: `itinerary_skipped
+  reason=noITINERARY_BASE_URL`), while the Cloud Storage bucket binding
+  (`[storage.cloudstorage.<NAME>]`) *does* and a function's own `func.toml`
+  `[env_vars]` *do*. Work-around: the caller reads its own `[env_vars]` and
+  forwards the values on the actor method's `body` (e.g. `config`), and the
+  actor resolves `config.X ?? process.env.X` (`process.env` stays the fallback
+  for unit tests, local dev, and once the platform honours the actor umbrella).
 
 ## Workflow for the agent
 

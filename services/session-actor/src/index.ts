@@ -44,6 +44,7 @@ import {
   CallerSession,
   ActorInputError,
 } from "./caller-session";
+import type { SaveDealConfig } from "./caller-session";
 
 // Re-export the actor class so the Edge bundler ships it with the function —
 // the [[actors]].type entry must be reachable from the bundle.
@@ -257,7 +258,9 @@ async function dispatch(
     case "setLastResults":
       return await stub.setLastResults((body ?? {}) as { deals: unknown });
     case "saveDeal":
-      return await stub.saveDeal((body ?? {}) as { dealId?: string });
+      return await stub.saveDeal(
+        (body ?? {}) as { dealId?: string; config?: SaveDealConfig },
+      );
   }
 }
 

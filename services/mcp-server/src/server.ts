@@ -472,6 +472,52 @@ async function callActor(actor: Actor, entityId: string, method: string, body?: 
   }
 }
 
+/**
+ * Build the per-save call config forwarded to the actor's `saveDeal`.
+ *
+ * Live finding (step 11, 7 Oct 08:52 UTC): the actor's umbrella `telnyx.toml`
+ * `[env_vars]` do NOT reach actor instances' `process.env`
+ * (`itinerary_skipped reason=noITINERARY_BASE_URL`), while this function's
+ * `func.toml` `[env_vars]` do. The four values below are therefore read here
+ * from this function's env and shipped on every `saveDeal` call as `config`;
+ * the actor resolves `config.X ?? process.env.X` so its own env still wins for
+ * unit tests / local dev / once the platform honours the actor umbrella.
+ *
+ * Read with `config.optional(...)` (which trims), and **omit empty values** so
+ * the actor falls back to its `process.env` cleanly when nothing is set here.
+ * `reminderDelaySeconds` is forwarded as a number — the actor validates a
+ * positive number and treats a string as bad (so we never send a string here).
+ */
+function saveDealConfig(): Record<string, unknown> {
+  const cfg: Record<string, unknown> = {};
+  const itineraryBaseUrl = config.optional("ITINERARY_BASE_URL", "");
+  if (itineraryBaseUrl) cfg.itineraryBaseUrl = itineraryBaseUrl;
+  const reminderRaw = config.optional("REMINDER_DELAY_SECONDS", "");
+  if (reminderRaw) {
+    const reminderDelaySeconds = Number.parseInt(reminderRaw, 10);
+    if (Number.isFinite(reminderDelaySeconds) && reminderDelaySeconds > 0) {
+      cfg.reminderDelaySeconds = reminderDelaySeconds;
+    }
+  }
+  const smsFrom = config.optional("SMS_FROM", "");
+  if (smsFrom) cfg.smsFrom = smsFrom;
+  const messagingProfileId = config.optional("MESSAGING_PROFILE_ID", "");
+  if (messagingProfileId) cfg.messagingProfileId = messagingProfileId;
+  return cfg;
+}
+
+/**
+ * Body for a `saveDeal` actor call: the chosen `dealId` plus the per-call
+ * `config` (itinerary base URL, reminder delay, SMS sender / profile) the
+ * actor cannot reliably read from its own `process.env` in production.
+ * `config` is omitted entirely when no values are present (so unit-test
+ * fakes that swallow the body keep working without a config field).
+ */
+function saveDealBody(dealId: string): { dealId: string; config?: Record<string, unknown> } {
+  const cfg = saveDealConfig();
+  return Object.keys(cfg).length ? { dealId, config: cfg } : { dealId };
+}
+
 /** The KV flag flags/assistant.sms_enabled (default on; KV failure = on). */
 async function smsEnabled(kv: Kv): Promise<boolean> {
   try {
@@ -652,7 +698,10 @@ export function createServer(
       setTraceId(conv || undefined);
       const entityId = await requireCaller(kv, conv);
       const dealId = args.deal_id.trim();
-      const profile = (await callActor(actor, entityId, "saveDeal", { dealId })) as
+      // Forward the itinerary/reminder config on the saveDeal body (live
+      // finding, step 11): the actor's umbrella telnyx.toml [env_vars] do not
+      // reach actor instances' process.env, so we hand them over here.
+      const profile = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId))) as
         | { itineraryUrl?: string }
         | undefined;
       info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
@@ -709,8 +758,12 @@ export function createServer(
         // `saveDeal` rejects deals the caller was not offered, so the model
         // can neither text a stranger nor invent a link. Its response carries
         // the just-written itinerary URL (when Cloud Storage is configured),
-        // which we surface in the SMS body for the caller to tap.
-        const saveResult = (await callActor(actor, entityId, "saveDeal", { dealId })) as
+        // which we surface in the SMS body for the caller to tap. We also
+        // forward the itinerary/reminder config (live finding, step 11): the
+        // actor's umbrella telnyx.toml [env_vars] do not reach actor instances'
+        // process.env, so it learns itineraryBaseUrl / smsFrom /
+        // messagingProfileId from this call instead.
+        const saveResult = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId))) as
           | { itineraryUrl?: string }
           | undefined;
         const saved = (await callActor(actor, entityId, "getSaved")) as { deals?: Deal[] };
