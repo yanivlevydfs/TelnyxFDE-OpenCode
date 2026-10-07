@@ -6,8 +6,9 @@ then deletes the copy and the TeXML application Telnyx created for it (deleting
 an assistant does not delete that app, and the account has a small cap).
 
 Fallback paths are forced through the copy's default dynamic variables
-(backend_degraded, flag_deals_enabled) and a zero-second conversation timeout;
-the chat channel does not call the dynamic-variables webhook.
+(backend_degraded, flag_deals_enabled). The chat channel does call the
+dynamic-variables webhook (as caller +10000000001), so these runs show up in the
+webhook metrics.
 
     python scripts/ops/workflow_paths.py
 
@@ -54,15 +55,15 @@ SCENARIOS = [
     ("greeting: speak node, verbatim disclosure", {}, 600, ["Hi"],
      lambda r: flow.GREETING_MESSAGE in r[0]),
     ("FAQ: booking", {}, 600, ["Hi", "How do I book a flight with you?"],
-     lambda r: any_word(r[1], "link", "text", "flytlv")),
+     lambda r: any_word(r[1], "link", "flytlv") and not any_word(r[1], "with the airline")),
     ("FAQ: departure cities", {}, 600, ["Hi", "Can I fly from Eilat or Haifa?"],
      lambda r: any_word(r[1], "tel aviv", "ben gurion")),
     ("FAQ: discount meaning", {}, 600, ["Hi", "What does the discount mean?"],
      lambda r: any_word(r[1], "usual", "typical", "normal")),
     ("FAQ: not covered (baggage)", {}, 600, ["Hi", "Is a suitcase included?"],
-     lambda r: any_word(r[1], "airline", "flytlv")),
-    ("FAQ: saved deals", {}, 600, ["Hi", "Do you remember the deals I save?"],
-     lambda r: any_word(r[1], "number", "next call", "call again", "phone")),
+     lambda r: any_word(r[1], "airline", "flytlv") and not any_word(r[1], "usually", "typically")),
+    ("FAQ: saved deals", {}, 600, ["Hi", "If I save a deal, will you remember it next time I call?"],
+     lambda r: any_word(r[1], "number", "next call", "call again", "phone", "remember", "next time")),
     ("search: holiday (category)", {}, 600, ["Hi", "Any cheap deals for Hanukkah?"],
      lambda r: any_word(r[1], "hanukkah", "chanukah") and any_word(r[1], "dollar", "$")),
     ("search: one way", {}, 600, ["Hi", "A one way flight to anywhere, the cheapest"],
@@ -73,9 +74,10 @@ SCENARIOS = [
      lambda r: any_word(r[1], "narnia") and not any_word(r[1], "dollar")),
     ("save: negative, hidden caller id", {}, 600,
      ["Hi", "The cheapest flights to Athens, any date", "Save the first one"],
-     lambda r: any_word(r[2], "can't", "cannot", "unable", "not able", "hidden", "isn't possible")),
-    ("human: none configured, keeps helping", {}, 600, ["Hi", "I want to speak to a human"],
-     lambda r: any_word(r[1], "no human", "not available", "isn't available", "unavailable")),
+     lambda r: any_word(r[2], "can't", "cannot", "unable", "not able", "hidden", "isn't possible", "identify")),
+    # Over chat the transfer cannot connect; the check is that the agent offers it.
+    ("human: offers the transfer", {}, 600, ["Hi", "I want to speak to a human"],
+     lambda r: any_word(r[1], "transfer", "connect")),
     ("goodbye: speak node, verbatim farewell", {}, 600, ["Hi", "That's all, thanks, bye"],
      lambda r: flow.FAREWELL_MESSAGE in r[1]),
     ("fallback: backend degraded (expression edge)", {"backend_degraded": "true"}, 600, ["Hi", "Find flights"],

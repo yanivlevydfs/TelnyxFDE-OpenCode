@@ -139,6 +139,9 @@ if not any(h.__class__.__name__ == "_StdoutHandler" for h in logger.handlers):
     _handler.setFormatter(_JsonFormatter())
     logger.addHandler(_handler)
 logger.propagate = False  # never bubble up to the root logger
+# httpx logs every request as a plain "INFO:httpx:..." line through the runtime's
+# root logger, which breaks JSON-only logs; our spans already time each call.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def info(event: str, **fields: Any) -> None:

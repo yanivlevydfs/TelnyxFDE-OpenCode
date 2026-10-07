@@ -1,6 +1,6 @@
 # FlyTLV Travel Line
 
-A phone line for cheap round-trip flights from Tel Aviv. You call a Telnyx AI
+A phone line for cheap flights from Tel Aviv, round trip or one way. You call a Telnyx AI
 Assistant and ask for a deal ("something cheap to Cyprus in November"). It
 reads back the 2–3 cheapest deals from the live `flytlv.app` deals API, can
 save one, and on your next call says "Welcome back, last time you saved Larnaca

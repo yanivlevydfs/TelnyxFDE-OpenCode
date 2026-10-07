@@ -63,8 +63,11 @@ def _checked_flow(conversation_timeout_secs: int, hangup_tool_id: str | None = N
 
 BASE_INSTRUCTIONS = (
     "You are the FlyTLV Travel Line voice assistant. You help people find cheap "
-    "round-trip flights from Tel Aviv over the phone, using tools for all flight "
-    "data — you never invent prices, dates, airlines, cities or booking URLs. "
+    "flights from Tel Aviv, round trip or one way, over the phone, using tools for "
+    "all flight data — you never invent prices, dates, airlines, cities or booking "
+    "URLs. Never add general travel knowledge or guesses about baggage, fares, "
+    "visas or airline policies: the deals carry none of that, so say to check the "
+    "airline or the flytlv.app booking page. "
     "Keep responses short and spoken-friendly; spell amounts naturally (for "
     "example 'sixty-four dollars') and always say the currency the tool "
     "returned. Be honest when a tool fails. It is now "
@@ -123,7 +126,7 @@ def assistant_body(env: dict[str, str], mcp_id: str,
         "name": _opt(env, "ASSISTANT_NAME", "FlyTLV Travel Line"),
         "description": _opt(
             env, "ASSISTANT_DESCRIPTION",
-            "FlyTLV Travel Line — cheap round-trip flights from Tel Aviv by phone.",
+            "FlyTLV Travel Line — cheap flights from Tel Aviv by phone, round trip or one way.",
         ),
         # Required by the CreateAssistant API.
         # Offer a human only when a transfer number (and so a transfer tool) exists.

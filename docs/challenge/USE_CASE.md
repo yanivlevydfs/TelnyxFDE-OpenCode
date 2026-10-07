@@ -2,7 +2,7 @@
 
 ## Who it is for
 
-People in Israel looking for cheap round-trip flights from Tel Aviv who prefer a quick
+People in Israel looking for cheap flights from Tel Aviv (round trip or one way) who prefer a quick
 phone call over searching websites.
 
 ## The problem

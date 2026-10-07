@@ -46,7 +46,7 @@ done
 ### 0:00–0:30 — Intro ("what it is")
 
 > "This is the FlyTLV Travel Line. People in Israel phone it for cheap
-> round-trip flights from Tel Aviv. Behind it: a Telnyx AI Assistant with a
+> flights from Tel Aviv, round trip or one way. Behind it: a Telnyx AI Assistant with a
 > Conversation Workflow, an MCP server, a Stateful Actor, and KV — all on Edge."
 
 Show the [architecture diagram](../../README.md#architecture): the chain
@@ -56,8 +56,8 @@ Show the [architecture diagram](../../README.md#architecture): the chain
 
 **Dial the number.** The assistant speaks the verbatim greeting:
 "Welcome to the FlyTLV Travel Line. I'm an AI assistant. I can find you cheap
-round-trip flights from Tel Aviv, and remember the ones you save. This call may
-be recorded for quality."
+flights from Tel Aviv, round trip or one way, and remember the ones you save.
+This call may be recorded for quality."
 
 Call out:
 - That is a **speak node** — delivered verbatim, no model turn (compliance).
