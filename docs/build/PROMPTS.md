@@ -304,3 +304,66 @@ Israel time) and 7 Oct morning were made with another AI coding tool, for compar
 challenge allows."
 Make docs/design/DECISIONS.md row 15 and docs/guides/DEMO_SCRIPT.md say the same in one line each
 (no tool name other than OpenCode). Change nothing else.
+
+## 15. PRODUCT.md and INTEGRATION.md
+
+Read README.md, docs/challenge/USE_CASE.md, docs/design/*, docs/guides/*, assistant/flow.py,
+assistant/provision.py, and the code in services/. Write two NEW documents. Every fact must come
+from the code or the existing docs; do not invent numbers, SLAs, prices, customers or roadmap
+dates. Use Israel time for any time.
+
+### docs/design/PRODUCT.md (audience: Telnyx reviewers and product people, non-engineers)
+- One-paragraph pitch: FlyTLV Travel Line, cheap flights from Tel Aviv by phone.
+- Who it is for and the problem it solves.
+- The caller journey, step by step (greeting, returning-caller "welcome back", search, follow-ups,
+  pick a flight, read-back and confirm, SMS with booking link + itinerary page, reminder text,
+  transfer to a human, goodbye).
+- Capabilities, grouped exactly as the step 9 list (flight search, travel patterns, conversation,
+  actions, safety/accuracy).
+- Safety and honesty rules (never invent prices/availability, never claim a booking; the caller
+  books on flytlv.app; prices can change).
+- What the caller receives (spoken deals, SMS, itinerary page, reminder).
+- Which Telnyx products power it, in one table: AI Assistant + Conversation Workflow, Telnyx
+  Inference (assistant model zai-org/GLM-5.3-Flash), MCP, Edge Functions, Stateful Actors (incl.
+  alarms, shared actors), KV, Cloud Storage, Messaging, Voice number.
+- Current status (live pieces; phone number +972765671113 bought, regulatory approval pending)
+  and known limits (SMS to Israeli numbers only; one reminder per caller; prices from the
+  flytlv.app feed).
+
+### docs/guides/INTEGRATION.md (audience: engineers integrating with or operating the system)
+- Architecture in one diagram (ASCII) and the request path of a call.
+- Every integration point with exact contract, auth and failure behaviour:
+  1. Telnyx Dynamic Variables webhook (signature check before JSON, 1.5 s budget, variables
+     returned, backend_degraded defaults).
+  2. MCP server: URL, bearer MCP_API_KEY, the 4 tools with their input schemas and outputs,
+     conversation id from params._meta.telnyx_conversation_id.
+  3. Session actor: shared actor binding (SESSIONS) and the HTTP facade
+     `POST /actors/{digits}/{method}` (bearer INTERNAL_API_TOKEN, method allowlist, error codes),
+     `POST /metrics/*`, public `GET /itineraries/<uuid>.html`.
+  4. flytlv.app deals API: `GET {FLYTLV_API_BASE}/api/private/deals`, REQUIRED `X-API-Key`
+     header (FLYTLV_API_KEY Edge secret), params, response fields, 404 = wrong key (fail-closed).
+  5. Telnyx KV keys (session/<conversation_id>, cache/deals/<query>, flags), Cloud Storage bucket
+     flytlv-itineraries, Messaging (SMS_FROM, MESSAGING_PROFILE_ID), actor alarm reminder.
+- Configuration reference: every env var and Edge secret per service, from func.toml /
+  telnyx.toml / code, with where it is read (note: umbrella [env_vars] do not reach actors; the
+  MCP server forwards actor config with saveDeal).
+- Deploy (GitHub Actions ship.yml) and provisioning (assistant/provision.py, --dry-run).
+- How to test: unit tests, self-checks, scripts/ops/live_check.py, workflow_paths.py.
+- Troubleshooting table: symptom -> log event -> fix (from docs/design/OBSERVABILITY.md).
+
+Also add both files to docs/README.md and link them from README.md. Change no code.
+
+### 15b. README links every Markdown file
+
+Add (or replace) a "Documentation" section near the top of README.md with a table linking EVERY
+Markdown file in the repo (`git ls-files "*.md"` plus the two step-15 files; skip node_modules
+and reference/), grouped by area (overview, challenge, design, guides, build, services, assistant,
+shared, scripts, tests, AGENTS.md), each with a one-line purpose taken from the file itself.
+Use relative links. Make sure every link resolves. Change nothing else.
+
+### 15c. Fix the fact-check findings in PRODUCT.md and INTEGRATION.md
+
+A read-only fact check against the code found 23 wrong or overstated claims; the list with file:line
+evidence is in logs/factcheck-step15.md. Fix each one in docs/design/PRODUCT.md and
+docs/guides/INTEGRATION.md (and the same wording in services/mcp-server/README.md if it repeats
+item 4). Verify each fix against the cited code. Change no code.

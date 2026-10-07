@@ -11,14 +11,33 @@ Requirement 6: the first version of every component was built by **OpenCode
 powered by Telnyx Inference** from the spec and the acceptance tests. See
 [Tool comparison](#tool-comparison) for what each AI coding tool built.
 
-- Use case: [docs/challenge/USE_CASE.md](docs/challenge/USE_CASE.md)
-- Design: [docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md), [docs/design/DECISIONS.md](docs/design/DECISIONS.md),
-  [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md)
-- Demo script: [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md)
-- How to talk to the phone agent: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)
-- All docs: [docs/README.md](docs/README.md); scripts: [scripts/README.md](scripts/README.md); tests: [tests/README.md](tests/README.md)
-- Dogfooding OpenCode + Telnyx Inference: [docs/build/DOGFOODING.md](docs/build/DOGFOODING.md)
-- Rules for the coding agent: [AGENTS.md](AGENTS.md); build prompts & status: [docs/build/PROMPTS.md](docs/build/PROMPTS.md)
+## Documentation
+
+Every Markdown file in the repo, grouped by area, each with a one-line purpose taken from the file itself:
+
+| Area | File | Purpose |
+| --- | --- | --- |
+| Overview | [README.md](README.md) | FlyTLV Travel Line: cheap flights from Tel Aviv by phone (root overview) |
+| Overview | [docs/README.md](docs/README.md) | Documentation index |
+| Challenge | [docs/challenge/code_challenge.md](docs/challenge/code_challenge.md) | AI Assistant & Edge Compute coding challenge brief |
+| Challenge | [docs/challenge/USE_CASE.md](docs/challenge/USE_CASE.md) | Who the FlyTLV Travel Line is for and the problem it solves |
+| Design | [docs/design/ARCHITECTURE.md](docs/design/ARCHITECTURE.md) | Architecture: request path of a call and the components |
+| Design | [docs/design/DECISIONS.md](docs/design/DECISIONS.md) | Decision log: alternatives considered and why |
+| Design | [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md) | Observability: signals, log events and how to read them |
+| Design | [docs/design/PRODUCT.md](docs/design/PRODUCT.md) | Product brief for Telnyx reviewers and product people |
+| Guides | [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md) | How a caller talks to the FlyTLV Travel Line |
+| Guides | [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md) | Demo script for the live 8–10 min demo |
+| Guides | [docs/guides/INTEGRATION.md](docs/guides/INTEGRATION.md) | Integration & operations guide for engineers |
+| Build | [docs/build/PROMPTS.md](docs/build/PROMPTS.md) | Build prompts and step status for OpenCode |
+| Build | [docs/build/DOGFOODING.md](docs/build/DOGFOODING.md) | Dogfooding notes: OpenCode + Telnyx Inference |
+| Services | [services/webhook/README.md](services/webhook/README.md) | Dynamic Variables webhook (Python Edge Function) |
+| Services | [services/mcp-server/README.md](services/mcp-server/README.md) | MCP server exposing the tools the assistant calls mid-conversation |
+| Services | [services/session-actor/README.md](services/session-actor/README.md) | CallerSession Stateful Actor: per-caller state, itinerary & alarm |
+| Assistant | [assistant/README.md](assistant/README.md) | Assistant definition & provisioning via the Telnyx SDK |
+| Shared | [shared/README.md](shared/README.md) | Common Python code, vendored into each Edge Function |
+| Scripts | [scripts/README.md](scripts/README.md) | Build and ops scripts, run from the repo root |
+| Tests | [tests/README.md](tests/README.md) | Acceptance tests (not edited) plus self-checks |
+| AGENTS.md | [AGENTS.md](AGENTS.md) | Instructions for the AI coding agent (OpenCode + Telnyx Inference) |
 
 ## Status
 
