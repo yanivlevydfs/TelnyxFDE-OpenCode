@@ -29,3 +29,12 @@ python scripts/ops/metrics.py [--reset]
 python scripts/ops/actor_concurrency_check.py 20
 python scripts/ops/workflow_paths.py
 ```
+
+`workflow_paths.py` sweeps the account first: it lists all assistants and deletes
+any whose name ends with ` (path test)` plus the TeXML app Telnyx created for
+it, logging each as `path.leftover_removed` (WARNING). It only ever touches
+those copies, never the real assistant. The `finally` cleanup repeats that
+delete for the copy it just made, with each call (retrieve the TeXML id, delete
+the assistant, delete the TeXML app) in its own try/except — so a single failing
+call logs an ERROR with a traceback and the remaining deletes still run, instead
+of one failure leaving a copy behind on the account.

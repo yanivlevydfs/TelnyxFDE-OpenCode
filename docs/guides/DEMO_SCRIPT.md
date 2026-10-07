@@ -232,9 +232,10 @@ Every other path is also walked over chat by `python scripts/ops/workflow_paths.
 
 > "Everything you saw runs on Telnyx: the workflow, the MCP server, the
 > Stateful Actor, KV. OpenCode with Telnyx-hosted models built the first
-> version of every component and every change since 7 Oct (steps 7-13). Which
-> tool built which part — and the platform fixes made with another AI coding
-> tool, for comparison — are in [README "Tool comparison"](../../README.md#tool-comparison). Here's the config."
+> version of every component and every change from 7 Oct 2026 (steps 7-14);
+> the fixes and features between the first deploy (6 Oct 2026, 18:00 Israel
+> time) and 7 Oct morning were made with another AI coding tool, for
+> comparison, as the challenge allows. Here's the config."
 
 Optional one-liner: show `opencode.json` + the `/telnyx` model list to bridge
 into the walkthrough.
