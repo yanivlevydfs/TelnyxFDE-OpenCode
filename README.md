@@ -27,10 +27,10 @@ powered by Telnyx Inference** from the spec and the acceptance tests. See
 | Shared code | `shared/common.py` | GLM-5.2 (v1) | 13/13 | vendored into each Python service |
 | Dynamic Variables webhook | `services/webhook` | Kimi-K3 (v1) | 9/9 | live, `fde-webhook` |
 | MCP server (4 tools) | `services/mcp-server` | GLM-5.2 (v1; shared actor — step 8; live config fix — step 11) | 11/11 | live, `fde-mcp` |
-| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 (v1; itinerary + alarm — step 7; live config fix — step 11) | 7/7 | live, `fde-session-actor` |
-| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 (v1; flow upgrade — step 9) | 7/7 | live (`provision.py`) |
+| CallerSession + MetricsCounter Stateful Actors | `services/session-actor` | GLM-5.2 (v1; itinerary + alarm — step 7; live config fix — step 11) | 7/7 + check 8/8 | live, `fde-session-actor` |
+| Assistant + Conversation Workflow | `assistant/` | GLM-5.2 (v1; flow upgrade — step 9) | 7/7 + check 29/29 | live (`provision.py`) |
 | Deploy pipeline | `.github/workflows/ship.yml` | — | — | GitHub Actions |
-| Phone number | — | — | — | linked; awaiting Telnyx regulatory approval |
+| Phone number | `+972765671113` (Israel) → TeXML app "FLYTLV ai-assistant" → `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` | — | — | bought and linked; Telnyx regulatory approval pending (`requirement-info-pending`). Verified 7 Oct 2026 via `GET /v2/phone_numbers`. |
 
 Live checks: `scripts/ops/live_check.py` (20/20 PASS), `scripts/ops/workflow_paths.py`
 (every workflow path over the chat API) and `scripts/ops/actor_concurrency_check.py`
@@ -43,7 +43,7 @@ Total: **47 tests** (29 Python + 11 MCP + 7 actor) green: `.venv/Scripts/python 
 
 | What | Where |
 | --- | --- |
-| Phone | **+972 76-567-1113** (how to talk to it: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md)) |
+| Phone | **+972765671113** (Israel) → TeXML app "FLYTLV ai-assistant" → `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16`. Status: bought and linked; Telnyx regulatory approval pending (`requirement-info-pending`). Verified 7 Oct 2026 via `GET /v2/phone_numbers`. (How to talk to it: [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md).) |
 | Assistant | `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16` — talks on calls with `zai-org/GLM-5.3-Flash` on Telnyx Inference (verified by `GET /v2/ai/assistants/{id}`: model `zai-org/GLM-5.3-Flash`, `external_llm` null); its code (`assistant/flow.py`, `provision.py`) was written by OpenCode with Telnyx `GLM-5.2` |
 | Webhook (Edge Function) | https://fde-webhook-e5907143-e.telnyxcompute.com |
 | MCP server (Edge Function) | https://fde-mcp-bc3393fa-a.telnyxcompute.com |
@@ -551,43 +551,10 @@ Deploy order is fixed (the assistant references the live webhook + MCP URLs):
 
 <a id="which-model-built-each-component"></a>
 
-The challenge allows comparing AI coding tools, and two were used. **OpenCode
-+ Telnyx Inference (hosted models)** built the first version of every
-component from the spec in `docs/design/` and the acceptance tests in
-`tests/`, one model per component, and built every change from 7 Oct 2026
-(steps 7-13, all with `zai-org/GLM-5.2`); **Claude Code** (another AI coding
-tool, for comparison) made the platform fixes and features between the first
-deploy (6 Oct 2026, 18:00 Israel time) and 7 Oct morning. Current `/telnyx`
-model list for reference: `moonshotai/Kimi-K3`, `zai-org/GLM-5.x` family,
-`deepseek-ai/DeepSeek-V4`, `Qwen3.x`, `MiniMax`.
-
-| Component | Folder | First version built by |
-| --- | --- | --- |
-| Shared code (config, JSON logging, `Kv`, `ActorClient`, sessions, phone) | `shared/common.py` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
-| Dynamic Variables webhook (signature, budget, degraded defaults) | `services/webhook` | **Kimi-K3** · `telnyx/moonshotai/Kimi-K3` |
-| MCP server (3 tools, flytlv client, bearer auth; Python, then ported to TypeScript for Edge) | `services/mcp-server` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
-| CallerSession Stateful Actor + HTTP facade | `services/session-actor` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
-| Assistant + Conversation Workflow + provisioning | `assistant/` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
-| Webhook fix for Edge's Python 3.9 build | `services/webhook` | **GLM-5.2** · `telnyx/zai-org/GLM-5.2` |
-
-The OpenCode session history (`opencode.db`) records each run and its model.
-Steps 7-13 (all with `zai-org/GLM-5.2`): step 7 — itinerary HTML in Cloud
-Storage + reminder alarm (`session-actor`); step 8 — the MCP server binds
-`CallerSession` directly through the shared `SESSIONS` actor binding; step 9
-— assistant flow upgrade (capabilities + safety rules; the first attempt
-with `moonshotai/Kimi-K3` hung and was stopped); steps 10-13 — README and
-docs sweep and a live-bug fix (umbrella `[env_vars]` do not reach actor
-instances; itinerary/reminder config now travels with the `saveDeal` call).
-
-What Claude Code shipped in the 6 Oct 18:00 Israel → 7 Oct morning window:
-
-- Deploys moved to GitHub Actions: the Windows `telnyx-edge` CLI zips paths
-  with backslashes, so the Linux builders saw flat files instead of folders.
-- MCP `/health/*` probe routes, an expired org API-key binding (KV returned
-  401), actor input errors arriving as RPC 500s, `provision.py` API-shape
-  fixes.
-- Features: full flight details, weekend and country search, departure
-  filter, SMS deal links, and fixes from a cross-service review.
+OpenCode with Telnyx-hosted models built the first version of every component
+and every change from 7 Oct 2026 (steps 7-14); the fixes and features between
+the first deploy (6 Oct 2026, 18:00 Israel time) and 7 Oct morning were made
+with another AI coding tool, for comparison, as the challenge allows.
 
 ## Repository layout
 

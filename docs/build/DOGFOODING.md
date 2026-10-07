@@ -80,3 +80,11 @@ on `zai-org/GLM-5.2`.
   local-dev fallback, but the MCP server now forwards the four
   itinerary/reminder values on every `saveDeal` call in a `config` field, and
   the actor resolves `config.X ?? process.env.X`. See DECISIONS #28 and #29.
+- **A path-test script left a live assistant behind.** An earlier
+  `scripts/ops/workflow_paths.py` run (01:42 Israel time) left its throwaway
+  "FlyTLV Travel Line (path test)" assistant and TeXML app on the account to be
+  deleted by hand: the `finally` block chained the retrieve, assistant delete
+  and TeXML delete, so one failing call (e.g. `retrieve`) skipped the deletes
+  after it. Fixed by sweeping leftover " (path test)" assistants before creating
+  a new copy and wrapping each cleanup call in its own try/except, so a failure
+  logs ERROR with a traceback and the remaining deletes still run.

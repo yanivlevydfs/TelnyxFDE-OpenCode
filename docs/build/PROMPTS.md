@@ -263,3 +263,44 @@ Today README.md, docs/design/DECISIONS.md (row 15) and docs/guides/DEMO_SCRIPT.m
 - DECISIONS.md row 15 and DEMO_SCRIPT.md line ~237: shorten to point at that README section.
 - Use Israel time (Asia/Jerusalem) for any time you write.
 Change no code.
+
+## 14. Path-test cleanup must never leave a copy behind
+
+Live finding (7 Oct 2026): scripts/ops/workflow_paths.py left its throwaway assistant
+"FlyTLV Travel Line (path test)" and its TeXML app on the account (created 01:42 Israel time);
+they had to be deleted by hand. The `finally` block runs only if the process ends normally, and
+one failing call (e.g. `retrieve`) skips the deletes after it.
+
+Fix in scripts/ops/workflow_paths.py only (keep it short, use the Telnyx SDK):
+1. Before creating the copy, sweep leftovers: list assistants, and for each whose name ends with
+   " (path test)" delete its TeXML app (via `provision._extract_connection_id`) and the assistant.
+   Never touch any other assistant. Log each removal (WARNING `path.leftover_removed`).
+2. In `finally`, run each cleanup call in its own try/except: get the TeXML id, delete the
+   assistant, delete the TeXML app. Log ERROR with traceback on failure and keep going.
+3. Update scripts/README.md (one paragraph) and add a line to docs/build/DOGFOODING.md.
+Do not run the script (it creates live resources). Check it compiles:
+`.venv/Scripts/python -m py_compile scripts/ops/workflow_paths.py`, and keep
+`.venv/Scripts/python -m pytest tests/test_assistant.py -q` green. Do not commit.
+
+### 14b. README status table: phone number and test counts
+
+In the README.md "Status" table:
+- Phone number row: we HAVE the number. Show `+972765671113` (Israel), routed to TeXML app
+  "FLYTLV ai-assistant" -> assistant `assistant-77f5cfdc-bdd4-41d9-ba1d-789a8e6e8d16`; status:
+  "bought and linked; Telnyx regulatory approval pending (requirement-info-pending)". Verified
+  7 Oct 2026 via GET /v2/phone_numbers.
+- Tests column, current counts: session-actor `7/7 + check 8/8`, assistant `7/7 + check 29/29`,
+  MCP `11/11`, shared `13/13`, webhook `9/9`.
+Make sure the README "Live endpoints and phone number" section shows the same number and status.
+Change nothing else.
+
+### 14c. Tool comparison: one sentence
+
+In README.md, replace the whole "Tool comparison" section body (including the list "What ... shipped
+in the 6 Oct 18:00 Israel -> 7 Oct morning window" and its bullets) with ONE sentence:
+"OpenCode with Telnyx-hosted models built the first version of every component and every change
+from 7 Oct 2026 (steps 7-14); the fixes and features between the first deploy (6 Oct 2026, 18:00
+Israel time) and 7 Oct morning were made with another AI coding tool, for comparison, as the
+challenge allows."
+Make docs/design/DECISIONS.md row 15 and docs/guides/DEMO_SCRIPT.md say the same in one line each
+(no tool name other than OpenCode). Change nothing else.

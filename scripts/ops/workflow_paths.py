@@ -5,6 +5,11 @@ server), drives it through the Telnyx chat API path by path, checks each reply,
 then deletes the copy and the TeXML application Telnyx created for it (deleting
 an assistant does not delete that app, and the account has a small cap).
 
+Before creating the copy it sweeps any leftover " (path test)" assistants and
+their TeXML apps from a crashed or killed prior run, and the ``finally`` cleanup
+runs each call in its own try/except so one failing call (e.g. ``retrieve``)
+never leaves a copy behind.
+
 Fallback paths are forced through the copy's default dynamic variables
 (backend_degraded, flag_deals_enabled). The chat channel does call the
 dynamic-variables webhook (as caller +10000000001), so these runs show up in the
@@ -90,8 +95,50 @@ SCENARIOS = [
 # a system variable only set on phone calls, so a real call covers it.
 
 
+async def _delete_assistant_and_texml(client: telnyx.AsyncTelnyx, assistant_id: str) -> str | None:
+    """Best-effort deletion of one assistant and the TeXML app Telnyx made for it.
+
+    Each call runs in its own try/except and logs ERROR with a traceback on
+    failure, so a failing ``retrieve`` no longer skips the deletes after it
+    (the live bug that left a " (path test)" assistant on the account). Returns
+    the TeXML app id it tried to delete (or None).
+    """
+    texml_id = None
+    try:
+        texml_id = provision._extract_connection_id(await client.ai.assistants.retrieve(assistant_id))
+    except Exception:  # noqa: BLE001 (cleanup must keep going; log and continue)
+        c.error("path.retrieve_failed", exc_info=True, assistant_id=assistant_id)
+    try:
+        await client.ai.assistants.delete(assistant_id)
+    except Exception:  # noqa: BLE001
+        c.error("path.assistant_delete_failed", exc_info=True, assistant_id=assistant_id)
+    if texml_id:
+        try:
+            await client.texml_applications.delete(texml_id)
+        except Exception:  # noqa: BLE001
+            c.error("path.texml_delete_failed", exc_info=True, texml_id=texml_id)
+    return texml_id
+
+
+async def _sweep_leftovers(client: telnyx.AsyncTelnyx) -> None:
+    """Delete leftover " (path test)" assistants and their TeXML apps before
+    creating a fresh copy. A crashed or killed prior run leaves these behind,
+    and the account caps the number of assistants and TeXML apps. Never touches
+    an assistant whose name does not end with " (path test)".
+    """
+    listed = await client.ai.assistants.list()
+    for a in listed.data:
+        name = provision._get(a, "name") or ""
+        if not name.endswith(" (path test)"):
+            continue
+        aid = provision._get(a, "id")
+        texml_id = await _delete_assistant_and_texml(client, aid)
+        c.warning("path.leftover_removed", assistant_id=aid, name=name, texml_id=texml_id)
+
+
 async def main() -> int:
     client = telnyx.AsyncTelnyx(api_key=E["TELNYX_API_KEY"])
+    await _sweep_leftovers(client)
     body = provision.assistant_body(E, E["MCP_SERVER_ID"])
     body["name"] = f"{body['name']} (path test)"
     test = await client.ai.assistants.create(**body)
@@ -113,11 +160,13 @@ async def main() -> int:
                 "path.pass" if passed else "path.fail", path=name,
                 turns=[{"caller": m, "assistant": r[:300]} for m, r in zip(messages, replies)])
     finally:
-        texml_id = provision._extract_connection_id(await client.ai.assistants.retrieve(test.id))
-        await client.ai.assistants.delete(test.id)
-        if texml_id:  # the app Telnyx created for THIS test copy only
-            await client.texml_applications.delete(texml_id)
-        await client.close()
+        # Each cleanup call in its own try/except (see _delete_assistant_and_texml):
+        # one failing call must not skip the deletes after it.
+        await _delete_assistant_and_texml(client, test.id)
+        try:
+            await client.close()
+        except Exception:  # noqa: BLE001
+            c.error("path.close_failed", exc_info=True)
     (c.error if failures else c.info)("path.summary", passed=len(SCENARIOS) - failures, total=len(SCENARIOS))
     return 1 if failures else 0
 
