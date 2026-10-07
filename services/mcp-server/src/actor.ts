@@ -1,14 +1,30 @@
 /**
- * src/actor.ts — HTTP client for the TypeScript session-actor facade.
+ * src/actor.ts — clients for the session-actor Stateful Actor.
  *
- * POSTs JSON to `${ACTOR_SERVICE_URL}/actors/{entity_id}/{method}` with a
- * Bearer `INTERNAL_API_TOKEN` and the current `x-trace-id` (configurable via
- * `TRACE_HEADER`). Returns the parsed JSON body. 4xx → `ActorInputError` (the
- * caller passed bad arguments), 5xx / network → `ActorError` (transient).
+ * Two implementations of the same `Actor` interface:
  *
- * Mirrors `shared/common.py`'s `ActorClient`; dependencies (the fetch impl)
- * are injected so tests pass a fake.
+ *   - `ActorClient` — HTTP client for the TypeScript session-actor facade at
+ *     `ACTOR_SERVICE_URL`. Used by the Python webhook (Python Edge functions
+ *     cannot bind actors), and selectable from `index.ts` by setting
+ *     `USE_SHARED_ACTOR=false`. POSTs JSON to `/actors/{entity_id}/{method}`
+ *     with a Bearer `INTERNAL_API_TOKEN` and the current `x-trace-id`
+ *     (configurable via `TRACE_HEADER`). 4xx → `ActorInputError` (the caller
+ *     passed bad arguments), 5xx / network → `ActorError` (transient).
+ *
+ *   - `EdgeActor` — calls the shared `CallerSession` actor directly through
+ *     the `env.SESSIONS` binding (Telnyx "shared actors": the `fde-session-actor`
+ *     function owns the class; this function declares the same `type` under
+ *     the SESSIONS binding and ships no class code). The default path for
+ *     `index.ts` (`USE_SHARED_ACTOR=true`, the production default). Over the
+ *     RPC hop an actor `ActorInputError` arrives as a plain Error whose
+ *     message embeds `{"name":"ActorInputError"}` — this is mapped back to the
+ *     MCP `ActorInputError`, anything else to `ActorError`.
+ *
+ * Mirrors `shared/common.py`'s `ActorClient`. Dependencies (the fetch impl for
+ * `ActorClient`) are injected so tests pass a fake.
  */
+
+import { env } from "@telnyx/edge-runtime";
 
 import { config } from "./config.js";
 import { getTraceId } from "./log.js";
@@ -116,5 +132,90 @@ export class ActorMetrics implements Metrics {
       headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
       body: JSON.stringify({ counts, latency }),
     }).catch(() => undefined);
+  }
+}
+
+// ---------------------------------------------------------------- EdgeActor
+
+/**
+ * Minimal hand-written shape for the `SESSIONS` actor binding declared in
+ * `func.toml` as `[[actors]] binding = "SESSIONS" type = "CallerSession"`.
+ *
+ * We deliberately do NOT import the `CallerSession` class from
+ * `services/session-actor`: this function ships no actor code. The Edge
+ * runtime resolves the shared actor over an RPC hop to the `fde-session-actor`
+ * function that owns the class. The base `ActorNamespace` (no type argument)
+ * resolves `PublicMethods` to `{}` — exactly the untyped
+ * `{ id, fetch, [method]: unknown }` stub we need here (see bindings.d.ts).
+ */
+interface SessionsNamespace {
+  /** Materialise the actor stub for `name`. Same name always → same instance. */
+  idFromName(name: string): {
+    readonly id: string;
+    [method: string]: unknown;
+  };
+}
+
+/**
+ * `Actor` client that talks to the shared `CallerSession` actor directly
+ * through the `env.SESSIONS` Edge binding (Telnyx "shared actors") — the
+ * production default for the MCP server (`USE_SHARED_ACTOR=true`).
+ *
+ * Unlike `ActorClient`, there is no HTTP hop and no bearer token: the
+ * `[[actors]]` binding is the trust boundary. The actor's own `ActorInputError`
+ * (e.g. "deal not in the last search results") is recovered from the RPC
+ * envelope's embedded `{"name":"ActorInputError"}` marker and re-thrown as
+ * the MCP `ActorInputError` so `callActor` can pass it through unchanged;
+ * any other failure is wrapped as a transient `ActorError`.
+ */
+export class EdgeActor implements Actor {
+  private readonly sessions: SessionsNamespace;
+
+  constructor() {
+    const binding = (env as unknown as { SESSIONS?: SessionsNamespace }).SESSIONS;
+    if (!binding) {
+      // Fail fast at boot: the function is misconfigured. The fix is to add
+      // `[[actors]] binding = "SESSIONS" type = "CallerSession"` to func.toml,
+      // or to set `USE_SHARED_ACTOR=false` and fall back to `ActorClient`.
+      throw new Error(
+        'env.SESSIONS is not bound: add `[[actors]] binding = "SESSIONS" type = "CallerSession"` to func.toml',
+      );
+    }
+    this.sessions = binding;
+  }
+
+  /** Call an actor method by entity id. Throws on input/transient failures. */
+  async call(entityId: string, method: string, body: unknown = {}): Promise<unknown> {
+    let stub: ReturnType<SessionsNamespace["idFromName"]>;
+    try {
+      stub = this.sessions.idFromName(entityId);
+    } catch (e) {
+      throw new ActorError(
+        `actor ${entityId}/${method}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    const fn = stub[method] as ((body?: unknown) => Promise<unknown>) | undefined;
+    if (typeof fn !== "function") {
+      // The actor class (owned by fde-session-actor) does not expose a method
+      // with this name. Treat as a server fault — the MCP allowlist should
+      // have caught it earlier.
+      throw new ActorError(`actor ${entityId}/${method}: method not exposed`);
+    }
+    try {
+      return await fn.call(stub, body);
+    } catch (e) {
+      // Over the RPC hop an `ActorInputError` arrives as a plain Error whose
+      // message embeds the original `{"name":"ActorInputError","message":...}`
+      // (the actor's own reason — e.g. "deal tlv-lca-1 not in last search
+      // results"). Recover it so `callActor` maps it to a caller-safe
+      // ToolError; anything else is a transient actor failure.
+      if (e instanceof ActorInputError) throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/"name":"ActorInputError"/.test(msg)) {
+        const m = /"message":"([^"]*)"/.exec(msg);
+        throw new ActorInputError(m ? m[1] : msg);
+      }
+      throw new ActorError(`actor ${entityId}/${method}: ${msg}`);
+    }
   }
 }
