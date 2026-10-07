@@ -1,7 +1,7 @@
 # How to talk to the FlyTLV Travel Line
 
-FlyTLV Travel Line is a phone agent that finds cheap **round-trip flights from
-Tel Aviv**, reads you the full flight details, saves the deals you like, and
+FlyTLV Travel Line is a phone agent that finds cheap **flights from Tel Aviv**
+(round trip or one way), reads you the full flight details, saves the deals you like, and
 remembers them the next time you call.
 
 ## Call
@@ -13,8 +13,8 @@ Speak in English, in normal sentences. You can interrupt at any time.
 ## 1. You will hear a greeting
 
 > "Welcome to the FlyTLV Travel Line. I'm an AI assistant. I can find you cheap
-> round-trip flights from Tel Aviv, and remember the ones you save. This call
-> may be recorded for quality."
+> flights from Tel Aviv, round trip or one way, and remember the ones you save.
+> This call may be recorded for quality."
 
 If you have called before and saved a deal, the agent also says
 **"Welcome back"** and reminds you of your last saved deal.

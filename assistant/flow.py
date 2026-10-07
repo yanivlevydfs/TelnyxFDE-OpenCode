@@ -61,8 +61,8 @@ _NODE_IDS = (
 
 GREETING_MESSAGE = (
     "Welcome to the FlyTLV Travel Line. I'm an AI assistant. "
-    "I can find you cheap round-trip flights from Tel Aviv, and remember the "
-    "ones you save. This call may be recorded for quality."
+    "I can find you cheap flights from Tel Aviv, round trip or one way, and "
+    "remember the ones you save. This call may be recorded for quality."
 )
 
 DEGRADED_MESSAGE = (
@@ -93,7 +93,9 @@ IDENTIFY_INSTRUCTIONS = (
     "find out what they want: search for cheap flights, save a deal from the ones "
     "just read out, hear their saved deals, ask a general question, or speak to a "
     "human. Ask one short clarifying question if the request is unclear; do not "
-    "list every option at once."
+    "list every option at once. A flight request without a place (for example "
+    "'deals for Hanukkah' or 'a cheap weekend trip') is clear: it is a search "
+    "everywhere, so do not ask where."
 )
 
 ESCALATE_INSTRUCTIONS = (
@@ -105,7 +107,8 @@ ESCALATE_INSTRUCTIONS = (
 SEARCH_INSTRUCTIONS = (
     "Help the caller find cheap flights from Tel Aviv with the search_deals tool. "
     "Map what they say to the tool arguments: 'anywhere' or no place -> no destination "
-    "or country; a city or airport -> destination (IATA code, e.g. ATH); a whole "
+    "or country (search everywhere right away; do not ask where first); a city or "
+    "airport -> destination (IATA code, e.g. ATH); a whole "
     "country -> country; 'one way' -> trip_type='one_way' (otherwise round trip); a "
     "holiday (Hanukkah, Purim, Passover, Shavuot, Sukkot, Rosh Hashanah, Sigd...) -> "
     "category with the holiday name; 'a weekend trip' -> category='Weekend'; 'weekdays "
@@ -236,11 +239,14 @@ FAQ_ENTRIES: list[tuple[str, str]] = [
 
 FAQ_INSTRUCTIONS = (
     "Answer the caller's general question about the FlyTLV Travel Line in one or "
-    "two short spoken sentences, using ONLY these facts (never add others):\n"
+    "two short spoken sentences. Find the matching fact below and say it in your "
+    "own words; use ONLY these facts:\n"
     + "\n".join(f"- {topic}: {answer}" for topic, answer in FAQ_ENTRIES)
-    + "\nIf the question is not covered, say you do not have that information and "
-    "suggest the airline or flytlv.app. Then ask if they would like to search for "
-    "flights."
+    + "\nNever add general travel knowledge or guesses (for example what airlines "
+    "or fares usually include); the deals carry no baggage or fare details. If the "
+    "question is not covered, say you do not have that information and suggest the "
+    "airline or the flytlv.app booking page. Then ask if they would like to search "
+    "for flights."
 )
 
 TRANSFER_INSTRUCTIONS = (
