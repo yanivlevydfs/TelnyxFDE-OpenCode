@@ -33,9 +33,8 @@ def _has_edge(src: str, dst: str) -> bool:
         if e.get("start_node_id") != src:
             continue
         target = e.get("target") or {}
-        if isinstance(target, dict) and target.get("type") == "node":
-            if target.get("node_id") == dst:
-                return True
+        if isinstance(target, dict) and target.get("type") == "node" and target.get("node_id") == dst:
+            return True
     return False
 
 
@@ -294,7 +293,7 @@ def test_no_unacknowledged_mcp_gaps() -> None:
 
 def _section(readme: str, title: str) -> str:
     """Return the body of the README section under a '## <title>' heading."""
-    pat = re.compile(rf"\n##\s+{re.escape(title)}\s*\n(.*?)(?=\n##\s|\Z)", re.S)
+    pat = re.compile(rf"\n##\s+{re.escape(title)}\s*\n(.*?)(?=\n##\s|\Z)", re.DOTALL)
     m = pat.search(readme)
     assert m, f"README has no '## {title}' section"
     return m.group(1)

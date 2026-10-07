@@ -469,6 +469,7 @@ telnyx-edge storage kv create --name fde-kv   # the KV_NAMESPACE_ID goes in .env
 
 ```bash
 python scripts/build/vendor_shared.py                  # copy shared/common.py into each Python service
+.venv/Scripts/python -m ruff check .            # lint Python (excludes .venv, node_modules, reference/ via .gitignore)
 .venv/Scripts/python -m pytest tests -q       # Python services (29 tests)
 cd services/session-actor && npm test           # actor (7 tests)
 cd services/session-actor && npm run check      # itinerary + alarm self-check (step 7)
