@@ -74,10 +74,13 @@ const flaky = (async () => {
   if (calls++ === 0) throw timeout();
   return new Response(JSON.stringify({ currency: "USD", deals: [] }));
 }) as unknown as typeof fetch;
+const quiet = { error: console.error, warn: console.warn };
+console.error = console.warn = () => {}; // the simulated failures below log on purpose
 assert.deepEqual((await new FlytlvClient(flaky).search({})).deals, []);
 assert.equal(calls, 2);
 calls = 0;
 const down = (async () => { calls++; throw new TypeError("network"); }) as unknown as typeof fetch;
 await assert.rejects(new FlytlvClient(down).search({}), /temporarily unavailable/);
+Object.assign(console, quiet);
 assert.equal(calls, 1);
 console.log("flytlv retry checks OK");

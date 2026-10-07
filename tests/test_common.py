@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import json
 import logging
+
+import common as c  # shared/common.py (path set in conftest.py)
 import httpx
 import pytest
 import telnyx
-
-import common as c  # shared/common.py (path set in conftest.py)
-
 
 # ------------------------------------------------------------------ config
 
@@ -66,9 +65,8 @@ def test_error_includes_traceback(capsys) -> None:
 def test_timed_logs_duration_and_errors(capsys) -> None:
     with c.timed("work") as span:
         span["items"] = 3
-    with pytest.raises(ValueError):
-        with c.timed("broken"):
-            raise ValueError("x")
+    with pytest.raises(ValueError), c.timed("broken"):
+        raise ValueError("x")
     ok, bad = _lines(capsys)
     assert ok["span"] == "work" and ok["items"] == 3 and "duration_ms" in ok
     assert bad["level"] == "ERROR" and bad["outcome"] == "error"
