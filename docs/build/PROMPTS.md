@@ -244,3 +244,22 @@ Attribution: steps 7-12 were built by OpenCode with Telnyx zai-org/GLM-5.2. Chan
   change in flytlv.ts.
 - services/mcp-server/func.toml comment: it says the actor's "own env still wins"; the code does
   `config.X ?? process.env.X`, so the value sent with the call wins. Fix the comment only.
+
+## 13. Attribution: one honest sentence instead of many mentions
+
+Today README.md, docs/design/DECISIONS.md (row 15) and docs/guides/DEMO_SCRIPT.md mention
+"Claude Code" in many places. Consolidate, without making any claim false:
+- README.md component table: replace the column holding "Claude Code" with one column
+  "Built with OpenCode (Telnyx model)" that lists only what OpenCode really built: the first
+  version of each component (models as already listed: GLM-5.2, Kimi-K3 for the webhook) and the
+  steps 7-13 changes (GLM-5.2). The deploy pipeline row gets "—".
+- README.md: delete the "Claude Code" sentence near the top (line ~12) and the "After the first
+  deploy (Claude Code ...)" section (line ~570); put the facts they carried in ONE short section
+  "Tool comparison" near the end: OpenCode + Telnyx models built the first version of every
+  component and every change from 7 Oct 2026 (steps 7-13); the platform fixes and features between
+  the first deploy (6 Oct 2026, 18:00 Israel time) and 7 Oct morning were made with another AI coding
+  tool, Claude Code, for comparison, as the challenge allows. Keep the useful list of what those
+  fixes were.
+- DECISIONS.md row 15 and DEMO_SCRIPT.md line ~237: shorten to point at that README section.
+- Use Israel time (Asia/Jerusalem) for any time you write.
+Change no code.
