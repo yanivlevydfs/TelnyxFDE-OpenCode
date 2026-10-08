@@ -1,0 +1,41 @@
+<section id="stretch" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Stretch goals</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Six shipped, one not</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">Actor alarms</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">Follow-up SMS reminder via setAlarm, one per caller.</p></div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">Cloud Storage</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">Itinerary HTML in the flytlv-itineraries bucket.</p></div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">KV feature flags</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">deals_enabled, sms_enabled, promo. No redeploy.</p></div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">Shared actors</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">MCP binds CallerSession directly via SESSIONS.</p></div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">Distributed tracing</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">One trace_id across webhook, actor and MCP.</p></div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:start;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<x-icon name="CheckCircle" style="color:#0B7A55;width:40px;height:40px"></x-icon>
+<div style="display:flex;flex-direction:column;gap:8px"><h3 style="font-size:30px;font-weight:600">Variable edges</h3><p style="font-size:24px;line-height:1.4;color:#3D4A5C">Duration, deals flag and degraded flag route without the model.</p></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:row;gap:20px;align-items:center;background:#FBEFE6;border:1px solid #E8C9B3;border-radius:16px;padding:24px 28px">
+<x-icon name="Warning" style="color:#C2561A;width:36px;height:36px"></x-icon>
+<p style="font-size:26px;color:#14213D"><b>Not done: multi-assistant routing.</b> There is a transfer-to-human tool, not a second assistant persona.</p>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">9 / 13</p>
+</div>
+<aside>Only the stretch goals the code really ships. Variable-comparison edges land here too: the three expression edges route on duration, the deals flag and the degraded flag, all evaluated before the model. Not done: multi-assistant routing — we have a transfer-to-human tool, not a second assistant persona. The custom dynamic-variables webhook is a core requirement, so I do not count it as a stretch.</aside>
+</section>

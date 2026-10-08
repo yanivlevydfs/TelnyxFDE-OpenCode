@@ -47,7 +47,8 @@ scripts/build/vendor_shared.py       copy shared/common.py into each Python serv
 scripts/ops/                         live_check.py, metrics.py, actor_concurrency_check.py
 docs/challenge/                      code_challenge.md (the brief), USE_CASE.md
 docs/design/                         ARCHITECTURE, DECISIONS, OBSERVABILITY
-docs/guides/                         HOW_TO_CALL (callers), DEMO_SCRIPT (demo day)
+docs/guides/                         HOW_TO_CALL (callers), INTEGRATION (engineers)
+docs/presentation/                   PRESENTATION (deck slides), DEMO_SCRIPT (demo), README, deck/
 docs/build/PROMPTS.md, DOGFOODING.md OpenCode build prompts; dogfooding notes
 tests/                            acceptance tests (do not edit) + check_* self-checks
 ```

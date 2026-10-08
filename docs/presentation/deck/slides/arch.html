@@ -1,0 +1,50 @@
+<section id="arch" data-section="How the call is built: architecture, workflow, MCP, webhook" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Architecture</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Caller → Assistant → Edge Functions → KV and Actor</h2>
+<x-connector x1="328" y1="535" x2="400" y2="535" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="700" y1="490" x2="790" y2="305" head="end" route="elbow" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="700" y1="580" x2="790" y2="765" head="end" route="elbow" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="950" y1="370" x2="950" y2="470" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="950" y1="700" x2="950" y2="600" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1110" y1="305" x2="1230" y2="370" head="end" route="elbow" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1110" y1="740" x2="1230" y2="420" head="end" route="elbow" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1110" y1="790" x2="1230" y2="790" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1530" y1="395" x2="1590" y2="395" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<div style="position:absolute;left:128px;top:465px;width:200px;height:140px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">Caller</p>
+<p style="font-size:24px;color:#3D4A5C">phone</p>
+</div>
+<div style="position:absolute;left:400px;top:440px;width:300px;height:190px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#0F1B2D;border-radius:16px;padding:24px">
+<p style="font-size:30px;font-weight:600;color:#F5F6F2">AI Assistant</p>
+<p style="font-size:24px;color:#BFC8D4">Conversation Workflow, 12 nodes</p>
+</div>
+<div style="position:absolute;left:790px;top:240px;width:320px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">webhook</p>
+<p style="font-size:24px;color:#3D4A5C">Edge Function · Python</p>
+</div>
+<div style="position:absolute;left:790px;top:470px;width:320px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">Telnyx KV</p>
+<p style="font-size:24px;color:#3D4A5C">flags · cache · session</p>
+</div>
+<div style="position:absolute;left:790px;top:700px;width:320px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">mcp-server</p>
+<p style="font-size:24px;color:#3D4A5C">Edge Function · TS · 4 tools</p>
+</div>
+<div style="position:absolute;left:1230px;top:330px;width:300px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">session-actor</p>
+<p style="font-size:24px;color:#3D4A5C">Stateful Actor · TS</p>
+</div>
+<div style="position:absolute;left:1230px;top:700px;width:300px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#FCFCFA;border:2px dashed #C9CFC6;border-radius:16px;padding:20px">
+<p style="font-size:30px;font-weight:600">flytlv deals API</p>
+<p style="font-size:24px;color:#3D4A5C">external</p>
+</div>
+<div style="position:absolute;left:1590px;top:330px;width:202px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:4px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:16px;padding:16px">
+<p style="font-size:26px;font-weight:600;line-height:1.2">Cloud Storage</p>
+</div>
+<p style="position:absolute;left:128px;top:860px;width:1664px;font-size:24px;color:#3D4A5C">Call start: webhook runs once. During the call: MCP tool calls reach the same actor via shared SESSIONS.</p>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">3 / 13</p>
+</div>
+<aside>At call start the workflow fires the webhook once, which reads flags from KV and records the call on the caller's actor. Mid-conversation, the prompt nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches the same caller actor directly through the shared SESSIONS binding. The Python webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP server skips that hop. The actor writes the itinerary page to Cloud Storage.</aside>
+</section>

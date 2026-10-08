@@ -423,3 +423,19 @@ Format each slide as:
 `Notes:` with 2-4 sentences the speaker says. Plain English, no marketing words.
 End with a "Sources" list of the files used per slide. Add the file to docs/README.md and
 the README Documentation table. Change no code. Do not commit.
+
+## 19. One folder for the demo-day presentation
+
+Keep everything for demo day in docs/presentation/. The rendered slide deck's source is already
+there in docs/presentation/deck/ (deck.json + slides/*.html, laid out by Claude Code from
+PRESENTATION.md; leave those files unchanged). Then:
+- `git mv docs/guides/PRESENTATION.md docs/presentation/PRESENTATION.md` and
+  `git mv docs/guides/DEMO_SCRIPT.md docs/presentation/DEMO_SCRIPT.md`.
+- Fix every link to either file across the repo (`git grep -n "PRESENTATION.md\|DEMO_SCRIPT.md"`),
+  including relative links inside the two moved files, so every link resolves.
+- Write docs/presentation/README.md: what each file is (slide text, demo script, deck source),
+  that the live deck is https://claude.ai/artifact/3R5GZNrRkjn3ZEKL4Vtc3t (private until shared,
+  downloads as .pptx or PDF), and that deck/ was laid out by Claude Code while PRESENTATION.md
+  was written by OpenCode (step 18).
+- Update the structure tree in AGENTS.md, docs/README.md and the README Documentation table.
+Change no code. Do not commit.

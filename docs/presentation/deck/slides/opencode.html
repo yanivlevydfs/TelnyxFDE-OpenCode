@@ -1,0 +1,42 @@
+<section id="opencode" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Telnyx Inference via OpenCode</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Built by Telnyx-hosted models, tested first</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
+<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">GLM-5.2</p>
+<p style="font-size:24px;line-height:1.4;color:#BFC8D4">Wrote most of the code and docs.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">Kimi-K3</p>
+<p style="font-size:24px;line-height:1.4;color:#BFC8D4">Built the first webhook version.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">GLM-5.3-Flash</p>
+<p style="font-size:24px;line-height:1.4;color:#BFC8D4">The assistant's voice on calls.</p>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:56px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<h3 style="font-size:32px;font-weight:600;color:#0B7A55">Worked</h3>
+<ul style="font-size:27px;line-height:1.45;color:#3D4A5C;display:flex;flex-direction:column;gap:10px">
+<li>Test-first prompts passed the acceptance tests in few iterations.</li>
+<li>Multi-file work, including the MCP port from Python to TypeScript.</li>
+</ul>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<h3 style="font-size:32px;font-weight:600;color:#C2561A">Hurt</h3>
+<ul style="font-size:27px;line-height:1.45;color:#3D4A5C;display:flex;flex-direction:column;gap:10px">
+<li>Negative balance stopped inference mid-step (error 20015).</li>
+<li>Global context made requests 215k tokens; a clean config cut it to 8.7k.</li>
+<li>Edge specifics (Python 3.9 build, health probes) only showed on deploy.</li>
+</ul>
+</div>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">12 / 13</p>
+</div>
+<aside>Test-first prompts against the acceptance tests plus the short rules file produced passing code in a few iterations, and GLM-5.2 handled multi-file work well, including the MCP port from Python to TypeScript. What hurt: a negative balance stops inference mid-step with error 20015, so two steps were rerun, and global context blew requests up to 215k tokens until a clean config dir cut it to 8.7k. Platform specifics like the Python 3.9 build and the health probes only appeared on deploy and were fixed from logs, not from the model. Show the OpenCode config with the Telnyx plugin active here.</aside>
+</section>

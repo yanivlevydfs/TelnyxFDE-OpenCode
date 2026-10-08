@@ -26,9 +26,10 @@ Every Markdown file in the repo, grouped by area, each with a one-line purpose t
 | Design | [docs/design/OBSERVABILITY.md](docs/design/OBSERVABILITY.md) | Observability: signals, log events and how to read them |
 | Design | [docs/design/PRODUCT.md](docs/design/PRODUCT.md) | Product brief for Telnyx reviewers and product people |
 | Guides | [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md) | How a caller talks to the FlyTLV Travel Line |
-| Guides | [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md) | Demo script for the live 8–10 min demo |
-| Guides | [docs/guides/PRESENTATION.md](docs/guides/PRESENTATION.md) | Slide text for the 7–10 min Live Walkthrough & Decision Review deck |
 | Guides | [docs/guides/INTEGRATION.md](docs/guides/INTEGRATION.md) | Integration & operations guide for engineers |
+| Presentation | [docs/presentation/PRESENTATION.md](docs/presentation/PRESENTATION.md) | Slide text for the 7–10 min Live Walkthrough & Decision Review deck |
+| Presentation | [docs/presentation/DEMO_SCRIPT.md](docs/presentation/DEMO_SCRIPT.md) | Demo script for the live 8–10 min demo |
+| Presentation | [docs/presentation/README.md](docs/presentation/README.md) | What's in docs/presentation/ and the live deck link |
 | Build | [docs/build/PROMPTS.md](docs/build/PROMPTS.md) | Build prompts and step status for OpenCode |
 | Build | [docs/build/DOGFOODING.md](docs/build/DOGFOODING.md) | Dogfooding notes: OpenCode + Telnyx Inference |
 | Services | [services/webhook/README.md](services/webhook/README.md) | Dynamic Variables webhook (Python Edge Function) |
@@ -601,7 +602,8 @@ scripts/                               see scripts/README.md
 docs/                                  see docs/README.md
   challenge/                           code_challenge.md (the brief), USE_CASE.md
   design/                              ARCHITECTURE.md, DECISIONS.md, OBSERVABILITY.md
-  guides/                              HOW_TO_CALL.md (callers), DEMO_SCRIPT.md (demo day)
+  guides/                              HOW_TO_CALL.md (callers), INTEGRATION.md (engineers)
+  presentation/                        PRESENTATION.md (deck slides), DEMO_SCRIPT.md (demo), README.md, deck/
   build/PROMPTS.md, DOGFOODING.md      OpenCode build prompts; what worked and what did not
 
 tests/                                 acceptance tests (not edited) + self-checks; see tests/README.md

@@ -1,0 +1,31 @@
+<section id="observe" data-transition="fade" style="background:#0F1B2D;color:#F5F6F2;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#00A36C">Observability</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15;color:#F5F6F2">How I know within a minute that it broke</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:56px">
+<div style="display:flex;flex-direction:column;gap:20px">
+<h3 style="font-size:32px;font-weight:600;color:#F5F6F2">What is instrumented</h3>
+<ul style="font-size:28px;line-height:1.45;color:#BFC8D4;display:flex;flex-direction:column;gap:12px">
+<li>JSON log line per event, with a duration_ms span per request.</li>
+<li>MetricsCounter actor: counters and latency; scripts/ops/metrics.py.</li>
+<li>Platform metrics: telnyx-edge metrics shows 2xx/4xx/5xx and p95.</li>
+<li>trace_id = conversation id, across webhook, actor and MCP.</li>
+</ul>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px">
+<h3 style="font-size:32px;font-weight:600;color:#F5F6F2">Where I look first</h3>
+<ol style="font-size:28px;line-height:1.45;color:#BFC8D4;display:flex;flex-direction:column;gap:12px">
+<li>telnyx-edge metrics fde-webhook: rising errors or p95 near the timeout.</li>
+<li>Logs with outcome != ok: rejected = signature, degraded = KV or actor.</li>
+<li>Follow one trace_id into the other two services.</li>
+</ol>
+</div>
+</div>
+<p style="font-size:28px;color:#00A36C">The webhook is the canary: every call hits it first.</p>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#8C99AB">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#8C99AB">10 / 13</p>
+</div>
+<aside>Within a minute I look at telnyx-edge metrics fde-webhook first: rising 4xx/5xx or p95 toward the timeout is the first sign a call is broken. Then I filter logs for outcome != ok — rejected means a signature problem, degraded means KV or the actor is down, and the degraded array names which dependency. Finally I follow one trace_id into the other two services to reconstruct the whole call. backend_degraded also flows back to the assistant, so a broken backend is partly self-protecting.</aside>
+</section>
