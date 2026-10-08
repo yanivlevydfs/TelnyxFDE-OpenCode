@@ -19,6 +19,7 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -65,6 +66,100 @@ def flag(name: str, default: bool = False) -> bool:
     if val is None:
         return default
     return val.strip().lower() in _TRUE_VALUES
+
+
+# ---------------------------------------------------------------- .env loader
+
+# A valid env var name: starts with a letter or underscore, then letters /
+# digits / underscores (POSIX). All our settings are SCREAMING_SNAKE_CASE, but
+# the loader stays general so it keeps working if a lowercase name is used.
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _find_dotenv(start: Path, max_up: int = 8) -> Path | None:
+    """Walk up from `start` looking for a `.env` file; return its path or None."""
+    p = start.resolve()
+    for _ in range(max_up):
+        candidate = p / ".env"
+        if candidate.is_file():
+            return candidate
+        if p.parent == p:  # reached the filesystem root
+            return None
+        p = p.parent
+    return None
+
+
+def _strip_inline_comment(value: str) -> str:
+    """Strip a trailing ` # comment` from an unquoted .env value.
+
+    A `#` preceded by whitespace starts a comment (the shell / dotenv idiom);
+    a `#` touching the value (e.g. `KEY=foo#bar`) is kept as part of the value.
+    Quoted values are not passed through here (quotes protect a literal `#`).
+    """
+    for sep in (" #", "\t#"):
+        idx = value.find(sep)
+        if idx != -1:
+            return value[:idx].rstrip()
+    return value
+
+
+def load_env(path: str | os.PathLike[str] | None = None) -> dict[str, str]:
+    """Load the repo-root `.env` into ``os.environ`` WITHOUT overriding it.
+
+    Local convenience for scripts/ops/*.py and assistant/provision.py so a plain
+    ``python assistant/provision.py`` picks up the repo's `.env`. Never call this
+    on Telnyx Edge: the webhook runs there and Edge already injects secrets as
+    env vars; `.env` is git-ignored and absent on Edge.
+
+    Parses ``KEY=VALUE`` lines, skipping blank lines and ``#`` comments. A
+    trailing ` # comment` is stripped from unquoted values; surrounding single
+    or double quotes around a value are removed (and protect a literal `#`).
+    An empty value (after stripping quotes / comments) is treated as "unset",
+    matching the ``.env.example`` convention where secrets and per-account ids
+    are left empty to be filled in — that keeps ``require()`` failing fast on
+    a missing secret instead of silently returning ``""``. Existing
+    ``os.environ`` entries are never overwritten, so test fixtures and the
+    shell beat the file. Returns the map of newly set values (handy for tests
+    / debugging).
+    """
+    if path is None:
+        env_path = _find_dotenv(Path.cwd())
+    else:
+        env_path = Path(path)
+    if env_path is None or not env_path.is_file():
+        return {}
+
+    added: dict[str, str] = {}
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, rest = line.partition("=")
+        name = name.strip()
+        if not name or not _ENV_NAME.match(name):
+            continue
+        stripped = rest.strip()
+        # A value that is blank or starts with `#` is an empty value with an
+        # optional inline `# comment` — treat as unset (see the empty-value
+        # note above).
+        if not stripped or stripped.startswith("#"):
+            continue
+        # Quoted value: drop the surrounding quote pair and keep the inside
+        # verbatim (no inline-comment stripping — a `#` inside quotes is data).
+        if len(stripped) >= 2 and stripped[0] in "\"'" and stripped[-1] == stripped[0]:
+            value = stripped[1:-1]
+        else:
+            value = _strip_inline_comment(stripped)
+        # An empty value means "unset", matching the .env.example convention
+        # (secrets / per-account ids are left empty to be filled in). Setting
+        # ``os.environ[name] = ""`` here would defeat the existing ``require()``
+        # fail-fast on a missing secret — leave it unset instead.
+        if not value:
+            continue
+        if name not in os.environ:
+            os.environ[name] = value
+            added[name] = value
+    return added
 
 
 # -------------------------------------------------------------------- logging

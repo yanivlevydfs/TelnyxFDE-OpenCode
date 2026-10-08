@@ -455,7 +455,11 @@ Each of these was found from logs, deploy records or a live check, not by guessi
 uv venv .venv
 uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
 
-# Configuration: copy and fill in (never commit .env)
+# Configuration: copy and fill in (never commit .env).
+# Local scripts (scripts/ops/*.py, assistant/provision.py) load this file
+# automatically at start-up via shared/common.load_env(), without overriding
+# anything the shell already set, so a plain `python assistant/provision.py
+# --dry-run` just works after editing .env. The Edge Functions never read .env.
 cp .env.example .env
 
 # OpenCode with Telnyx Inference
@@ -477,6 +481,7 @@ cd services/session-actor && npm test           # actor (7 tests)
 cd services/session-actor && npm run check      # itinerary + alarm self-check (step 7)
 cd services/mcp-server && npm test               # MCP server (11 tests)
 .venv/Scripts/python -m pytest tests/check_flow_capabilities.py -q   # step 9 capability self-check
+.venv/Scripts/python -m pytest tests/check_env.py -q                   # step 21 env-var guard (owner rule 3)
 ```
 
 ## Deploy
