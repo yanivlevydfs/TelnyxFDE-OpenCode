@@ -424,7 +424,7 @@ official scaffold and watching it fail the same way).
   `service` = `all`, `webhook`, `mcp-server` or `session-actor`.
 
 The workflow runs `python scripts/build/vendor_shared.py` (copies
-`shared/common.py` into each Python service), installs `telnyx-edge v0.5.9`,
+`shared/common.py` into each Python service), installs `telnyx-edge v0.5.10`,
 sets the CLI auth from the repo secret `TELNYX_API_KEY`, and runs
 `telnyx-edge ship --from-dir services/<service> --timeout 20m`.
 

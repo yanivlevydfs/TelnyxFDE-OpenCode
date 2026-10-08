@@ -377,3 +377,14 @@ under a new "# --- lint ---" group with a short comment, install it
 `.venv/Scripts/python -m ruff check .` and fix any NEW Ruff errors in our Python files (not in
 .venv, node_modules or reference/). Mention `ruff check .` in the README setup/test commands.
 Keep all Python tests green. Do not commit.
+
+## 17. Pin telnyx-edge v0.5.10
+
+telnyx-edge v0.5.10 is out (release notes: `actors logs --tail` streams live, `ship` waits 30m,
+`dev` rejects what `ship` would, `[network.<name>]` validated at ship time). Locally it is
+installed and every test, self-check and live script passes with it. Change
+`TELNYX_EDGE_VERSION: v0.5.9` to `v0.5.10` in .github/workflows/ship.yml (line 25), and the two
+places that say which version CI installs: README.md line 506 and docs/guides/INTEGRATION.md
+line 427. Keep every mention of the Windows backslash bug as "v0.5.9" (ship.yml line 3,
+README.md line 422, DECISIONS.md decision 17, INTEGRATION.md line 416): that is what was
+observed on that version. Change nothing else. Do not commit.
