@@ -1,0 +1,43 @@
+<section id="history" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Caller history and audit</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Every search leaves a trail in three places</h2>
+<x-connector x1="428" y1="335" x2="520" y2="335" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="730" y1="400" x2="730" y2="450" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="428" y1="715" x2="520" y2="715" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="940" y1="335" x2="1032" y2="450" head="end" route="elbow" style="color:#6B7685;border-width:3px;border-style:dashed"></x-connector>
+<x-connector x1="940" y1="715" x2="1032" y2="530" head="end" route="elbow" style="color:#6B7685;border-width:3px;border-style:dashed"></x-connector>
+<div style="position:absolute;left:128px;top:270px;width:300px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">mcp-server</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#3D4A5C">search · save</p>
+</div>
+<div style="position:absolute;left:520px;top:270px;width:420px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Caller Actor: searchHistory</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">query, results, top deals; last 50</p>
+</div>
+<div style="position:absolute;left:520px;top:450px;width:420px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Cloud Storage: audit/</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">one JSON per event, never changed</p>
+</div>
+<div style="position:absolute;left:128px;top:650px;width:300px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Phone call</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">the whole conversation</p>
+</div>
+<div style="position:absolute;left:520px;top:650px;width:420px;height:130px;display:flex;flex-direction:column;justify-content:center;gap:6px;background:#0F1B2D;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600;color:#F5F6F2">Telnyx conversation + insights</p>
+<p style="font-size:24px;line-height:1.3;color:#BFC8D4">destinations, dates, saved deal, outcome</p>
+</div>
+<div style="position:absolute;left:1032px;top:390px;width:380px;height:200px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #14213D;border-radius:12px;padding:24px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600">history.py</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">one report per caller or per date</p>
+</div>
+<div style="position:absolute;left:1472px;top:390px;width:320px;display:flex;flex-direction:column;gap:12px">
+<p style="font-size:26px;font-weight:600;color:#0B7A55">Privacy</p>
+<p style="font-size:24px;line-height:1.4;color:#3D4A5C">Audit files and logs hold a masked number. A failed audit write never breaks the call.</p>
+</div>
+<p style="position:absolute;left:128px;top:820px;width:1664px;font-size:24px;color:#3D4A5C">Not KV: history needs safe append (Actor), audit needs files that never change (Cloud Storage).</p>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">15 / 19</p>
+</div>
+<aside>Live since today. Each search and save goes through the MCP server to the caller's actor, which appends it to a searchHistory list capped at 50, and writes one immutable JSON file per event to Cloud Storage under audit, with the caller's number masked. Separately, Telnyx keeps every conversation, and an insight group called FlyTLV caller intent extracts the destinations, dates, saved deal and outcome after each phone call. scripts/ops/history.py puts the actor history and the Telnyx conversations and insights into one report per caller or per date. KV was the wrong tool: history needs a safe read-modify-write, and audit needs write-once files.</aside>
+</section>

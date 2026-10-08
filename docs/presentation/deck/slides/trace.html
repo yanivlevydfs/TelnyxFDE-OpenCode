@@ -43,7 +43,7 @@
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
-<p style="font-size:24px;color:#6B7685">14 / 18</p>
+<p style="font-size:24px;color:#6B7685">14 / 19</p>
 </div>
 <aside>The trace id is the Telnyx conversation id. The webhook logs it, forwards it to the actor, and the MCP server reads it from the tool call and forwards it too, so filtering logs by one trace_id rebuilds a whole call. For a signal beyond logs, the webhook and the MCP server post counters and latencies to a MetricsCounter actor — an actor because Edge scales to zero and KV would lose concurrent increments. metrics.py shows the live dashboard. On the platform side, telnyx-edge metrics gives status codes and p95 with no code at all.</aside>
 </section>
