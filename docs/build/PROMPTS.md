@@ -520,3 +520,44 @@ starts it with `npm start` and injects its own PORT, so a declared PORT could ov
 the live MCP server. Remove PORT (and its comment) from services/mcp-server/func.toml. Keep PORT in
 .env.example, commented as "local npm start only; Telnyx Edge injects its own; never declare it in
 func.toml". Make tests/check_env.py still pass. Change nothing else. Do not commit.
+
+## 22. Never more than 5 files in Cloud Storage: overwrite, never grow
+
+Hard account limit (owner, 2026-10-08): the flytlv-itineraries bucket may hold at most 5 objects,
+and the limit cannot be raised. Over the limit every put fails with
+`HTTP 400: TooManyObjects: You have exceeded the number of objects allowed for this bucket.`
+(seen live: `itinerary_write_failed`, `audit_write_failed`). Today the actor writes a new
+`itineraries/<uuid>.html` per caller+deal and one audit object per event, so the bucket fills up.
+Rule: the code only ever writes to a FIXED set of at most 5 keys and overwrites them.
+
+1. Itineraries: ITINERARY_SLOTS (default 4) fixed keys `itineraries/slot-<n>.html`. A caller always
+   maps to the same slot: n = a stable hash of the caller entity id modulo ITINERARY_SLOTS. Each
+   write overwrites that slot. Every write gets a fresh random token; the page's public link
+   becomes `/itineraries/<token>.html`; the facade needs to find the slot from the token, so store
+   `itin/<token>` -> slot number in the bucket object's own content? No: keep it simple and safe:
+   the link is `/itineraries/<slot>-<token>.html`, the HTML object stores its token (e.g. in a
+   leading `<!-- token:... -->` line or object metadata), and the facade serves the slot ONLY when
+   the token matches; otherwise 404. So an old link whose slot was overwritten by another caller
+   returns 404 and never shows someone else's trip. Validate `<slot>` (0..SLOTS-1) and `<token>`
+   (strict UUID regex) as today. Remove the per-deal itineraryKeys map.
+2. Audit: ONE object, `audit/latest.json`, overwritten. Add a singleton AuditLog Stateful Actor
+   (one instance, like MetricsCounter; same telnyx.toml pattern, shared-actor binding if the
+   MCP/actor side needs it) that keeps the last AUDIT_MAX_EVENTS (default 200) events in its own
+   storage (single-threaded, no lost events) and overwrites `audit/latest.json` after each append.
+   CallerSession sends its events (masked caller, never the full number) to AuditLog instead of
+   writing objects itself. AUDIT_ENABLED (default "true") turns it off. A failed audit write logs
+   ERROR with the stack and never fails the tool call. Total keys: 4 slots + 1 audit = 5.
+3. Guard: add a constant check (unit test) that ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS
+   (default 5), and refuse at startup (log ERROR, clamp slots) if config breaks it.
+4. scripts/ops/live_check.py: use ONE fixed test caller (LIVE_CHECK_CALLER, default a documented
+   fake number) so runs reuse the same slot; add checks that a save returns an itineraryUrl, that
+   GET on it returns 200, and that a made-up token on the same slot returns 404.
+5. Add scripts/ops/storage_check.py (read-only): list the bucket over the S3 API with the
+   TELNYX_API_KEY (sigv4, region from env) and fail if it holds more than STORAGE_MAX_OBJECTS or
+   any key outside the allowed set.
+6. Tests: update tests/check_itinerary.mts and tests/check_history.mts for slots, token match,
+   404 on mismatch, audit single object, AUDIT_ENABLED off. Declare every new variable in
+   .env.example and the toml files (check_env green). Document the limit and its log signature in
+   docs/design/DECISIONS.md, OBSERVABILITY.md and services/session-actor/README.md.
+
+Keep every test and self-check in tests/README.md green, ruff and typechecks clean. Do not commit.

@@ -503,6 +503,10 @@ function saveDealConfig(): Record<string, unknown> {
   if (smsFrom) cfg.smsFrom = smsFrom;
   const messagingProfileId = config.optional("MESSAGING_PROFILE_ID", "");
   if (messagingProfileId) cfg.messagingProfileId = messagingProfileId;
+  // Cloud Storage object limit (step 22): forwarded so the actor's slot
+  // computation and guard match the facade's (which reads its own env vars).
+  cfg.itinerarySlots = config.integer("ITINERARY_SLOTS", 4);
+  cfg.storageMaxObjects = config.integer("STORAGE_MAX_OBJECTS", 5);
   return cfg;
 }
 

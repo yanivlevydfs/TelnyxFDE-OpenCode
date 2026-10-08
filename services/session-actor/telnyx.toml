@@ -28,6 +28,15 @@ type    = "CallerSession"
 binding = "METRICS"
 type    = "MetricsCounter"
 
+# Singleton audit-trail actor (step 22). One instance named "global" keeps
+# the last AUDIT_MAX_EVENTS events in its own storage (single-threaded, no
+# lost events) and overwrites the single object `audit/latest.json` in the
+# ITINERARIES bucket. CallerSession sends events here through `env.AUDIT_LOG`.
+# Total bucket keys: ITINERARY_SLOTS (default 4) itinerary slots + 1 audit = 5.
+[[actors]]
+binding = "AUDIT_LOG"
+type    = "AuditLog"
+
 # Pre-authenticated Telnyx SDK client. `env.TELNYX.messages.send(...)` is used
 # by `CallerSession.alarm()` to text the follow-up reminder to the caller; the
 # Messaging profile and sender come from [env_vars] below.
@@ -59,29 +68,37 @@ name    = "INTERNAL_API_TOKEN"   # the key stored with `telnyx-edge secrets add`
 #   MAX_SAVED_DEALS             saved deals kept per caller (default 50)
 # Itinerary + reminder (added step 7):
 #   ITINERARY_BASE_URL          public prefix for itinerary pages (served by
-#                               this function at /itineraries/<uuid>.html).
+#                               this function at /itineraries/<slot>-<token>.html).
 #   REMINDER_DELAY_SECONDS      delay before the follow-up SMS fires (default 600).
 #   SMS_FROM                    alphanumeric Telnyx messaging sender id.
 #   MESSAGING_PROFILE_ID        Telnyx messaging profile for the reminder SMS.
-# History + audit (added step 20):
-#   AUDIT_PREFIX                Cloud Storage key prefix for audit objects
-#                               (default "audit/"); reads via process.env
-#                               (defaults in production — see AGENTS.md live
-#                               finding, decision #28).
+# History (added step 20):
 #   SEARCH_HISTORY_MAX          entries kept in the per-caller searchHistory
 #                               timeline (default 50, oldest dropped).
+# Cloud Storage object limit (added step 22):
+#   ITINERARY_SLOTS             fixed itinerary slot keys (default 4); a caller
+#                               maps to slot = stableHash(entityId) mod SLOTS.
+#   STORAGE_MAX_OBJECTS         hard bucket object limit (default 5). Guard:
+#                               ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS.
+#   AUDIT_ENABLED               "false" turns off audit writes (default true).
+#   AUDIT_MAX_EVENTS            events kept by the AuditLog actor in storage
+#                               and written to audit/latest.json (default 200).
+#   AUDIT_PREFIX                legacy — kept for compatibility; audit now
+#                               writes one object `audit/latest.json`
+#                               (step 22) instead of per-event keys.
 #
 # ***Live finding (step 11, 7 Oct 08:52 UTC):*** these `[env_vars]` do NOT reach
 # actor instances' `process.env` in production (logs showed
 # `itinerary_skipped reason=noITINERARY_BASE_URL`). The bound
-# `[storage.cloudstorage.ITINERARIES]` bucket DOES reach the actor, but the
-# umbrella `telnyx.toml [env_vars]` are not honoured by the actor runtime.
-# (The MCP `func.toml [env_vars]` for `fde-mcp` ARE honoured — verified live —
-# so the MCP server forwards the four itinerary/reminder values on every
-# `saveDeal` call in `config`, and `CallerSession.saveDeal` resolves
-# `config.X ?? process.env.X`.) The entries below stay as the source of truth
-# for unit tests, local dev, and as the fallback path once the platform
-# honours the actor umbrella.
+# `[storage.cloudstorage.ITINERARIES]` bucket DOES reach the actor, and actor
+# bindings ([[actors]] AUDIT_LOG) DO reach actor instances, so CallerSession
+# can call the AuditLog actor directly. But the umbrella `telnyx.toml
+# [env_vars]` are not honoured by the actor runtime. (The MCP `func.toml
+# [env_vars]` for `fde-mcp` ARE honoured — verified live — so the MCP server
+# forwards the itinerary/reminder/slot values on every `saveDeal` call in
+# `config`, and `CallerSession.saveDeal` resolves `config.X ?? process.env.X`.)
+# The entries below stay as the source of truth for unit tests, local dev, and
+# as the fallback path once the platform honours the actor umbrella.
 [env_vars]
 ITINERARY_BASE_URL     = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
 REMINDER_DELAY_SECONDS = "600"
@@ -91,14 +108,23 @@ MESSAGING_PROFILE_ID  = "4001a112-28fd-40f5-a0de-226b1bad6b80"
 # unit-test / local-dev source of truth and as the fallback once the platform
 # honours the actor umbrella — see the live-finding comment above). NOTE: in
 # production these do NOT reach actor instances' process.env, so they have no
-# effect there; the MCP server forwards the four values above on every
-# saveDeal call, and the actor resolves config.X ?? process.env.X.
+# effect there; the MCP server forwards the values above on every saveDeal
+# call, and the actor resolves config.X ?? process.env.X.
 LOG_LEVEL             = "INFO"
 LOG_TIMEZONE          = "Asia/Jerusalem"
 TRACE_HEADER          = "x-trace-id"
 MAX_SAVED_DEALS       = "50"
 AUDIT_PREFIX          = "audit/"
 SEARCH_HISTORY_MAX    = "50"
+# Cloud Storage object limit (step 22). The flytlv-itineraries bucket may
+# hold at most STORAGE_MAX_OBJECTS (5) objects; the code writes a fixed set
+# of ITINERARY_SLOTS (4) slot keys + 1 audit key = 5, all overwritten.
+ITINERARY_SLOTS       = "4"
+STORAGE_MAX_OBJECTS   = "5"
+# Audit toggle + buffer size. AUDIT_ENABLED=false stops sending events to
+# the AuditLog actor (history is still kept in actor storage).
+AUDIT_ENABLED         = "true"
+AUDIT_MAX_EVENTS      = "200"
 
 # Function identity, written by `telnyx-edge new-func --actor` (ship requires it).
 [edge_compute]

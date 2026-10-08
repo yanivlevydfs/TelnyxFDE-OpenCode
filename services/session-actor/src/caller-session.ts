@@ -34,12 +34,11 @@
 
 import { randomUUID } from "node:crypto";
 
-import { log, localIso, mask } from "./log.js";
+import { log, mask } from "./log.js";
 import {
   StatefulActor,
   type AlarmInfo,
   type CloudStorageBucket,
-  type CloudStorageObjectBody,
   type Env,
 } from "@telnyx/edge-runtime";
 
@@ -96,12 +95,18 @@ export class ActorInputError extends Error {
 const K_CALL_COUNT = "callCount";
 const K_LAST_RESULTS = "lastResults";
 const K_SAVED_DEALS = "savedDeals";
-/** map<dealId, itinerary storage key> — re-saving a deal reuses its file. */
-const K_ITINERARY_KEYS = "itineraryKeys";
 /** Pending follow-up reminder consumed by `alarm()`. */
 const K_PENDING_REMINDER = "pendingReminder";
 /** Per-caller timeline of search + save events (capped by SEARCH_HISTORY_MAX). */
 const K_SEARCH_HISTORY = "searchHistory";
+
+/** Hard account limit on the `flytlv-itineraries` bucket (owner, 2026-10-08):
+ * the bucket may hold at most `STORAGE_MAX_OBJECTS` (env, default 5) objects
+ * and the limit cannot be raised. The code only ever writes to a FIXED set
+ * of at most 5 keys and overwrites them: `ITINERARY_SLOTS` (default 4) slot
+ * keys (`itineraries/slot-<n>.html`) + one audit key (`audit/latest.json`). */
+const DEFAULT_SLOTS = 4;
+const DEFAULT_MAX_OBJECTS = 5;
 
 /**
  * One entry in the caller's history timeline. `search` entries come from
@@ -146,7 +151,7 @@ function isDeal(v: unknown): v is Deal {
  * `src/index.ts`'s dispatch can type the `saveDeal` body.
  */
 export interface SaveDealConfig {
-  /** Public prefix for itinerary pages: `${itineraryBaseUrl}/itineraries/<uuid>.html`. */
+  /** Public prefix for itinerary pages: `${itineraryBaseUrl}/itineraries/<slot>-<token>.html`. */
   itineraryBaseUrl?: string;
   /** Delay before the follow-up reminder SMS fires, in seconds (positive). */
   reminderDelaySeconds?: number;
@@ -154,6 +159,13 @@ export interface SaveDealConfig {
   smsFrom?: string;
   /** Telnyx messaging profile id, captured for `alarm()`. */
   messagingProfileId?: string;
+  /** Number of fixed itinerary slot keys (env `ITINERARY_SLOTS`, default 4).
+   * Forwarded by the MCP server because the actor's umbrella env vars do not
+   * reach actor instances (live finding, step 11). */
+  itinerarySlots?: number;
+  /** Hard bucket object limit (env `STORAGE_MAX_OBJECTS`, default 5). Used
+   * by the guard `slots + 1 <= maxObjects`; forwarded like `itinerarySlots`. */
+  storageMaxObjects?: number;
 }
 
 /** Resolved string config value: `cfg` (when a non-empty trimmed string),
@@ -192,6 +204,57 @@ function pickPositiveNumber(v: unknown, name: string, def: number): number {
   return def;
 }
 
+/** Resolved positive integer: `cfg` (when a finite positive number), else
+ * `process.env[name]` parsed as an integer (when finite & positive), else
+ * `def`. Same as `pickPositiveNumber` but floors to an integer — used for
+ * the slot/object-count config. */
+function pickPositiveInt(v: unknown, name: string, def: number): number {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return Math.floor(v);
+  const envval = process.env[name];
+  if (typeof envval === "string") {
+    const s = envval.trim();
+    if (s) {
+      const n = Number(s);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+  }
+  return def;
+}
+
+/** Stable hash of the caller entity id → slot number (0..slots-1). The same
+ * caller always maps to the same slot so its itinerary writes overwrite the
+ * same fixed key. A 32-bit multiply-and-add FNV-style hash keeps the
+ * distribution even across a small number of slots. */
+export function slotFor(callerId: string, slots: number): number {
+  let h = 0;
+  for (let i = 0; i < callerId.length; i++) {
+    h = (Math.imul(h, 31) + callerId.charCodeAt(i)) >>> 0;
+  }
+  return slots > 0 ? h % slots : 0;
+}
+
+/** Resolved number of itinerary slots. Reads `cfg?.itinerarySlots` then
+ * `process.env.ITINERARY_SLOTS`, default 4. Guard (step 22): if
+ * `slots + 1 > STORAGE_MAX_OBJECTS`, log `ERROR` and clamp to
+ * `maxObjects - 1` so the fixed-key set never exceeds the bucket limit.
+ * The MCP server forwards both values in `config` because the actor's
+ * umbrella env vars do not reach actor instances. */
+function resolveSlots(cfg?: SaveDealConfig): number {
+  let slots = pickPositiveInt(cfg?.itinerarySlots, "ITINERARY_SLOTS", DEFAULT_SLOTS);
+  const maxObjects = pickPositiveInt(
+    cfg?.storageMaxObjects, "STORAGE_MAX_OBJECTS", DEFAULT_MAX_OBJECTS,
+  );
+  if (slots + 1 > maxObjects) {
+    log("ERROR", "config.clamp_slots", {
+      requested: slots,
+      maxObjects,
+      clamped: Math.max(0, maxObjects - 1),
+    });
+    slots = Math.max(0, maxObjects - 1);
+  }
+  return slots;
+}
+
 /** Map a caller id (actor id = digits) for the audit trail: `***` + last 4
  * digits — reuses the shared `mask` helper from `log.ts` (the same mask used
  * on every log line). The full phone number is never written to Cloud Storage. */
@@ -199,14 +262,13 @@ function maskCaller(id: string): string {
   return mask(id);
 }
 
-/** Audit Cloud Storage key prefix (env `AUDIT_PREFIX`, default "audit/").
- * In production the actor's umbrella `[env_vars]` do not reach actor instances
- * (live finding, step 11), so this defaults to "audit/" there; the bucket
- * binding (`env.ITINERARIES`) does reach the actor, so writes still happen. */
-function auditPrefix(): string {
-  const v = process.env.AUDIT_PREFIX;
-  if (typeof v === "string" && v.trim()) return v.trim().replace(/\/?$/, "/");
-  return "audit/";
+/** Whether audit is enabled (env `AUDIT_ENABLED`, default true). Set to
+ * "false" to turn off audit writes entirely — events are still recorded in
+ * the per-caller `searchHistory`, just not sent to the AuditLog actor. */
+function auditEnabled(): boolean {
+  const v = process.env.AUDIT_ENABLED;
+  if (v === undefined) return true;
+  return v.trim().toLowerCase() !== "false";
 }
 
 /** Max entries kept in `searchHistory` (env `SEARCH_HISTORY_MAX`, default 50).
@@ -235,14 +297,26 @@ interface TelnyxMessages {
   };
 }
 
+/** Minimal stub shape for the `AUDIT_LOG` actor binding (a singleton
+ * `AuditLog` Stateful Actor, one "global" instance per the step-22 spec).
+ * We declare a structural type here to avoid importing the AuditLog class
+ * into caller-session.ts (which would create a circular import, since
+ * audit-log.ts imports `HistoryEntry` from this file). */
+interface AuditLogStub {
+  append(input: { event: HistoryEntry; caller: string }): Promise<{ ok: true }>;
+}
+
 /** Bindings declared for this actor in `telnyx.toml`:
  *   - `TELNYX`      — pre-authenticated Telnyx SDK client (`[telnyx] binding`)
  *                     used by `alarm()` to send the follow-up SMS.
  *   - `ITINERARIES` — Cloud Storage bucket for itinerary HTML files
- *                     (`[storage.cloudstorage.ITINERARIES]`). */
+ *                     (`[storage.cloudstorage.ITINERARIES]`).
+ *   - `AUDIT_LOG`   — singleton audit-trail actor (`[[actors]] AUDIT_LOG`)
+ *                     that buffers events and overwrites `audit/latest.json`. */
 export interface SessionActorEnv extends Env {
   TELNYX?: TelnyxMessages;
   ITINERARIES?: CloudStorageBucket;
+  AUDIT_LOG?: { idFromName(name: string): AuditLogStub };
 }
 
 /** Pending reminder written by `saveDeal` and consumed by `alarm()`. */
@@ -448,13 +522,24 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
 
   /**
    * Render the itinerary page for `deal`, `put` it into `env.ITINERARIES`
-   * (reusing the existing key for this `dealId`), record the pending
-   * reminder and arm the alarm. All best-effort: returns `undefined` when
-   * any prerequisite is missing or fails, so a save never breaks.
+   * under the caller's fixed slot key (`itineraries/slot-<n>.html`,
+   * overwriting any previous content), record the pending reminder and arm
+   * the alarm. Every write gets a fresh random token; the public link is
+   * `/itineraries/<n>-<token>.html` and the HTML stores the token in a
+   * leading `<!-- token:... -->` comment. The facade serves the slot only
+   * when the token matches — an old link whose slot was overwritten by
+   * another caller returns 404 and never shows someone else's trip.
+   *
+   * Fixed-key design (step 22): the bucket is limited to `STORAGE_MAX_OBJECTS`
+   * (default 5). `ITINERARY_SLOTS` (default 4) fixed slot keys + the audit
+   * object = at most 5 keys, all overwritten in place.
+   *
+   * All best-effort: returns `undefined` when any prerequisite is missing or
+   * fails, so a save never breaks.
    *
    * `cfg` is the per-call config the MCP server forwards (live finding,
    * step 11). Each value is resolved as `cfg.X ?? process.env.X` (validated,
-   * bad ones ignored); the resolved `smsFrom` / `messagingProfileId` are
+   * bad ones ignored). The resolved `smsFrom` / `messagingProfileId` are
    * stored on the pending reminder so `alarm()` reads them back from storage
    * (it can no longer rely on `process.env` at fire time).
    *
@@ -479,17 +564,17 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
       return undefined;
     }
 
-    // reuse the existing storage key for this deal (one file per saved deal)
-    const map =
-      (await this.ctx.storage.get<Record<string, string>>(K_ITINERARY_KEYS)) ?? {};
-    let key = map[deal.dealId];
-    if (!key) {
-      key = `itineraries/${randomUUID()}.html`;
-      map[deal.dealId] = key;
-      await this.ctx.storage.put(K_ITINERARY_KEYS, map);
-    }
+    // Fixed slot key for this caller — overwrite, never grow (step 22).
+    const slots = resolveSlots(cfg);
+    const slot = slotFor(this.ctx.id, slots);
+    const key = `itineraries/slot-${slot}.html`;
+    // Fresh token per write. The facade serves the object only when the
+    // token in the URL matches the token stored in the HTML — so an old
+    // link whose slot was overwritten returns 404.
+    const token = randomUUID();
+    const html = `<!-- token:${token} -->\n${renderItinerary(deal)}`;
     try {
-      await bucket.put(key, renderItinerary(deal), {
+      await bucket.put(key, html, {
         httpMetadata: { contentType: "text/html; charset=utf-8" },
       });
     } catch (e) {
@@ -500,7 +585,7 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
       });
       return undefined;
     }
-    const itineraryUrl = `${baseUrl}/${key}`;
+    const itineraryUrl = `${baseUrl}/itineraries/${slot}-${token}.html`;
 
     // Resolve the reminder config once: per-call `config` first, then
     // `process.env` (validated). Captured into the pending reminder so the
@@ -577,40 +662,35 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
   }
 
   /**
-   * Write one immutable audit JSON object per event to the existing
-   * `env.ITINERARIES` Cloud Storage bucket under
-   * `${AUDIT_PREFIX}<YYYY-MM-DD>/<conversationId>/<ts>-<type>.json`. The
-   * object holds the event plus a **masked caller** (never the full number).
+   * Send one audit event to the singleton `AuditLog` Stateful Actor (via the
+   * `AUDIT_LOG` binding), which buffers events in its own storage and
+   * overwrites the single Cloud Storage object `audit/latest.json`.
    *
-   * Best-effort: a missing bucket logs a `WARNING` (audit skipped) and a
-   * failed write logs `ERROR` with the stack — neither ever fails the tool
-   * call. `alarm()` is untouched (per the step-20 spec).
+   * Step 22 replaces the per-event Cloud Storage write (which hit the
+   * 5-object bucket limit) with a single overwrite. The event carries a
+   * **masked caller** (never the full number) and is passed as-is to the
+   * AuditLog actor — `alarm()` is untouched.
+   *
+   * Best-effort: when audit is off (`AUDIT_ENABLED=false`), no binding, or
+   * the call fails, the message is skipped or logged — neither ever fails
+   * the tool call.
    */
   private async _writeAudit(entry: HistoryEntry): Promise<void> {
-    const bucket = this.env.ITINERARIES;
-    if (!bucket) {
+    if (!auditEnabled()) return;
+    const auditLog = this.env.AUDIT_LOG;
+    if (!auditLog) {
       log("WARNING", "audit_skipped", {
         entity: this.ctx.id,
         type: entry.type,
-        reason: "noITINERARIES",
+        reason: "noAUDIT_LOG",
       });
       return;
     }
     try {
-      const date = localIso().slice(0, 10); // YYYY-MM-DD in LOG_TIMEZONE
-      const conv = entry.conversationId || "unknown";
-      const key = `${auditPrefix()}${date}/${conv}/${entry.ts}-${entry.type}.json`;
-      const body = JSON.stringify({ ...entry, caller: maskCaller(this.ctx.id) });
-      await bucket.put(key, body, {
-        httpMetadata: { contentType: "application/json" },
-      });
-      log("INFO", "audit_written", {
-        entity: this.ctx.id,
-        type: entry.type,
-        key,
-      });
+      const stub = auditLog.idFromName("global");
+      await stub.append({ event: entry, caller: maskCaller(this.ctx.id) });
     } catch (e) {
-      // A failed audit write must never fail the tool call.
+      // A failed audit must never fail the tool call.
       log("ERROR", "audit_write_failed", {
         entity: this.ctx.id,
         type: entry.type,
