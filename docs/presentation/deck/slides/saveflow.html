@@ -48,7 +48,7 @@
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
-<p style="font-size:24px;color:#6B7685">9 / 18</p>
+<p style="font-size:24px;color:#6B7685">9 / 19</p>
 </div>
 <aside>When the caller saves a deal, the save_deal tool finds the caller through the KV session map and calls saveDeal on that caller's actor, with the config passed in. The actor writes the itinerary HTML page to Cloud Storage, stores a pending reminder, and sets an alarm. Later the alarm fires inside the same actor and sends the follow-up SMS through the TELNYX binding. One alarm per actor, so a newer save replaces the reminder. Alarms are delivered at least once, so alarm() always catches its own errors and logs them.</aside>
 </section>

@@ -17,7 +17,7 @@
 <p style="font-size:26px;color:#3D4A5C">Proof: 20 concurrent recordCall requests return counts 1 to 20, none lost (live, today).</p>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
-<p style="font-size:24px;color:#6B7685">11 / 18</p>
+<p style="font-size:24px;color:#6B7685">11 / 19</p>
 </div>
 <aside>The rule is: pick the cheapest primitive that is correct. KV wins for read-mostly flags, caches and the one-write session map — and the session map keeps the phone number out of the LLM's arguments. The actor wins for per-caller read-modify-write, because KV has no compare-and-set and concurrent calls would lose updates. That is proven by 20 concurrent recordCalls returning counts 1 to 20 with none lost. The itinerary lives in Cloud Storage because it is a file to serve, and the reminder lives in actor storage because the alarm is per actor instance.</aside>
 </section>

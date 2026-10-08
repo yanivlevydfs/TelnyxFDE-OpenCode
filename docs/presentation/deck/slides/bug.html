@@ -27,7 +27,7 @@
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
-<p style="font-size:24px;color:#6B7685">15 / 18</p>
+<p style="font-size:24px;color:#6B7685">16 / 19</p>
 </div>
 <aside>The value was set in the actor's umbrella telnyx.toml, but the logs proved the actor instance never saw it — while the Cloud Storage bucket binding did, and the MCP function's own env did. So the MCP server now forwards the values on every saveDeal call and the actor resolves config first, with process.env as a fallback. I also captured the SMS sender into the pending reminder so the alarm turn does not depend on process.env either. A check_itinerary.mts case with no process.env proves the passed config works end to end.</aside>
 </section>
