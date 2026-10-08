@@ -1,0 +1,32 @@
+<section id="edges" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Edges</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Facts route by expression. Intent routes by LLM.</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:32px">
+<p style="font-size:72px;font-weight:700;line-height:1.1;color:#0B7A55">3</p>
+<h3 style="font-size:32px;font-weight:600">expression edges</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Deterministic facts, checked before the model turn.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:32px">
+<p style="font-size:72px;font-weight:700;line-height:1.1;color:#14213D">19</p>
+<h3 style="font-size:32px;font-weight:600">LLM edges</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Intent routing, where the caller's words vary.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:32px">
+<p style="font-size:72px;font-weight:700;line-height:1.1;color:#6B7685">4</p>
+<h3 style="font-size:32px;font-weight:600">default edges</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">One per speak node, enforced by validate().</p>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#0F1B2D;border-radius:16px;padding:32px 40px">
+<p style="font-size:24px;color:#BFC8D4">At identify_intent, declaration order is priority order:</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;line-height:1.6;color:#F5F6F2">1  backend_degraded == "true"  → degraded_notice<br>2  flag_deals_enabled == "false"  → deals_disabled<br>3  telnyx_conversation_duration_secs >= 600  → timeout_escalate</p>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">5 / 13</p>
+</div>
+<aside>26 edges in total. Expression edges are deterministic facts that must never depend on model judgement, so they are evaluated before the model turn — a degraded backend routes to a scripted notice automatically. LLM edges handle intent, where the caller's words vary. Every speak node has exactly one default edge, which validate() enforces. Declaration order is priority order, so expression edges win over LLM edges at the identify_intent hub.</aside>
+</section>

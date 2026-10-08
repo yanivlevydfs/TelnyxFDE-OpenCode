@@ -1,0 +1,26 @@
+<section id="cover" data-transition="fade" style="background:#0F1B2D;color:#F5F6F2;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:space-between;gap:48px">
+<div style="display:flex;flex-direction:column;gap:32px">
+<p style="font-size:28px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#00A36C">Telnyx FDE challenge · walkthrough</p>
+<h1 style="font-size:120px;font-weight:700;line-height:1.05;color:#F5F6F2">FlyTLV Travel Line</h1>
+<p style="font-size:44px;line-height:1.3;color:#BFC8D4;max-width:1300px">Call a number, ask for cheap flights from Tel Aviv, save a deal, and be remembered on the next call.</p>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px 64px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<p style="font-size:24px;color:#8C99AB">Phone (regulatory approval pending)</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:32px;color:#F5F6F2">+972 76 567 1113</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<p style="font-size:24px;color:#8C99AB">Webhook (Edge Function)</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;color:#F5F6F2">fde-webhook-e5907143-e.telnyxcompute.com</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<p style="font-size:24px;color:#8C99AB">MCP server (Edge Function)</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;color:#F5F6F2">fde-mcp-bc3393fa-a.telnyxcompute.com</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<p style="font-size:24px;color:#8C99AB">Session actor (Stateful Actor)</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;color:#F5F6F2">fde-session-actor-94b99eb9-4.telnyxcompute.com</p>
+</div>
+</div>
+<aside>A caller dials the line, asks for cheap flights from Tel Aviv, hears the best deals from the live flytlv.app feed, can save one, and on the next call hears "welcome back, last time you saved Larnaca, 64 dollars." The phone number is bought and linked but Telnyx regulatory approval is still pending, so the live demo may use the Portal call tester. Three Edge services are live: the webhook, the MCP server, and the session actor.</aside>
+</section>

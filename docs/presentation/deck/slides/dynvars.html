@@ -1,0 +1,31 @@
+<section id="dynvars" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Dynamic Webhook Variables</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">One call-start webhook changes the greeting and the route</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
+<div style="display:flex;flex-direction:column;gap:20px;background:#0F1B2D;border-radius:16px;padding:40px">
+<p style="font-size:24px;color:#BFC8D4">Returned (strings only)</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;line-height:1.7;color:#F5F6F2">caller_known<br>call_count<br>saved_count<br>last_saved_deal<br>backend_degraded<br>flag_&lt;name&gt;</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">Personalises</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">"Welcome back, last time you saved Larnaca for 64 dollars."</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">Routes</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">backend_degraded and flag_deals_enabled drive the expression edges.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">Stays fast</h3>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Platform default 1.5 s; assistant set to 8000 ms; webhook budget 2500 ms.</p>
+</div>
+</div>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">7 / 13</p>
+</div>
+<aside>The webhook overrides the assistant's default variables at call start; if it fails entirely the defaults keep expression edges from comparing against raw placeholders. The 1.5 second platform default is too tight for a cold Edge start, so the assistant timeout is 8000 ms and the webhook keeps an internal 2500 ms parallel budget — the session write even runs after the response. On any actor or KV failure it returns backend_degraded=true, which routes the call to a scripted notice instead of reading placeholders on air.</aside>
+</section>

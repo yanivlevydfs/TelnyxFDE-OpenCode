@@ -1,0 +1,35 @@
+<section id="mcp" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">MCP server</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Four tools, each backed by the caller's actor</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:24px">
+<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#0B7A55">search_deals</p>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">KV cache, then flytlv. Stores results on the actor.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#0B7A55">save_deal</p>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Actor saveDeal: itinerary page and reminder alarm.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#0B7A55">list_saved_deals</p>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Actor getSaved: reads back what the caller kept.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:28px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#0B7A55">send_deal_sms</p>
+<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Texts a saved deal. Off when sms_enabled is false.</p>
+</div>
+</div>
+<ul style="font-size:30px;line-height:1.5;color:#14213D;display:flex;flex-direction:column;gap:8px">
+<li>Official @modelcontextprotocol/sdk, a fresh stateless transport per request.</li>
+<li>Bearer MCP_API_KEY checked before the transport runs.</li>
+<li>Failures return isError: true with a caller-friendly message, never a traceback.</li>
+<li>MCP tools can't be scoped per node, so each node's text names its one tool.</li>
+</ul>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">6 / 13</p>
+</div>
+<aside>MCP tools cannot be scoped per workflow node — only shared tools can — so all four are visible at every prompt node, and each node's instructions name the one to call; the server enforces safety itself. We use the official SDK with a fresh stateless StreamableHTTPServerTransport per request, since Edge has no request lifespan. Tool failures return isError:true with a caller-friendly message, never a traceback or URL. The conversation id arrives in params._meta.telnyx_conversation_id, and the server maps it to the caller through KV, so the phone number is never an LLM argument.</aside>
+</section>
