@@ -1,0 +1,49 @@
+<section id="trace" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Tracing and metrics</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">One trace_id per call; counters in an Actor</h2>
+<p style="position:absolute;left:128px;top:258px;width:1664px;font-size:24px;font-weight:600;color:#0B7A55">Trace: trace_id = the conversation id, on every log line</p>
+<p style="position:absolute;left:128px;top:558px;width:1664px;font-size:24px;font-weight:600;color:#0B7A55">Metrics: a signal beyond logs</p>
+<x-connector x1="468" y1="375" x2="569" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="909" y1="375" x2="1010" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1451" y1="375" x2="1350" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="468" y1="675" x2="569" y2="675" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="909" y1="675" x2="1010" y2="675" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<div style="position:absolute;left:128px;top:300px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#0F1B2D;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600;color:#F5F6F2">AI Assistant</p>
+<p style="font-size:24px;line-height:1.3;color:#BFC8D4">sends the conversation id</p>
+</div>
+<div style="position:absolute;left:569px;top:300px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600">webhook</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#3D4A5C">webhook.request</p>
+</div>
+<div style="position:absolute;left:1010px;top:300px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600">session-actor</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#3D4A5C">actor.request</p>
+</div>
+<div style="position:absolute;left:1451px;top:300px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600">mcp-server</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#3D4A5C">mcp.request</p>
+</div>
+<p style="position:absolute;left:128px;top:470px;width:1664px;font-size:24px;color:#3D4A5C">Each line is JSON with level, event, trace_id and duration_ms, so one call can be rebuilt across all three services.</p>
+<div style="position:absolute;left:128px;top:600px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600">webhook, mcp-server</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#3D4A5C">POST /metrics/add</p>
+</div>
+<div style="position:absolute;left:569px;top:600px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px;padding:24px">
+<p style="font-size:26px;font-weight:600">MetricsCounter Actor</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">counters and latency, none lost</p>
+</div>
+<div style="position:absolute;left:1010px;top:600px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:24px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600">metrics.py</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">live dashboard; --reset before a demo</p>
+</div>
+<div style="position:absolute;left:1451px;top:600px;width:340px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px dashed #C9CFC6;border-radius:12px;padding:24px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;font-weight:600">telnyx-edge metrics</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">platform side: 2xx/4xx/5xx, p95</p>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">14 / 18</p>
+</div>
+<aside>The trace id is the Telnyx conversation id. The webhook logs it, forwards it to the actor, and the MCP server reads it from the tool call and forwards it too, so filtering logs by one trace_id rebuilds a whole call. For a signal beyond logs, the webhook and the MCP server post counters and latencies to a MetricsCounter actor — an actor because Edge scales to zero and KV would lose concurrent increments. metrics.py shows the live dashboard. On the platform side, telnyx-edge metrics gives status codes and p95 with no code at all.</aside>
+</section>
