@@ -483,3 +483,40 @@ test_assistant.py without editing existing tests (else a new tests/check_insight
 test and self-check listed in tests/README.md and keep them all green. Update READMEs
 (session-actor, mcp-server, scripts, assistant) and docs/design/DECISIONS.md with one decision row
 ("history in the actor, audit in Cloud Storage, insights in Telnyx; not KV"). Do not commit.
+
+## 21. Every setting lives in the environment
+
+Owner rule 3 ("nothing hardcoded") audit, 2026-10-08. Code reads these variables but they are not
+declared in .env.example, any func.toml [env_vars] or services/session-actor/telnyx.toml:
+ASSISTANT_PHONE_NUMBER AUDIT_PREFIX DEALS_BROAD_FETCH_LIMIT FLAGS_CACHE_SECS FLYTLV_FLIGHTS_PATH
+HANGUP_TOOL_ID HANGUP_TOOL_NAME INSIGHT_GROUP_ID INSIGHT_GROUP_NAME MAX_SAVED_DEALS PORT
+SEARCH_HISTORY_MAX. Do NOT read or print .env (it holds secrets); work from .env.example.
+
+1. .env.example lists EVERY environment variable any Python or TypeScript file in this repo reads
+   (services, shared, assistant, scripts), grouped by component, each with its current default
+   value (or empty for secrets) and a one-line comment. Secrets are marked "secret: set with
+   telnyx-edge secrets add" and never get a value.
+2. Each service's own config declares the non-secret variables it reads: services/webhook/func.toml
+   and services/mcp-server/func.toml [env_vars], services/session-actor/telnyx.toml (keep the
+   existing comment that actor instances do not see umbrella env_vars). Same defaults as the code.
+3. Local runs load .env automatically: add one small helper in shared/common.py that reads the
+   repo-root .env (KEY=VALUE lines, # comments, optional quotes) into os.environ WITHOUT
+   overriding variables already set, and call it at the start of every scripts/ops/*.py and
+   assistant/provision.py. Never call it on Telnyx Edge (the webhook must not use it).
+4. Guard: add tests/check_env.py (pytest) that scans the repo's .py and .ts sources (not .venv,
+   node_modules, reference/) for environment variable reads and fails, naming the variable,
+   when one is missing from .env.example. List it in tests/README.md.
+5. Prompt and speak-node text, tool names, storage key names and regexes are code/content, not
+   settings: leave them in code.
+
+Keep every test and self-check in tests/README.md green, ruff clean, typechecks clean. Update
+README setup notes (".env is loaded automatically by local scripts"). Do not commit.
+
+### 21b. Fix: PORT must not be in func.toml
+
+Review of step 21: services/mcp-server/func.toml now sets `PORT = "8080"` with a comment saying it
+has no effect on Edge. That is wrong: src/index.ts always listens on `process.env.PORT`, and Edge
+starts it with `npm start` and injects its own PORT, so a declared PORT could override it and break
+the live MCP server. Remove PORT (and its comment) from services/mcp-server/func.toml. Keep PORT in
+.env.example, commented as "local npm start only; Telnyx Edge injects its own; never declare it in
+func.toml". Make tests/check_env.py still pass. Change nothing else. Do not commit.

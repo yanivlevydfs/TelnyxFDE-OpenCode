@@ -1,8 +1,11 @@
 # Scripts
 
 Run from the repo root with the project virtualenv; the `ops/` scripts read the
-values in `.env` (see [.env.example](../.env.example)). Every script logs through
-the shared JSON logger (`info` / `debug` / `warning` / `error`, Israel-time `ts`).
+values in `.env` (see [.env.example](../.env.example)) — they load it
+automatically at start-up via `shared/common.load_env()` (without overriding
+anything the shell already set), so you do not need to `source` it. Every
+script logs through the shared JSON logger (`info` / `debug` / `warning` /
+`error`, Israel-time `ts`).
 
 ## build/ — before testing or shipping
 

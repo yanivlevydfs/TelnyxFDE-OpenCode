@@ -82,3 +82,23 @@ MESSAGING_PROFILE_ID = "4001a112-28fd-40f5-a0de-226b1bad6b80"  # profile flytlv-
 # fallback for unit tests / local dev).
 ITINERARY_BASE_URL = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
 REMINDER_DELAY_SECONDS = "600"
+
+# FlyTLV feed endpoints + request shape.
+FLYTLV_FLIGHTS_PATH = "/api/private/flights"  # one-way feed (round trips use FLYTLV_DEALS_PATH)
+
+# Search sizing. A "broad" search (country / category / weekend / discount) fetches
+# every destination's best deal; DEALS_BROAD_FETCH_LIMIT caps it, falling back to
+# DEALS_COUNTRY_FETCH_LIMIT when unset.
+DEALS_BROAD_FETCH_LIMIT = "300"
+DEALS_COUNTRY_FETCH_LIMIT = "300"
+
+# Caller-side filtering knobs (best-effort; the flytlv feed ignores most).
+CALLER_TIMEZONE = "Asia/Jerusalem"  # weekend date computation + departure cutoff tz
+MIN_HOURS_BEFORE_DEPARTURE = "3"     # hide flights leaving sooner than this
+
+# KV flags key (best-effort SMS enable flag; same value as the webhook).
+KV_FLAGS_KEY = "flags/assistant"
+
+# Logging timezone (LOG_LEVEL is already declared above; LOG_TIMEZONE is read
+# directly via process.env by src/log.ts).
+LOG_TIMEZONE = "Asia/Jerusalem"

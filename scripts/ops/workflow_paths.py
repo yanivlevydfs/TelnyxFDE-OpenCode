@@ -36,6 +36,10 @@ import common as c  # shared JSON logger: info / debug / warning / error
 import flow
 import provision
 
+# Local convenience: load the repo-root .env (without overriding anything the
+# shell already set). No-op on Telnyx Edge — this file never runs there.
+c.load_env()
+
 E = dict(os.environ)
 
 

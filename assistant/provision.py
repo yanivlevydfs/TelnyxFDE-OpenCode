@@ -473,6 +473,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_arg_parser().parse_args(argv)
+    # Local convenience: load the repo-root .env (without overriding anything
+    # the shell already set). No-op on Telnyx Edge. Tests import this module
+    # without calling main(), so this never runs during the test suite.
+    c.load_env()
     env = dict(os.environ)
 
     if args.dry_run:

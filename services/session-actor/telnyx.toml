@@ -87,6 +87,18 @@ ITINERARY_BASE_URL     = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com
 REMINDER_DELAY_SECONDS = "600"
 SMS_FROM              = "FlyTLV"
 MESSAGING_PROFILE_ID  = "4001a112-28fd-40f5-a0de-226b1bad6b80"
+# Non-secret runtime knobs the actor reads via process.env (kept here as the
+# unit-test / local-dev source of truth and as the fallback once the platform
+# honours the actor umbrella — see the live-finding comment above). NOTE: in
+# production these do NOT reach actor instances' process.env, so they have no
+# effect there; the MCP server forwards the four values above on every
+# saveDeal call, and the actor resolves config.X ?? process.env.X.
+LOG_LEVEL             = "INFO"
+LOG_TIMEZONE          = "Asia/Jerusalem"
+TRACE_HEADER          = "x-trace-id"
+MAX_SAVED_DEALS       = "50"
+AUDIT_PREFIX          = "audit/"
+SEARCH_HISTORY_MAX    = "50"
 
 # Function identity, written by `telnyx-edge new-func --actor` (ship requires it).
 [edge_compute]

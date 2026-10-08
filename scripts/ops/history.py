@@ -40,6 +40,10 @@ import telnyx
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared"))  # scripts/ops/ -> repo root
 import common as c
 
+# Local convenience: load the repo-root .env (without overriding anything the
+# shell already set). No-op on Telnyx Edge — this file never runs there.
+c.load_env()
+
 
 def _report_tz() -> ZoneInfo:
     """Report timezone from LOG_TIMEZONE (default Asia/Jerusalem); UTC if unknown."""
