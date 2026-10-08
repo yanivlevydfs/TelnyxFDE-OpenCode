@@ -53,7 +53,7 @@ Caller id is the digits of the phone (matches `entity_id` in
 | `/actors/{callerId}/saveDeal` | `{dealId: string, config?: SaveDealConfig, conversationId?}` | `{callCount, savedCount, lastSaved, itineraryUrl?}` — also appends a `save` history entry + audit |
 | `/actors/{callerId}/getSaved` | *(ignored)* | `{savedCount: number, deals: Deal[]}` |
 | `/actors/{callerId}/getHistory` | *(ignored)* | `{history: HistoryEntry[]}` — the caller's bounded search/save timeline |
-| `GET /itineraries/<uuid>.html` | *(none)* | **no bearer** — random UUID is the capability; the HTML page from Cloud Storage (404 on bad id / missing object) |
+| `GET /itineraries/<slot>-<token>.html` | *(none)* | **no bearer** — `<slot>` is the caller's fixed key, `<token>` is the per-caller capability; the HTML page from Cloud Storage (404 on bad shape / slot out of range / missing object / token mismatch) |
 
 `recordCall` returns the **full profile** (callCount, savedCount, lastSaved) on
 purpose — the webhook builds `call_count`, `saved_count` and `last_saved_deal`
@@ -66,14 +66,23 @@ purpose — the webhook builds `call_count`, `saved_count` and `last_saved_deal`
   1. **Itinerary HTML in Cloud Storage.** Renders a small, mobile-friendly
      page (city, country, dates, airline, direct or stops, price + currency,
      booking link — every field HTML-escaped) and `put`s it into the
-     `ITINERARIES` Cloud Storage bucket under `itineraries/<uuid>.html` with
-     `httpMetadata.contentType = "text/html; charset=utf-8"`. A `<dealId → key>`
-     map is kept in actor storage so re-saving the same deal reuses its file.
+     `ITINERARIES` Cloud Storage bucket under the caller's fixed slot key
+     `itineraries/slot-<n>.html` with `httpMetadata.contentType =
+     "text/html; charset=utf-8"`. The caller maps to a stable slot via a
+     hash of the caller entity id modulo `ITINERARY_SLOTS` (step 22), so
+     the slot is overwritten in place and the bucket never grows past the
+     hard 5-object limit.
 
-     The public URL `${ITINERARY_BASE_URL}/itineraries/<uuid>.html` is added to
-     the returned profile as `itineraryUrl` and surfaced by the MCP
-     `save_deal` / `send_deal_sms` tools (the model can read it on the call
-     and the SMS text appends `Itinerary: <url>`).
+     The public URL `${ITINERARY_BASE_URL}/itineraries/<slot>-<token>.html`
+     is added to the returned profile as `itineraryUrl` and surfaced by the
+     MCP `save_deal` / `send_deal_sms` tools (the model can read it on the
+     call and the SMS text appends `Itinerary: <url>`). The token is **one
+     per caller** (step 22b): minted on the first save and stored in the
+     actor's storage, then reused on every later save, so a prior link —
+     already sent by SMS — keeps returning 200. Only a DIFFERENT caller
+     hashing to the same slot (overwriting the object with their own token)
+     breaks a link; the first caller's own token is kept, so their next
+     re-save revives their link.
 
   2. **Follow-up SMS via the actor's single alarm.** Stores
      `{dealId, itineraryUrl}` as the pending reminder and arms the alarm with
@@ -129,12 +138,16 @@ the source of truth for unit tests, local dev, and the fallback path once
 the platform honours the actor umbrella (see `docs/design/DECISIONS.md`
 #28).
 
-### `GET /itineraries/<uuid>.html`
+### `GET /itineraries/<slot>-<token>.html`
 
-A public route (no bearer — the random UUID in the URL is the capability).
-The id is validated with a strict UUID regex (404 otherwise). It streams the
-object straight out of `env.ITINERARIES` with its stored content type, so the
-bucket is the single source of truth the actor wrote.
+A public route (no bearer — the token in the URL is the capability). The
+`<slot>-<token>` shape is validated with a strict regex (404 otherwise),
+the slot is range-checked against `ITINERARY_SLOTS`, and the object is
+served from `env.ITINERARIES` only when the token stored in the HTML's
+leading `<!-- token:... -->` comment matches the URL token — so an old
+link whose slot was overwritten by another caller returns 404 and never
+shows someone else's trip. Because one caller reuses their token on every
+save (step 22b), their own link is stable across re-saves.
 
 ## Caller history + audit trail (step 20)
 

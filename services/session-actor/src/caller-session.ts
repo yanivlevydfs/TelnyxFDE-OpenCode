@@ -99,6 +99,10 @@ const K_SAVED_DEALS = "savedDeals";
 const K_PENDING_REMINDER = "pendingReminder";
 /** Per-caller timeline of search + save events (capped by SEARCH_HISTORY_MAX). */
 const K_SEARCH_HISTORY = "searchHistory";
+/** Per-caller itinerary token (step 22b): minted on the first save and reused
+ * on every later save, so a prior link (already sent by SMS) keeps working
+ * until a DIFFERENT caller hashes to the same slot and overwrites it. */
+const K_ITINERARY_TOKEN = "itineraryToken";
 
 /** Hard account limit on the `flytlv-itineraries` bucket (owner, 2026-10-08):
  * the bucket may hold at most `STORAGE_MAX_OBJECTS` (env, default 5) objects
@@ -524,15 +528,24 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    * Render the itinerary page for `deal`, `put` it into `env.ITINERARIES`
    * under the caller's fixed slot key (`itineraries/slot-<n>.html`,
    * overwriting any previous content), record the pending reminder and arm
-   * the alarm. Every write gets a fresh random token; the public link is
-   * `/itineraries/<n>-<token>.html` and the HTML stores the token in a
-   * leading `<!-- token:... -->` comment. The facade serves the slot only
-   * when the token matches — an old link whose slot was overwritten by
-   * another caller returns 404 and never shows someone else's trip.
+   * the alarm. The token is **per caller** (step 22b): minted on the first
+   * save and stored in the actor's storage, then reused on every later
+   * save so the link from a prior save (already sent by SMS) keeps
+   * returning 200. The public link is `/itineraries/<n>-<token>.html` and
+   * the HTML stores the token in a leading `<!-- token:... -->` comment.
+   * The facade serves the slot only when the token matches — an old link
+   * whose slot was overwritten by another caller returns 404 and never
+   * shows someone else's trip.
    *
    * Fixed-key design (step 22): the bucket is limited to `STORAGE_MAX_OBJECTS`
    * (default 5). `ITINERARY_SLOTS` (default 4) fixed slot keys + the audit
    * object = at most 5 keys, all overwritten in place.
+   *
+   * One token per caller (step 22b): before this, every save minted a fresh
+   * token, so a caller's second save silently broke the link from their
+   * first save (and the SMS already sent with it). The token now lives in
+   * actor storage and is only reminted when a different caller takes the
+   * same slot, overwriting the object with their own token.
    *
    * All best-effort: returns `undefined` when any prerequisite is missing or
    * fails, so a save never breaks.
@@ -568,10 +581,24 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
     const slots = resolveSlots(cfg);
     const slot = slotFor(this.ctx.id, slots);
     const key = `itineraries/slot-${slot}.html`;
-    // Fresh token per write. The facade serves the object only when the
-    // token in the URL matches the token stored in the HTML — so an old
-    // link whose slot was overwritten returns 404.
-    const token = randomUUID();
+
+    // One token per caller, minted on the first save and reused on every
+    // later save (step 22b). The token lives in the actor's storage so a
+    // re-save overwrites the SAME slot with the SAME token: the link from a
+    // prior save (already sent by SMS) keeps returning 200. A link only dies
+    // when a DIFFERENT caller hashes to the same slot and overwrites the
+    // object with their own token (tests/check_itinerary.mts). Before 22b
+    // every save minted a fresh token, so a caller's second save silently
+    // broke the link from their first save (and the SMS already sent).
+    let token = await this.ctx.storage.get<string>(K_ITINERARY_TOKEN);
+    if (typeof token !== "string" || token.length === 0) {
+      token = randomUUID();
+      await this.ctx.storage.put(K_ITINERARY_TOKEN, token);
+      log("INFO", "itinerary_token_minted", {
+        entity: this.ctx.id,
+        dealId: deal.dealId,
+      });
+    }
     const html = `<!-- token:${token} -->\n${renderItinerary(deal)}`;
     try {
       await bucket.put(key, html, {

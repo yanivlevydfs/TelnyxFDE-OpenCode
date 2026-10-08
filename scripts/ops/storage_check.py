@@ -14,9 +14,12 @@ Read-only: never writes or deletes anything.
 
     python scripts/ops/storage_check.py
 
-Needs the .env values: STORAGE_S3_ACCESS_KEY, STORAGE_S3_SECRET_KEY,
-STORAGE_S3_ENDPOINT, STORAGE_S3_REGION, STORAGE_BUCKET, and optionally
-ITINERARY_SLOTS (default 4), STORAGE_MAX_OBJECTS (default 5).
+    Needs the .env values: STORAGE_S3_ENDPOINT, STORAGE_S3_REGION, STORAGE_BUCKET
+    and TELNYX_API_KEY. Verified live (2026-10-08): sigv4 signing with the Telnyx
+    API key as BOTH the S3 access key and the secret key lists the bucket, so
+    TELNYX_API_KEY is the default for both. Set the optional STORAGE_S3_ACCESS_KEY
+    / STORAGE_S3_SECRET_KEY to override either one. Optionally ITINERARY_SLOTS
+    (default 4), STORAGE_MAX_OBJECTS (default 5).
 """
 
 from __future__ import annotations
@@ -157,17 +160,21 @@ def _list_bucket_keys(
 
 
 def main() -> int:
-    access_key = E.get("STORAGE_S3_ACCESS_KEY", "")
-    secret_key = E.get("STORAGE_S3_SECRET_KEY", "")
-    endpoint = E.get("STORAGE_S3_ENDPOINT", "https://telnyxcloudstorage.com")
+    # Credentials: the Telnyx API key works as BOTH the S3 access key and the
+    # secret key for sigv4 (verified live, 2026-10-08). STORAGE_S3_ACCESS_KEY /
+    # STORAGE_S3_SECRET_KEY are optional overrides (e.g. a dedicated S3 key).
+    telnyx_key = E.get("TELNYX_API_KEY", "")
+    access_key = E.get("STORAGE_S3_ACCESS_KEY", "") or telnyx_key
+    secret_key = E.get("STORAGE_S3_SECRET_KEY", "") or telnyx_key
     region = E.get("STORAGE_S3_REGION", "us-central-1")
+    endpoint = E.get("STORAGE_S3_ENDPOINT") or f"https://{region}.telnyxcloudstorage.com"
     bucket = E.get("STORAGE_BUCKET", "flytlv-itineraries")
     slots = int(E.get("ITINERARY_SLOTS", "4"))
     max_objects = int(E.get("STORAGE_MAX_OBJECTS", "5"))
 
     if not access_key or not secret_key:
         c.error("storage_check.missing_credentials",
-                   msg="Set STORAGE_S3_ACCESS_KEY and STORAGE_S3_SECRET_KEY")
+                    msg="Set TELNYX_API_KEY (or STORAGE_S3_ACCESS_KEY / STORAGE_S3_SECRET_KEY)")
         return 1
 
     try:

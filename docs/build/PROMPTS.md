@@ -561,3 +561,27 @@ Rule: the code only ever writes to a FIXED set of at most 5 keys and overwrites 
    docs/design/DECISIONS.md, OBSERVABILITY.md and services/session-actor/README.md.
 
 Keep every test and self-check in tests/README.md green, ruff and typechecks clean. Do not commit.
+
+### 22b. Fixes from the live run of step 22
+
+Live run after deploy (2026-10-08 18:57 UTC): writes now go to `itineraries/slot-1.html` and
+`audit/latest.json` (good), but:
+1. `GET itinerary URL returns 200` fails with 404. Cause: every saveDeal mints a NEW token, so the
+   same caller's second save overwrites their slot with a new token and the link from the first
+   save (already sent by SMS) dies. Fix: one token per caller, minted on the first save, stored in
+   the CallerSession actor's storage and reused on every later save; the slot file is overwritten
+   with the same token. A link only dies when a DIFFERENT caller takes the same slot. Update
+   tests/check_itinerary.mts: two saves by one caller keep the same URL and both GETs return 200;
+   another caller hashing to the same slot makes the first caller's link 404.
+2. scripts/ops/storage_check.py exits with "Set STORAGE_S3_ACCESS_KEY and STORAGE_S3_SECRET_KEY".
+   Use TELNYX_API_KEY as both access key and secret by default (verified live: sigv4 with the API
+   key lists the bucket); keep the two STORAGE_S3_* variables as optional overrides in .env.example.
+Keep every test and self-check in tests/README.md green, ruff and typechecks clean. Do not commit.
+
+### 22c. storage_check endpoint
+
+storage_check.py gets `S3 ListObjectsV2 returned 301` because the default STORAGE_S3_ENDPOINT
+`https://telnyxcloudstorage.com` is not regional. Verified live: `https://us-central-1.telnyxcloudstorage.com`
+works. Default the endpoint to `https://{STORAGE_S3_REGION}.telnyxcloudstorage.com` when
+STORAGE_S3_ENDPOINT is empty, and set the .env.example line to empty with that comment.
+Change nothing else. Keep check_env green. Do not commit.
