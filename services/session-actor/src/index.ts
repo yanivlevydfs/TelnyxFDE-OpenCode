@@ -162,10 +162,11 @@ async function route(req: Request, env: Env): Promise<Response> {
 
     // Public GET route for itinerary HTML files. The URL is
     // `/itineraries/<slot>-<token>.html`: the slot (0..ITINERARY_SLOTS-1) is
-    // the fixed key the caller maps to, and the token (a fresh UUID per
-    // write) is the capability. No bearer token required (AGENTS.md step 22):
-    // the slot part is validated against the range, and the facade serves the
-    // object only when the token stored in the HTML matches.
+    // the fixed key the caller maps to, and the token (one per caller,
+    // minted on the first save and reused on every later save — step 22b)
+    // is the capability. No bearer token required (AGENTS.md step 22):
+    // the slot part is validated against the range, and the facade serves
+    // the object only when the token stored in the HTML matches.
     if (req.method === "GET" && pathname.startsWith("/itineraries/")) {
       const m = pathname.match(
         /^\/itineraries\/(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/i,
@@ -314,12 +315,13 @@ async function internalTokenFor(env: Env): Promise<string | undefined> {
  * Serve one itinerary HTML file from `env.ITINERARIES` to the public
  * `GET /itineraries/<slot>-<token>.html` route. The slot (fixed key
  * `itineraries/slot-<slot>.html`) is the fixed key the caller maps to;
- * the token (a fresh UUID per write) is the capability. The facade reads
- * the object body, extracts the stored token from the leading
- * `<!-- token:... -->` comment, and serves the file ONLY when the URL
- * token matches — otherwise 404. So an old link whose slot was
- * overwritten by another caller returns 404 and never shows someone else's
- * trip (step 22). No bearer: the token is the capability.
+ * the token (one per caller, minted on the first save and reused on every
+ * later save — step 22b) is the capability. The facade reads the object
+ * body, extracts the stored token from the leading `<!-- token:... -->`
+ * comment, and serves the file ONLY when the URL token matches —
+ * otherwise 404. So an old link whose slot was overwritten by another
+ * caller returns 404 and never shows someone else's trip (step 22). No
+ * bearer: the token is the capability.
  */
 async function serveItinerary(
   env: Env,

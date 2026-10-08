@@ -2,13 +2,17 @@
 // (actor alarm). Run: cd services/session-actor && npm run check
 //
 // Fakes for ctx.storage (+ setAlarm/getAlarm/deleteAlarm), a Cloud Storage
-// bucket, and env.TELNYX (messages.send). Verifies the step-22 slot-token
+// bucket, and env.TELNYX (messages.send). Verifies the step-22b slot-token
 // design:
 //   - saveDeal writes to the caller's fixed slot (`itineraries/slot-<n>.html`)
 //     and returns a URL `/itineraries/<slot>-<token>.html`
-//   - re-save overwrites the same slot with a FRESH token (different URL,
-//     same slot key, same bucket object count)
-//   - an old token on the same slot returns 404 (token mismatch)
+//   - re-save by the SAME caller reuses the same slot AND the same token
+//     (same URL, same slot key, same bucket object count) — one token per
+//     caller, minted on the first save (step 22b)
+//   - both the first and the second URL GET 200 (the link already sent by
+//     SMS keeps working)
+//   - a DIFFERENT caller hashing to the same slot overwrites the object with
+//     their own token, so the first caller's link returns 404 (token mismatch)
 //   - alarm() sends exactly one SMS; a second alarm sends none
 //   - GET /itineraries/<slot>-<token>.html streams the HTML (200)
 //   - GET /itineraries/<bad-id>.html is 404 (regex + slot mismatch + missing
@@ -53,6 +57,18 @@ const deal = (id: string, city = "Larnaca", price = 64): Deal => ({
   direct: true,
   url: `https://flytlv.app/go?id=${id}`,
 });
+
+/** Find a digit-string caller id (not `target`) that hashes to the same
+ * slot as `target` under the actor's `slotFor`. Searches `0..100000`, which
+ * always finds a collision for a small slot count. */
+function findCollidingCaller(target: string, slots: number): string {
+  const want = slotFor(target, slots);
+  for (let n = 0; n < 100000; n++) {
+    const id = String(n);
+    if (id !== target && slotFor(id, slots) === want) return id;
+  }
+  throw new Error(`no colliding caller found for ${target} over ${slots} slots`);
+}
 
 /** In-memory ctx.storage plus a single alarm (setAlarm/getAlarm/deleteAlarm). */
 function fakeCtx(id = "97250") {
@@ -211,7 +227,7 @@ test("saveDeal writes one HTML object to the caller slot and returns a slot-toke
   assert.match(obj.body, /href="https:\/\/flytlv\.app\/go\?id=a"/);
 });
 
-test("re-save overwrites the same slot with a fresh token (new URL, same key, same count)", async () => {
+test("re-save by the same caller keeps the same URL (one token per caller, step 22b); both GETs return 200", async () => {
   const bucket = fakeBucket();
   const actor = new CallerSession(
     fakeCtx() as never,
@@ -222,10 +238,10 @@ test("re-save overwrites the same slot with a fresh token (new URL, same key, sa
   const second = await actor.saveDeal({ dealId: "a" });
   assert.ok(first.itineraryUrl);
   assert.ok(second.itineraryUrl);
-  assert.notEqual(
+  assert.equal(
     first.itineraryUrl,
     second.itineraryUrl,
-    "re-save returns a DIFFERENT URL (fresh token)",
+    "re-save returns the SAME URL (one token per caller, reused on every save)",
   );
   // Same slot in both URLs.
   const slot1 = Number(first.itineraryUrl!.split("/").pop()!.match(/^(\d+)-/)![1]);
@@ -236,16 +252,109 @@ test("re-save overwrites the same slot with a fresh token (new URL, same key, sa
     1,
     "still one itinerary object after re-save (overwrite, no grow)",
   );
-  // The first URL's token no longer matches (the object now has the second token).
+  // The stored token matches the (single) URL's token — not a fresh mint.
   const key = `itineraries/slot-${slot2}.html`;
   const body = bucket.objects.get(key)!.body;
   const storedToken = body.match(/^<!-- token:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) -->/)![1];
   const extractToken = (url: string) =>
     url.match(/-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/)![1];
-  const firstToken = extractToken(first.itineraryUrl!);
-  assert.notEqual(storedToken, firstToken, "the object's token is the second write's token, not the first");
-  const secondToken = extractToken(second.itineraryUrl!);
-  assert.equal(storedToken, secondToken, "the object's token matches the second URL");
+  assert.equal(storedToken, extractToken(first.itineraryUrl!), "the object's token is the reused token");
+  assert.equal(storedToken, extractToken(second.itineraryUrl!), "the object's token matches the second URL too");
+  // The link from the first save (already sent by SMS) still resolves — both
+  // GETs return 200 (the whole point of step 22b).
+  const env = envNoAudit(actor, bucket, fakeTelnyx());
+  assert.equal(
+    (await worker.fetch(new Request(first.itineraryUrl!), env)).status,
+    200,
+    "first URL still GETs 200 after a re-save by the same caller",
+  );
+  assert.equal(
+    (await worker.fetch(new Request(second.itineraryUrl!), env)).status,
+    200,
+    "second URL GETs 200",
+  );
+});
+
+test("a different caller hashing to the same slot makes the first caller's link 404 (step 22b)", async () => {
+  const slots = Number(process.env.ITINERARY_SLOTS ?? "4");
+  const firstId = "97250";
+  const otherId = findCollidingCaller(firstId, slots);
+  assert.notEqual(otherId, firstId, "found a different caller id");
+  assert.equal(slotFor(otherId, slots), slotFor(firstId, slots), "same slot");
+
+  const bucket = fakeBucket();
+  const telnyx = fakeTelnyx();
+
+  // First caller saves → their link works.
+  const actor1 = new CallerSession(
+    fakeCtx(firstId) as never,
+    { ITINERARIES: bucket, TELNYX: telnyx } as never,
+  );
+  await actor1.setLastResults({ deals: [deal("a")] });
+  const profile1 = await actor1.saveDeal({ dealId: "a" });
+  assert.ok(profile1.itineraryUrl);
+  const url1 = profile1.itineraryUrl!;
+  const env = envNoAudit(actor1, bucket, telnyx);
+  assert.equal((await worker.fetch(new Request(url1), env)).status, 200);
+
+  // A different caller hashing to the same slot overwrites the object with
+  // their own token (minted for them on their first save).
+  const actor2 = new CallerSession(
+    fakeCtx(otherId) as never,
+    { ITINERARIES: bucket, TELNYX: telnyx } as never,
+  );
+  await actor2.setLastResults({ deals: [deal("b", "Rhodes", 70)] });
+  const profile2 = await actor2.saveDeal({ dealId: "b" });
+  assert.ok(profile2.itineraryUrl);
+  const url2 = profile2.itineraryUrl!;
+  // Same slot, different token → different URL.
+  assert.equal(
+    Number(url1.split("/").pop()!.match(/^(\d+)-/)![1]),
+    Number(url2.split("/").pop()!.match(/^(\d+)-/)![1]),
+    "both callers map to the same slot",
+  );
+  assert.notEqual(url1, url2, "different tokens -> different URLs");
+
+  // The first caller's link now 404s (the slot object holds the other token).
+  assert.equal(
+    (await worker.fetch(new Request(url1), env)).status,
+    404,
+    "the first caller's link is dead after their slot was taken by another caller",
+  );
+  // The other caller's own link works.
+  assert.equal(
+    (await worker.fetch(new Request(url2), env)).status,
+    200,
+    "the other caller's link returns 200",
+  );
+  // Still exactly one itinerary object in the bucket (same slot key).
+  assert.equal(
+    [...bucket.objects.keys()].filter((k) => k.startsWith("itineraries/")).length,
+    1,
+    "one itinerary object (the shared slot key, overwritten)",
+  );
+
+  // And if the first caller saves again, they mint NO new token of their own:
+  // their stored token is reused, they overwrite the slot, their link lives
+  // again (proving a caller's token survives a slot takeover + re-save).
+  await actor1.setLastResults({ deals: [deal("a")] });
+  const profile1again = await actor1.saveDeal({ dealId: "a" });
+  assert.equal(
+    profile1again.itineraryUrl,
+    url1,
+    "the first caller re-saves onto their own slot with their own reused token",
+  );
+  assert.equal(
+    (await worker.fetch(new Request(url1), env)).status,
+    200,
+    "the first caller's original link works again after they re-save",
+  );
+  // The other caller's link is now 404 (slot taken back).
+  assert.equal(
+    (await worker.fetch(new Request(url2), env)).status,
+    404,
+    "the other caller's link is dead again after the first caller re-saves",
+  );
 });
 
 test("alarm() sends exactly one SMS; a second alarm sends none", async () => {

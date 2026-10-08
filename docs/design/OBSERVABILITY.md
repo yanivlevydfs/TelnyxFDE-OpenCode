@@ -79,7 +79,7 @@ engineer:
 | --- | --- | --- | --- |
 | `itinerary_skipped` | WARNING | `fde-session-actor` | `saveDeal` did not write the itinerary file. The `reason` field is `noITINERARIES` (the `[storage.cloudstorage.ITINERARIES]` binding is missing on this deploy), `noITINERARY_BASE_URL` (the public URL prefix is not configured — this is the live bug from step 11), or `noSetAlarm` (the ctx has no `setAlarm`, e.g. a unit test environment). The save still succeeded; only `itineraryUrl` is dropped from the profile. Storm of these in production = the binding or env-var drifted. |
 | `itinerary_write_failed` | WARNING | `fde-session-actor` | `bucket.put` threw (network/permission/quota). `dealId` and the `error` text are logged. The save still succeeded. A persistent stream means the bucket binding is misconfigured or the region is wrong; a one-off is transient. |
-| `itinerary.read_failed` | ERROR | `fde-session-actor` | The public `GET /itineraries/<uuid>.html` route failed to read the object back. `key` and `error` are logged. A 500 back to the caller; investigate the bucket binding. |
+| `itinerary.read_failed` | ERROR | `fde-session-actor` | The public `GET /itineraries/<slot>-<token>.html` route failed to read the object back. `key` and `error` are logged. A 500 back to the caller; investigate the bucket binding. |
 | `reminder_scheduled` | INFO | `fde-session-actor` | `saveDeal` armed the alarm (`delay_ms` in the payload). The reminder is now pending; `alarm()` will fire in `delay_ms`. Useful for tracing save → reminder latency. |
 | `alarm.sms_sent` | INFO | `fde-session-actor` | The follow-up reminder SMS was delivered to Telnyx. The pending reminder is drained, so a redrive sends nothing. This is the success signal for the whole step-7 reminder feature. |
 | `alarm.failed` | ERROR | `fde-session-actor` | Any uncaught error inside `alarm()`. `error` and `stack` are logged. The reminder is **not** drained (left for a redrive) unless it was already — see `alarm.sms_sent`. Three redrives drop the alarm; persistent `alarm.failed` means the SMS provider or the actor storage is degraded. |
@@ -115,9 +115,16 @@ in place, never growing. The log events those changes emit:
 | `config.clamp_slots` | ERROR | `fde-session-actor` | The env config violates the guard `ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS`: the code refused the broken value, logged its `requested` and `maxObjects`, and clamped slots to `maxObjects - 1`. Fix the env vars in `telnyx.toml` / MCP `func.toml` so the actor and the facade agree on the slot count. |
 | `itinerary_write_failed` | WARNING | `fde-session-actor` | `bucket.put` threw on a slot key. Seen live as `HTTP 400: TooManyObjects` before step 22 (the bucket grew past 5 objects). After step 22 this should ONLY appear transiently (network/permission). A persistent stream means the bucket binding, the region, or the slot config is wrong. |
 | `audit_write_failed` | ERROR | `fde-session-actor` | The `AuditLog` actor's `bucket.put("audit/latest.json")` threw. `AUDIT_ENABLED` must be true and the `AUDIT_LOG` binding must be present. The failure logged here is in the AuditLog actor (it caught the error internally and returned `{ok: true}`); the caller's tool call was never affected. |
+| `itinerary_token_minted` | INFO | `fde-session-actor` | `saveDeal` minted a NEW per-caller itinerary token and stored it in actor storage (step 22b). This happens **once per caller** (on their first save) and never again, because the token is reused on every later save so a prior link keeps working. Seeing this repeatedly for the same `entity` means the caller's `itineraryToken` is being evicted from actor storage (investigate storage churn); one per caller is the steady state. |
 
-**Itinerary slot design signoff**: with the fixed-key design, the bucket key
-count is at most `ITINERARY_SLOTS + 1 = 5` forever, regardless of how many
-callers or events pass through. `scripts/ops/storage_check.py` lists the
-bucket over S3 (sigv4) and fails on any key outside
-`{itineraries/slot-<n>.html, audit/latest.json}` or on a count > `STORAGE_MAX_OBJECTS`.
+**Itinerary slot + token design signoff (step 22b)**: with the fixed-key
+design, the bucket key count is at most `ITINERARY_SLOTS + 1 = 5` forever,
+regardless of how many callers or events pass through. The token is **one
+per caller** (minted on the first save, reused on every later save), so
+the link from a prior save — already sent by SMS — keeps returning 200
+until a DIFFERENT caller hashes to the same slot and overwrites the
+object with their own token. `scripts/ops/storage_check.py` lists the
+bucket over S3 (sigv4; the Telnyx API key is used as both the access and
+secret key by default, `STORAGE_S3_*` are optional overrides) and fails on
+any key outside `{itineraries/slot-<n>.html, audit/latest.json}` or on a
+count > `STORAGE_MAX_OBJECTS`.
