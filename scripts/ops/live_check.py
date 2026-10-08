@@ -1,7 +1,8 @@
 """scripts/ops/live_check.py — end-to-end check of the deployed Telnyx Edge services.
 
 Runs real requests against the live webhook, MCP server and actor, then prints
-PASS/FAIL per check. Uses fresh test caller ids, never a real caller.
+PASS/FAIL per check. Uses a FIXED test caller id (LIVE_CHECK_CALLER, default a
+documented fake number) so runs reuse the same itinerary slot (step 22):
 
     python scripts/ops/live_check.py
 
@@ -62,7 +63,7 @@ def kv(op):
 
 
 async def concurrent_record_calls(n: int) -> list[int]:
-    """n concurrent recordCall requests to one fresh caller actor."""
+    """n concurrent recordCall requests to one fixed caller actor."""
     who = f"1999{random.randint(10**6, 10**7)}"
     async with httpx.AsyncClient(timeout=60) as h:
         rs = await asyncio.gather(*[h.post(f"{E['ACTOR_SERVICE_URL'].rstrip('/')}/actors/{who}/recordCall",
@@ -71,10 +72,23 @@ async def concurrent_record_calls(n: int) -> list[int]:
     return sorted(r.json()["callCount"] for r in rs)
 
 
+def _slot_for(caller_id: str, slots: int = 4) -> int:
+    """Port of the TypeScript slotFor: stable 32-bit hash mod slots. Matches
+    services/session-actor/src/caller-session.ts slotFor() so the live check
+    can construct a URL with a made-up token on the same slot."""
+    h = 0
+    for ch in caller_id:
+        h = ((h * 31) + ord(ch)) & 0xFFFFFFFF
+    return h % slots if slots > 0 else 0
+
+
 def main() -> int:
     flags_key = E.get("KV_FLAGS_KEY", "flags/assistant")
     flags = kv(lambda k: k.get_json(flags_key)) or {}
-    conv, entity = f"live-check-{random.randint(10**5, 10**6)}", f"1888{random.randint(10**6, 10**7)}"
+    # Fixed test caller so runs reuse the same itinerary slot (step 22).
+    # Default is a documented fake number (not a real subscriber).
+    entity = E.get("LIVE_CHECK_CALLER", "18880000000")
+    conv = f"live-check-{random.randint(10**5, 10**6)}"
     kv(lambda k: k.put_json(f"session/{conv}", {"entity_id": entity}, ttl_secs=1800))
     greece: list[dict] = []
 
@@ -108,14 +122,35 @@ def main() -> int:
     err, text = mcp(conv, "search_deals", {"destination": "not-a-code"})
     check("invalid tool input is rejected", err, text[:80])
 
+    # Itinerary URL checks (step 22): save a deal, verify the URL, GET 200,
+    # and verify a made-up token on the same slot returns 404.
+    saved_deal = greece[0] if greece else {}
+    itinerary_url = ""
     for d in greece[:2]:
         err, text = mcp(conv, "save_deal", {"deal_id": d["dealId"]})
         check(f"save {d['dealId']}", not err, text[:60])
+        if not err and d["dealId"] == saved_deal.get("dealId"):
+            itinerary_url = json.loads(text).get("itineraryUrl", "")
     err, text = mcp(conv, "list_saved_deals")
     saved = 0 if err else json.loads(text).get("savedCount", 0)
     check("list shows both saved deals", saved >= 2, f"savedCount {saved}")
     err, text = mcp(conv, "save_deal", {"deal_id": "nope"})
     check("bad save explains why, no phone number", err and "last search" in text and entity not in text, text[:60])
+
+    if itinerary_url:
+        check("save returns an itineraryUrl", bool(itinerary_url), itinerary_url[:80])
+        # GET on the itinerary URL → 200
+        r = httpx.get(itinerary_url, timeout=30, follow_redirects=True)
+        check("GET itinerary URL returns 200", r.status_code == 200, str(r.status_code))
+        # Same slot, made-up token → 404 (never shows someone else's trip)
+        slot = _slot_for(entity)
+        fake_token = "00000000-0000-0000-0000-000000000000"
+        base = itinerary_url.rsplit("/", 1)[0]  # strip <slot>-<token>.html
+        fake_url = f"{base}/{slot}-{fake_token}.html"
+        r = httpx.get(fake_url, timeout=30, follow_redirects=True)
+        check("made-up token on same slot returns 404", r.status_code == 404, str(r.status_code))
+    else:
+        check("save returns an itineraryUrl", False, "no itineraryUrl in save response")
 
     # Hidden caller id: deals are read, nothing remembered
     err, text = mcp(f"no-session-{conv}", "search_deals", {})
@@ -123,7 +158,7 @@ def main() -> int:
 
     # SMS kill switch (KV flag) without sending a message
     kv(lambda k: k.put_json(flags_key, {**flags, "sms_enabled": False}))
-    err, text = mcp(conv, "send_deal_sms", {"deal_id": greece[0]["dealId"]})
+    err, text = mcp(conv, "send_deal_sms", {"deal_id": saved_deal["dealId"]})
     check("sms_enabled=false blocks SMS in code", err and "turned off" in text, text[:60])
     kv(lambda k: k.put_json(flags_key, flags or {"deals_enabled": True, "sms_enabled": True, "promo": ""}))
 

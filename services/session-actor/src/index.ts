@@ -43,6 +43,7 @@ import type {
 import {
   CallerSession,
   ActorInputError,
+  slotFor,
 } from "./caller-session";
 import type { SaveDealConfig } from "./caller-session";
 
@@ -50,7 +51,9 @@ import type { SaveDealConfig } from "./caller-session";
 // the [[actors]].type entry must be reachable from the bundle.
 export { CallerSession } from "./caller-session";
 export { MetricsCounter } from "./metrics-counter";
+export { AuditLog } from "./audit-log";
 import type { MetricsCounter } from "./metrics-counter";
+import type { AuditLog } from "./audit-log";
 
 // --------------------------------------------------------------- public API
 
@@ -90,9 +93,12 @@ interface Env {
   CALLER_SESSION: ActorNamespace<CallerSession>;
   /** Shared metrics actor (binding = "METRICS"), one instance named "global". */
   METRICS?: ActorNamespace<MetricsCounter>;
+  /** Singleton audit-log actor (binding = "AUDIT_LOG"), one instance named
+   * "global". CallerSession sends audit events here via `env.AUDIT_LOG`. */
+  AUDIT_LOG?: ActorNamespace<AuditLog>;
   /** Cloud Storage bucket (binding = "ITINERARIES") holding the itinerary
    * HTML pages the actor writes on `saveDeal`. Held by `CallerSession`
-   * too; here it serves the public `GET /itineraries/<uuid>.html` route. */
+   * too; here it serves the public `GET /itineraries/<slot>-<token>.html` route. */
   ITINERARIES?: CloudStorageBucket;
   /** Edge secrets declared via `[[secrets]]`. Used to fetch
    * `INTERNAL_API_TOKEN` through Dapr. */
@@ -154,15 +160,18 @@ async function route(req: Request, env: Env): Promise<Response> {
   {
     const pathname = new URL(req.url).pathname;
 
-    // Public GET route for itinerary HTML files. The random UUID in the path
-    // is the capability — no bearer token required (AGENTS.md step 7). The
-    // path is validated against a strict UUID regex; anything else is 404.
+    // Public GET route for itinerary HTML files. The URL is
+    // `/itineraries/<slot>-<token>.html`: the slot (0..ITINERARY_SLOTS-1) is
+    // the fixed key the caller maps to, and the token (a fresh UUID per
+    // write) is the capability. No bearer token required (AGENTS.md step 22):
+    // the slot part is validated against the range, and the facade serves the
+    // object only when the token stored in the HTML matches.
     if (req.method === "GET" && pathname.startsWith("/itineraries/")) {
       const m = pathname.match(
-        /^\/itineraries\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/i,
+        /^\/itineraries\/(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/i,
       );
       if (!m) return error(404, "not found");
-      return serveItinerary(env, m[1]);
+      return serveItinerary(env, Number(m[1]), m[2].toLowerCase());
     }
 
     // Only POST is used by the actor facade.
@@ -303,21 +312,38 @@ async function internalTokenFor(env: Env): Promise<string | undefined> {
 
 /**
  * Serve one itinerary HTML file from `env.ITINERARIES` to the public
- * (`GET /itineraries/<uuid>.html`). The random UUID in the URL is the capability —
- * the route accepts no bearer token; a bad id is 404, a missing object is 404,
- * a missing binding is 404 (so the route stays up while the bucket is being
- * provisioned). Streams the object body with its stored content type.
+ * `GET /itineraries/<slot>-<token>.html` route. The slot (fixed key
+ * `itineraries/slot-<slot>.html`) is the fixed key the caller maps to;
+ * the token (a fresh UUID per write) is the capability. The facade reads
+ * the object body, extracts the stored token from the leading
+ * `<!-- token:... -->` comment, and serves the file ONLY when the URL
+ * token matches — otherwise 404. So an old link whose slot was
+ * overwritten by another caller returns 404 and never shows someone else's
+ * trip (step 22). No bearer: the token is the capability.
  */
-async function serveItinerary(env: Env, uuid: string): Promise<Response> {
+async function serveItinerary(
+  env: Env,
+  slot: number,
+  token: string,
+): Promise<Response> {
   const bucket = env.ITINERARIES;
   if (!bucket) return error(404, "not found");
-  const key = `itineraries/${uuid}.html`;
+  // Validate the slot range (matches the actor's resolveSlots guard).
+  const slots = resolveFacadeSlots();
+  if (slot < 0 || slot >= slots) return error(404, "not found");
+  const key = `itineraries/slot-${slot}.html`;
   try {
     const obj = await bucket.get(key);
     if (!obj || !("body" in obj)) return error(404, "not found");
+    // `obj` is now CloudStorageObjectBody (has body, text(), writeHttpMetadata).
+    const bodyText = await obj.text();
+    const tm = bodyText.match(
+      /^<!-- token:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) -->/,
+    );
+    if (!tm || tm[1] !== token) return error(404, "not found");
     const headers = new Headers();
     obj.writeHttpMetadata(headers);
-    return new Response(obj.body, { status: 200, headers });
+    return new Response(bodyText, { status: 200, headers });
   } catch (e) {
     log("ERROR", "itinerary.read_failed", {
       key,
@@ -326,6 +352,41 @@ async function serveItinerary(env: Env, uuid: string): Promise<Response> {
     return error(500, "itinerary read failed");
   }
 }
+
+/** Resolved number of itinerary slots for the facade route validation.
+ * Reads `process.env.ITINERARY_SLOTS` (default 4) and clamps against
+ * `STORAGE_MAX_OBJECTS` (default 5) — same guard as the actor's
+ * `resolveSlots`, but without the `cfg` override (the facade reads its own
+ * env vars, which ARE honoured since it is a function, not an actor). */
+function resolveFacadeSlots(): number {
+  let slots = pickFacadeInt("ITINERARY_SLOTS", DEFAULT_SLOTS);
+  const maxObjects = pickFacadeInt("STORAGE_MAX_OBJECTS", DEFAULT_MAX_OBJECTS);
+  if (slots + 1 > maxObjects) {
+    log("ERROR", "config.clamp_slots", {
+      requested: slots,
+      maxObjects,
+      clamped: Math.max(0, maxObjects - 1),
+    });
+    slots = Math.max(0, maxObjects - 1);
+  }
+  return slots;
+}
+
+/** Read a positive int env var for the facade (default `def`). */
+function pickFacadeInt(name: string, def: number): number {
+  const v = process.env[name];
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s) {
+      const n = Number(s);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+  }
+  return def;
+}
+
+const DEFAULT_SLOTS = 4;
+const DEFAULT_MAX_OBJECTS = 5;
 
 /** JSON response body. */
 function json(status: number, body: unknown): Response {

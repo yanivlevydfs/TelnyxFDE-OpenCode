@@ -82,6 +82,11 @@ MESSAGING_PROFILE_ID = "4001a112-28fd-40f5-a0de-226b1bad6b80"  # profile flytlv-
 # fallback for unit tests / local dev).
 ITINERARY_BASE_URL = "https://fde-session-actor-94b99eb9-4.telnyxcompute.com"
 REMINDER_DELAY_SECONDS = "600"
+# Cloud Storage object limit (step 22). The bucket is capped at 5 objects;
+# the code uses ITINERARY_SLOTS (4) fixed slot keys + 1 audit key = 5,
+# all overwritten. Forwarded to the actor on every saveDeal call.
+ITINERARY_SLOTS = "4"
+STORAGE_MAX_OBJECTS = "5"
 
 # FlyTLV feed endpoints + request shape.
 FLYTLV_FLIGHTS_PATH = "/api/private/flights"  # one-way feed (round trips use FLYTLV_DEALS_PATH)

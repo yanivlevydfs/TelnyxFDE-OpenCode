@@ -102,3 +102,22 @@ Cheat-sheet for triage:
   `itinerary_write_failed` on that `entity` (last-4 of phone).
 - MCP server falls off the shared actor: `mcp.actor.http_fallback` once per
   cold start; service otherwise keeps working over HTTP.
+
+## Step 22 log events — bucket object limit
+
+The `flytlv-itineraries` Cloud Storage bucket has a hard account limit of
+at most 5 objects (owner, 2026-10-08). Step 22 changed the code to write a
+FIXED set of keys (4 itinerary slots + 1 audit object) and overwrite them
+in place, never growing. The log events those changes emit:
+
+| Event | Level | Service | What it tells on-call |
+| --- | --- | --- | --- |
+| `config.clamp_slots` | ERROR | `fde-session-actor` | The env config violates the guard `ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS`: the code refused the broken value, logged its `requested` and `maxObjects`, and clamped slots to `maxObjects - 1`. Fix the env vars in `telnyx.toml` / MCP `func.toml` so the actor and the facade agree on the slot count. |
+| `itinerary_write_failed` | WARNING | `fde-session-actor` | `bucket.put` threw on a slot key. Seen live as `HTTP 400: TooManyObjects` before step 22 (the bucket grew past 5 objects). After step 22 this should ONLY appear transiently (network/permission). A persistent stream means the bucket binding, the region, or the slot config is wrong. |
+| `audit_write_failed` | ERROR | `fde-session-actor` | The `AuditLog` actor's `bucket.put("audit/latest.json")` threw. `AUDIT_ENABLED` must be true and the `AUDIT_LOG` binding must be present. The failure logged here is in the AuditLog actor (it caught the error internally and returned `{ok: true}`); the caller's tool call was never affected. |
+
+**Itinerary slot design signoff**: with the fixed-key design, the bucket key
+count is at most `ITINERARY_SLOTS + 1 = 5` forever, regardless of how many
+callers or events pass through. `scripts/ops/storage_check.py` lists the
+bucket over S3 (sigv4) and fails on any key outside
+`{itineraries/slot-<n>.html, audit/latest.json}` or on a count > `STORAGE_MAX_OBJECTS`.

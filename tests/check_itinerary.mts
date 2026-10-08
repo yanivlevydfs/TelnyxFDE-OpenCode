@@ -2,19 +2,31 @@
 // (actor alarm). Run: cd services/session-actor && npm run check
 //
 // Fakes for ctx.storage (+ setAlarm/getAlarm/deleteAlarm), a Cloud Storage
-// bucket, and env.TELNYX (messages.send). Verifies:
-//   - saveDeal writes one HTML object and returns its URL
-//   - re-save reuses it (same key, same bucket size)
+// bucket, and env.TELNYX (messages.send). Verifies the step-22 slot-token
+// design:
+//   - saveDeal writes to the caller's fixed slot (`itineraries/slot-<n>.html`)
+//     and returns a URL `/itineraries/<slot>-<token>.html`
+//   - re-save overwrites the same slot with a FRESH token (different URL,
+//     same slot key, same bucket object count)
+//   - an old token on the same slot returns 404 (token mismatch)
 //   - alarm() sends exactly one SMS; a second alarm sends none
-//   - GET /itineraries/<uuid>.html returns the HTML stream
-//   - GET /itineraries/<bad-id>.html is 404
+//   - GET /itineraries/<slot>-<token>.html streams the HTML (200)
+//   - GET /itineraries/<bad-id>.html is 404 (regex + slot mismatch + missing
+//     object + token mismatch)
+//   - saveDeal degrades safely without bucket/alarm/url
+//   - config travels with the call (no process.env): itineraryUrl returned,
+//     alarm SMS uses the passed smsFrom / messagingProfileId
+//   - bad-typed config is dropped in favour of the process.env fallback
+//   - guard: ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   CallerSession,
+  slotFor,
   type Deal,
 } from "../services/session-actor/src/caller-session";
+import { AuditLog } from "../services/session-actor/src/audit-log";
 import worker from "../services/session-actor/src/index";
 
 // Configuration the actor reads at call time (the config helpers in
@@ -23,6 +35,8 @@ process.env.ITINERARY_BASE_URL = "https://itinerary.test";
 process.env.REMINDER_DELAY_SECONDS = "1";
 process.env.SMS_FROM = "FlyTLV";
 process.env.MESSAGING_PROFILE_ID = "profile-id";
+process.env.ITINERARY_SLOTS = "4";
+process.env.STORAGE_MAX_OBJECTS = "5";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -137,7 +151,20 @@ function fakeTelnyx() {
   };
 }
 
+/** Build an env that includes an AuditLog actor instance for audit writes. */
 function envWith(actor: unknown, bucket: unknown, telnyx: unknown) {
+  const auditLog = new AuditLog(fakeCtx("global") as never, { ITINERARIES: bucket } as never);
+  return {
+    CALLER_SESSION: { idFromName: () => actor },
+    SECRETS: { get: async () => "tok" },
+    ITINERARIES: bucket,
+    TELNYX: telnyx,
+    AUDIT_LOG: { idFromName: () => auditLog },
+  } as never;
+}
+
+/** Environment without an AUDIT_LOG binding — audit is skipped (WARNING). */
+function envNoAudit(actor: unknown, bucket: unknown, telnyx: unknown) {
   return {
     CALLER_SESSION: { idFromName: () => actor },
     SECRETS: { get: async () => "tok" },
@@ -146,29 +173,37 @@ function envWith(actor: unknown, bucket: unknown, telnyx: unknown) {
   } as never;
 }
 
-test("saveDeal writes one HTML object and returns its URL", async () => {
+test("saveDeal writes one HTML object to the caller slot and returns a slot-token URL", async () => {
   const bucket = fakeBucket();
   const actor = new CallerSession(
-    fakeCtx() as never,
+    fakeCtx("97250") as never,
     { ITINERARIES: bucket, TELNYX: fakeTelnyx() } as never,
   );
   await actor.setLastResults({ deals: [deal("a")] });
   const profile = await actor.saveDeal({ dealId: "a" });
   assert.ok(profile.itineraryUrl, "saveDeal returns itineraryUrl when configured");
-  const uuid = profile.itineraryUrl!.split("/").pop()!.replace(/\.html$/, "");
-  assert.match(uuid, UUID_RE, "the path segment is a strict UUID");
+  // URL is /itineraries/<slot>-<token>.html
+  const filename = profile.itineraryUrl!.split("/").pop()!.replace(/\.html$/, "");
+  const m = filename.match(/^(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
+  assert.ok(m, "the path segment is <slot>-<token>");
+  const slot = Number(m![1]);
+  const token = m![2];
+  assert.match(token, UUID_RE, "the token is a strict UUID");
+  assert.equal(slot, slotFor("97250", 4), "slot = stableHash(callerId) mod SLOTS");
   assert.ok(
     profile.itineraryUrl!.startsWith("https://itinerary.test/itineraries/"),
   );
   assert.equal(
     [...bucket.objects.keys()].filter((k) => k.startsWith("itineraries/")).length,
     1,
-    "exactly one HTML object in the bucket",
+    "exactly one itinerary HTML object in the bucket",
   );
-  const key = [...bucket.objects.keys()].find((k) => k.startsWith("itineraries/"))!;
-  assert.equal(key, `itineraries/${uuid}.html`);
+  const key = `itineraries/slot-${slot}.html`;
+  assert.ok(bucket.objects.has(key), "the object key is itineraries/slot-<n>.html");
   const obj = bucket.objects.get(key)!;
   assert.equal(obj.contentType, "text/html; charset=utf-8");
+  assert.match(obj.body, /^<!-- token:[0-9a-f-]+ -->/, "HTML starts with a token comment");
+  assert.ok(obj.body.includes(token), "the stored token matches the URL token");
   assert.match(obj.body, /<html/i);
   assert.match(obj.body, /Larnaca/);
   assert.match(obj.body, /Wizz Air/);
@@ -176,7 +211,7 @@ test("saveDeal writes one HTML object and returns its URL", async () => {
   assert.match(obj.body, /href="https:\/\/flytlv\.app\/go\?id=a"/);
 });
 
-test("re-save reuses the existing itinerary file (same key, no new object)", async () => {
+test("re-save overwrites the same slot with a fresh token (new URL, same key, same count)", async () => {
   const bucket = fakeBucket();
   const actor = new CallerSession(
     fakeCtx() as never,
@@ -187,16 +222,30 @@ test("re-save reuses the existing itinerary file (same key, no new object)", asy
   const second = await actor.saveDeal({ dealId: "a" });
   assert.ok(first.itineraryUrl);
   assert.ok(second.itineraryUrl);
-  assert.equal(
+  assert.notEqual(
     first.itineraryUrl,
     second.itineraryUrl,
-    "re-save returns the same itinerary URL",
+    "re-save returns a DIFFERENT URL (fresh token)",
   );
+  // Same slot in both URLs.
+  const slot1 = Number(first.itineraryUrl!.split("/").pop()!.match(/^(\d+)-/)![1]);
+  const slot2 = Number(second.itineraryUrl!.split("/").pop()!.match(/^(\d+)-/)![1]);
+  assert.equal(slot1, slot2, "re-save maps to the same slot");
   assert.equal(
     [...bucket.objects.keys()].filter((k) => k.startsWith("itineraries/")).length,
     1,
-    "still one HTML object after re-save",
+    "still one itinerary object after re-save (overwrite, no grow)",
   );
+  // The first URL's token no longer matches (the object now has the second token).
+  const key = `itineraries/slot-${slot2}.html`;
+  const body = bucket.objects.get(key)!.body;
+  const storedToken = body.match(/^<!-- token:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) -->/)![1];
+  const extractToken = (url: string) =>
+    url.match(/-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.html$/)![1];
+  const firstToken = extractToken(first.itineraryUrl!);
+  assert.notEqual(storedToken, firstToken, "the object's token is the second write's token, not the first");
+  const secondToken = extractToken(second.itineraryUrl!);
+  assert.equal(storedToken, secondToken, "the object's token matches the second URL");
 });
 
 test("alarm() sends exactly one SMS; a second alarm sends none", async () => {
@@ -226,7 +275,7 @@ test("alarm() sends exactly one SMS; a second alarm sends none", async () => {
   assert.equal(telnyx.sent.length, 1, "second alarm sends no SMS (reminder drained)");
 });
 
-test("GET /itineraries/<uuid>.html streams the HTML with its content type", async () => {
+test("GET /itineraries/<slot>-<token>.html streams the HTML with its content type", async () => {
   const bucket = fakeBucket();
   const actor = new CallerSession(
     fakeCtx() as never,
@@ -234,11 +283,11 @@ test("GET /itineraries/<uuid>.html streams the HTML with its content type", asyn
   );
   await actor.setLastResults({ deals: [deal("a")] });
   const profile = await actor.saveDeal({ dealId: "a" });
-  const uuid = profile.itineraryUrl!.split("/").pop()!.replace(/\.html$/, "");
+  assert.ok(profile.itineraryUrl);
 
   const resp = await worker.fetch(
-    new Request(`https://x/itineraries/${uuid}.html`),
-    envWith(actor, bucket, fakeTelnyx()),
+    new Request(profile.itineraryUrl!),
+    envNoAudit(actor, bucket, fakeTelnyx()),
   );
   assert.equal(resp.status, 200);
   assert.equal(resp.headers.get("content-type"), "text/html; charset=utf-8");
@@ -247,44 +296,62 @@ test("GET /itineraries/<uuid>.html streams the HTML with its content type", asyn
   assert.match(body, /Larnaca/);
 });
 
-test("GET /itineraries/<bad-id>.html is 404 (regex + missing object)", async () => {
+test("GET /itineraries/<bad-id>.html is 404 (regex + slot mismatch + missing object + token mismatch)", async () => {
   const bucket = fakeBucket();
-  const env = envWith(null, bucket, fakeTelnyx());
-  // Not a UUID at all -> 404 (regex check).
+  const actor = new CallerSession(
+    fakeCtx() as never,
+    { ITINERARIES: bucket, TELNYX: fakeTelnyx() } as never,
+  );
+  // Write an itinerary so we can test token mismatch on a real slot.
+  await actor.setLastResults({ deals: [deal("a")] });
+  const profile = await actor.saveDeal({ dealId: "a" });
+  assert.ok(profile.itineraryUrl);
+  const env = envNoAudit(actor, bucket, fakeTelnyx());
+
+  // Not a slot-token format at all -> 404 (regex check).
   assert.equal(
-    (
-      await worker.fetch(
-        new Request("https://x/itineraries/not-a-uuid.html"),
-        env,
-      )
-    ).status,
+    (await worker.fetch(new Request("https://x/itineraries/not-a-uuid.html"), env)).status,
     404,
   );
-  // UUID shape but no such object in the bucket -> 404 (object missing).
+  // UUID shape but no slot separator -> 404.
   assert.equal(
-    (
-      await worker.fetch(
-        new Request(
-          "https://x/itineraries/00000000-0000-0000-0000-000000000000.html",
-        ),
-        env,
-      )
-    ).status,
+    (await worker.fetch(
+      new Request("https://x/itineraries/00000000-0000-0000-0000-000000000000.html"),
+      env,
+    )).status,
     404,
+  );
+  // Slot out of range -> 404.
+  assert.equal(
+    (await worker.fetch(new Request("https://x/itineraries/99-00000000-0000-0000-0000-000000000000.html"), env)).status,
+    404,
+  );
+  // Valid slot, valid token shape, but no object in the bucket -> 404.
+  assert.equal(
+    (await worker.fetch(new Request("https://x/itineraries/1-00000000-0000-0000-0000-000000000000.html"), env)).status,
+    404,
+  );
+  // Valid slot, object exists, but WRONG token -> 404 (never shows someone else's trip).
+  const realSlot = Number(profile.itineraryUrl!.split("/").pop()!.match(/^(\d+)-/)![1]);
+  const fakeToken = "00000000-0000-0000-0000-000000000000";
+  assert.equal(
+    (await worker.fetch(new Request(`https://x/itineraries/${realSlot}-${fakeToken}.html`), env)).status,
+    404,
+    "wrong token on a real slot returns 404",
   );
 });
 
 test("saveDeal degrades safely when the bucket/alarm/url is unconfigured", async () => {
   // Mirrors the unit-test contract from AGENTS.md step 7: with {} as env and a
   // ctx without setAlarm, saveDeal still succeeds and omits itineraryUrl.
+  const ctxData = new Map<string, unknown>();
   const strippedCtx = {
     id: "97250",
     storage: {
-      get: async (k: string) => data.get(k),
-      put: async (k: string, v: unknown) => void data.set(k, structuredClone(v)),
+      get: async (k: string) => ctxData.get(k),
+      put: async (k: string, v: unknown) => void ctxData.set(k, structuredClone(v)),
     },
   } as never;
-  const data = new Map<string, unknown>();
   const noTelnyx = fakeTelnyx();
   const actor = new CallerSession(
     strippedCtx,
@@ -335,6 +402,8 @@ test("saveDeal with config in the call survives absent process.env (step 11 live
         reminderDelaySeconds: 2,
         smsFrom: "ConfigFrom",
         messagingProfileId: "cfg-profile",
+        itinerarySlots: 4,
+        storageMaxObjects: 5,
       },
     });
     assert.ok(
@@ -395,6 +464,8 @@ test("saveDeal ignores bad-typed config values and falls back to process.env", a
       reminderDelaySeconds: "abc" as unknown as number,
       smsFrom: 99 as unknown as string,
       messagingProfileId: { id: "x" } as unknown as string,
+      itinerarySlots: "bad" as unknown as number,
+      storageMaxObjects: -1 as unknown as number,
     },
   });
   assert.ok(
@@ -404,5 +475,14 @@ test("saveDeal ignores bad-typed config values and falls back to process.env", a
   assert.ok(
     profile.itineraryUrl!.startsWith("https://itinerary.test/itineraries/"),
     "itineraryUrl uses process.env.ITINERARY_BASE_URL (bad config ignored)",
+  );
+});
+
+test("guard: ITINERARY_SLOTS + 1 <= STORAGE_MAX_OBJECTS (constant check)", () => {
+  const slots = Number(process.env.ITINERARY_SLOTS ?? "4");
+  const max = Number(process.env.STORAGE_MAX_OBJECTS ?? "5");
+  assert.ok(
+    slots + 1 <= max,
+    `ITINERARY_SLOTS(${slots}) + 1 must be <= STORAGE_MAX_OBJECTS(${max})`,
   );
 });
