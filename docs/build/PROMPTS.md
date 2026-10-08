@@ -388,3 +388,38 @@ places that say which version CI installs: README.md line 506 and docs/guides/IN
 line 427. Keep every mention of the Windows backslash bug as "v0.5.9" (ship.yml line 3,
 README.md line 422, DECISIONS.md decision 17, INTEGRATION.md line 416): that is what was
 observed on that version. Change nothing else. Do not commit.
+
+## 18. Presentation for demo day (walkthrough part)
+
+Write docs/guides/PRESENTATION.md: the slide text for the 7-10 minute "Live Walkthrough &
+Decision Review" in docs/challenge/code_challenge.md (Demo Day, part 2). The audience is the
+Telnyx FDE team. The live demo itself follows docs/guides/DEMO_SCRIPT.md and is not in this deck.
+
+Take every fact from the repo (README.md, docs/design/*, docs/build/DOGFOODING.md,
+docs/build/PROMPTS.md, assistant/flow.py, services/*, shared/common.py, scripts/ops/*).
+Invent nothing: no numbers, costs, model names or bug details that the repo does not state.
+If a fact is missing, write `TODO(Yaniv): <what is missing>` instead of guessing.
+
+11-13 slides, in this order, each answering one question the brief asks:
+1. Title: FlyTLV Travel Line, one-line pitch, the phone number and live URLs.
+2. Why this use case: the real problem and who calls.
+3. Architecture: Caller -> Assistant -> Workflow -> Edge Function (webhook) -> KV / Actor -> MCP.
+   Give it as a mermaid `flowchart LR` block, using only the components that exist.
+4. Conversation Workflow: the nodes (speak vs prompt vs tool) and why each is that type.
+5. Edges: which are LLM conditions and which are expression edges (variable comparisons), and why.
+6. MCP server: the 4 tools, which node may call which tool, how it is built (SDK, stateless).
+7. Dynamic Webhook Variables: what the webhook returns and how those values change routing
+   and the greeting; the 1.5 s budget and backend_degraded fallback.
+8. Actor vs KV vs plain function logic: a table, one row per piece of state, with the reason.
+9. Stretch goals done (alarms, Cloud Storage, KV flags, shared actors, tracing, etc.), only
+   those the code really has.
+10. Observability: what is logged, the metrics signal, and "how I know within a minute it broke".
+11. The hardest bug: symptom -> signal that found it -> root cause -> fix -> evidence.
+12. Building with Telnyx Inference via OpenCode: models used, what worked, what did not.
+13. Tradeoffs and what I would do next.
+
+Format each slide as:
+`## Slide N - <title>` then 3-5 bullets of at most 14 words each, then
+`Notes:` with 2-4 sentences the speaker says. Plain English, no marketing words.
+End with a "Sources" list of the files used per slide. Add the file to docs/README.md and
+the README Documentation table. Change no code. Do not commit.
