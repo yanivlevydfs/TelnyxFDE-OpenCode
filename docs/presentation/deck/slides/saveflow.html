@@ -1,0 +1,54 @@
+<section id="saveflow" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Saving a deal</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">One save writes a page now and sends an SMS later</h2>
+<p style="position:absolute;left:128px;top:258px;width:800px;font-size:24px;font-weight:600;color:#0B7A55">Now, during the call</p>
+<p style="position:absolute;left:820px;top:558px;width:972px;font-size:24px;font-weight:600;text-align:right;color:#C2561A">Later, when the alarm fires</p>
+<x-connector x1="408" y1="375" x2="474" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="754" y1="375" x2="820" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1100" y1="375" x2="1166" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1446" y1="375" x2="1512" y2="375" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1652" y1="450" x2="1652" y2="600" head="end" route="straight" style="color:#C2561A;border-width:3px;border-style:dashed"></x-connector>
+<x-connector x1="1512" y1="675" x2="1446" y2="675" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<x-connector x1="1166" y1="675" x2="1100" y2="675" head="end" route="straight" style="color:#6B7685;border-width:3px"></x-connector>
+<div style="position:absolute;left:128px;top:300px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Caller</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">"Save the second one."</p>
+</div>
+<div style="position:absolute;left:474px;top:300px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600">save_deal</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">MCP tool; finds the caller via KV</p>
+</div>
+<div style="position:absolute;left:820px;top:300px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600">saveDeal</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">Caller Actor, with config</p>
+</div>
+<div style="position:absolute;left:1166px;top:300px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Cloud Storage</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">put the itinerary HTML page</p>
+</div>
+<div style="position:absolute;left:1512px;top:300px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600">setAlarm</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">store the reminder, set the alarm</p>
+</div>
+<div style="position:absolute;left:1512px;top:600px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FBEFE6;border:2px solid #C2561A;border-radius:12px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600">alarm()</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">fires after the reminder delay</p>
+</div>
+<div style="position:absolute;left:1166px;top:600px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C2561A;border-radius:12px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600">messages.send</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">SMS through the TELNYX binding</p>
+</div>
+<div style="position:absolute;left:820px;top:600px;width:280px;height:150px;display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px;padding:20px">
+<p style="font-size:26px;font-weight:600">Caller's phone</p>
+<p style="font-size:24px;line-height:1.3;color:#3D4A5C">gets the follow-up SMS</p>
+</div>
+<div style="position:absolute;left:128px;top:600px;width:600px;display:flex;flex-direction:column;gap:8px">
+<p style="font-size:26px;font-weight:600;color:#C2561A">Why config rides on saveDeal</p>
+<p style="font-size:24px;line-height:1.4;color:#3D4A5C">Umbrella [env_vars] never reach the actor, so MCP passes the values with each save. That was the hardest bug.</p>
+</div>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">9 / 18</p>
+</div>
+<aside>When the caller saves a deal, the save_deal tool finds the caller through the KV session map and calls saveDeal on that caller's actor, with the config passed in. The actor writes the itinerary HTML page to Cloud Storage, stores a pending reminder, and sets an alarm. Later the alarm fires inside the same actor and sends the follow-up SMS through the TELNYX binding. One alarm per actor, so a newer save replaces the reminder. Alarms are delivered at least once, so alarm() always catches its own errors and logs them.</aside>
+</section>

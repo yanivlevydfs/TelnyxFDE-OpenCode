@@ -1,0 +1,46 @@
+<section id="sequence" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:12px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">One call, in order</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15">Call start runs once. Tools run during the call.</h2>
+<p style="font-size:24px;color:#3D4A5C"><span style="color:#0B7A55"><b>Green</b></span> = once, at call start · <b>Navy</b> = during the conversation</p>
+<x-connector x1="247" y1="356" x2="247" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="485" y1="356" x2="485" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="723" y1="356" x2="723" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="961" y1="356" x2="961" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="1199" y1="356" x2="1199" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="1437" y1="356" x2="1437" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<x-connector x1="1675" y1="356" x2="1675" y2="905" head="none" route="straight" style="color:#C9CFC6;border-width:2px;border-style:dashed"></x-connector>
+<div style="position:absolute;left:147px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:12px"><p style="font-size:24px;font-weight:600">Caller</p></div>
+<div style="position:absolute;left:385px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#0F1B2D;border-radius:12px"><p style="font-size:24px;font-weight:600;color:#F5F6F2">Assistant</p></div>
+<div style="position:absolute;left:623px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px"><p style="font-size:24px;font-weight:600">webhook</p></div>
+<div style="position:absolute;left:861px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#FCFCFA;border:2px solid #0B7A55;border-radius:12px"><p style="font-size:24px;font-weight:600">mcp-server</p></div>
+<div style="position:absolute;left:1099px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px"><p style="font-size:24px;font-weight:600">Telnyx KV</p></div>
+<div style="position:absolute;left:1337px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#E3F1EA;border:2px solid #0B7A55;border-radius:12px"><p style="font-size:24px;font-weight:600">Caller Actor</p></div>
+<div style="position:absolute;left:1575px;top:300px;width:200px;height:56px;display:flex;align-items:center;justify-content:center;background:#FCFCFA;border:2px dashed #C9CFC6;border-radius:12px"><p style="font-size:24px;font-weight:600">flytlv API</p></div>
+<x-connector x1="247" y1="390" x2="485" y2="390" head="end" route="straight" style="color:#0B7A55;border-width:3px"></x-connector>
+<x-connector x1="485" y1="436" x2="723" y2="436" head="end" route="straight" style="color:#0B7A55;border-width:3px"></x-connector>
+<x-connector x1="723" y1="482" x2="1199" y2="482" head="end" route="straight" style="color:#0B7A55;border-width:3px"></x-connector>
+<x-connector x1="723" y1="528" x2="1437" y2="528" head="end" route="straight" style="color:#0B7A55;border-width:3px"></x-connector>
+<x-connector x1="723" y1="574" x2="485" y2="574" head="end" route="straight" style="color:#0B7A55;border-width:3px"></x-connector>
+<x-connector x1="485" y1="640" x2="961" y2="640" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<x-connector x1="961" y1="686" x2="1199" y2="686" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<x-connector x1="961" y1="732" x2="1675" y2="732" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<x-connector x1="961" y1="778" x2="1437" y2="778" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<x-connector x1="485" y1="824" x2="961" y2="824" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<x-connector x1="961" y1="870" x2="1437" y2="870" head="end" route="straight" style="color:#14213D;border-width:3px"></x-connector>
+<p style="position:absolute;left:257px;top:358px;width:218px;font-size:24px;text-align:center;color:#0B7A55">dials</p>
+<p style="position:absolute;left:495px;top:404px;width:218px;font-size:24px;text-align:center;color:#0B7A55">webhook POST</p>
+<p style="position:absolute;left:733px;top:450px;width:456px;font-size:24px;text-align:center;color:#0B7A55">read flags</p>
+<p style="position:absolute;left:733px;top:496px;width:694px;font-size:24px;text-align:center;color:#0B7A55">recordCall → full profile</p>
+<p style="position:absolute;left:495px;top:542px;width:218px;font-size:24px;text-align:center;color:#0B7A55">variables</p>
+<p style="position:absolute;left:495px;top:608px;width:456px;font-size:24px;text-align:center;color:#14213D">search_deals</p>
+<p style="position:absolute;left:971px;top:654px;width:218px;font-size:24px;text-align:center;color:#14213D">cache lookup</p>
+<p style="position:absolute;left:971px;top:700px;width:694px;font-size:24px;text-align:center;color:#14213D">deals, only on a cache miss</p>
+<p style="position:absolute;left:971px;top:746px;width:456px;font-size:24px;text-align:center;color:#14213D">setLastResults</p>
+<p style="position:absolute;left:495px;top:792px;width:456px;font-size:24px;text-align:center;color:#14213D">save_deal</p>
+<p style="position:absolute;left:971px;top:838px;width:456px;font-size:24px;text-align:center;color:#14213D">saveDeal + config</p>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#6B7685">4 / 18</p>
+</div>
+<aside>Read it top to bottom. At call start, Telnyx calls the webhook once. The webhook reads the flags from KV and calls recordCall on the caller's actor, which returns the full profile, and it answers with the dynamic variables. During the conversation the assistant calls MCP tools: search_deals checks the KV cache, calls flytlv only on a miss, and stores the results on the same actor. save_deal calls saveDeal on the actor and passes the config with it.</aside>
+</section>

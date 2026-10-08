@@ -44,7 +44,7 @@
 <p style="position:absolute;left:128px;top:860px;width:1664px;font-size:24px;color:#3D4A5C">Call start: webhook runs once. During the call: MCP tool calls reach the same actor via shared SESSIONS.</p>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
-<p style="font-size:24px;color:#6B7685">3 / 13</p>
+<p style="font-size:24px;color:#6B7685">3 / 18</p>
 </div>
 <aside>At call start the workflow fires the webhook once, which reads flags from KV and records the call on the caller's actor. Mid-conversation, the prompt nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches the same caller actor directly through the shared SESSIONS binding. The Python webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP server skips that hop. The actor writes the itinerary page to Cloud Storage.</aside>
 </section>
