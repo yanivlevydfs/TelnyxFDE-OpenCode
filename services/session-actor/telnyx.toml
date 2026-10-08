@@ -63,6 +63,13 @@ name    = "INTERNAL_API_TOKEN"   # the key stored with `telnyx-edge secrets add`
 #   REMINDER_DELAY_SECONDS      delay before the follow-up SMS fires (default 600).
 #   SMS_FROM                    alphanumeric Telnyx messaging sender id.
 #   MESSAGING_PROFILE_ID        Telnyx messaging profile for the reminder SMS.
+# History + audit (added step 20):
+#   AUDIT_PREFIX                Cloud Storage key prefix for audit objects
+#                               (default "audit/"); reads via process.env
+#                               (defaults in production — see AGENTS.md live
+#                               finding, decision #28).
+#   SEARCH_HISTORY_MAX          entries kept in the per-caller searchHistory
+#                               timeline (default 50, oldest dropped).
 #
 # ***Live finding (step 11, 7 Oct 08:52 UTC):*** these `[env_vars]` do NOT reach
 # actor instances' `process.env` in production (logs showed

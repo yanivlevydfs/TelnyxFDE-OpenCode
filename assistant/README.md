@@ -129,17 +129,23 @@ entirely the defaults keep the expression edges from comparing against raw
 ## Provisioning (`provision.py`)
 
 Every URL, id, model and voice comes from env vars / Telnyx Edge secrets —
-nothing is hardcoded. The CLI runs four steps in order:
+nothing is hardcoded. The CLI runs five steps in order:
 
 1. **integration secret** — stores `MCP_API_KEY` (`/v2/integration_secrets`).
 2. **MCP server** — `/ai/mcp_servers` pointing at the deployed MCP Edge Function,
    authenticated with the secret as `api_key_ref`.
-3. **assistant** — `/ai/assistants` with the workflow, dynamic-variables
+3. **conversation insight group** — `/ai/conversations/insight-groups` creates
+   (or reuses by name) the "FlyTLV caller intent" group with four insights
+   (destinations, dates/trip type, deal saved, call outcome) and assigns each
+   insight to the group. Re-runnable: existing groups/insights are reused by
+   name, and an insight already assigned is left as-is.
+4. **assistant** — `/ai/assistants` with the workflow, dynamic-variables
    webhook (8 s timeout, Telnyx's guidance for Edge cold starts), MCP server
-   reference and the inline `transfer` tool. Ending the call is a terminal
-   **tool node** running the shared hangup tool (`HANGUP_TOOL_ID`, created on
-   first run), so no prompt node can hang up mid-conversation.
-4. **phone number** — links an owned number to the assistant's voice connection.
+   reference, the inline `transfer` tool, and `insight_settings` pointing at
+   the group from step 3. Ending the call is a terminal **tool node** running
+   the shared hangup tool (`HANGUP_TOOL_ID`, created on first run), so no
+   prompt node can hang up mid-conversation.
+5. **phone number** — links an owned number to the assistant's voice connection.
 
 `--dry-run` skips all API calls and prints the assistant body that *would* be
 created (used by the unit test).
@@ -173,6 +179,8 @@ created (used by the unit test).
 | `MCP_SERVER_NAME` | `flytlv-mcp` | MCP server name |
 | `WEBHOOK_TIMEOUT_MS` | `8000` | dynamic-variables webhook timeout |
 | `CONVERSATION_TIMEOUT_SECS` | `600` | the duration comparison for the escalation edge |
+| `INSIGHT_GROUP_NAME` | `FlyTLV caller intent` | the conversation insight group name (created/reused by name) |
+| `INSIGHT_GROUP_ID` | `` | skip step 3 and wire this group id directly (else created) |
 
 ### Run
 
@@ -198,8 +206,29 @@ python assistant/provision.py
 ## Observability
 
 `provision.py` logs each step as structured JSON via `shared/common.py`
-(`provision.integration_secret`, `provision.mcp_server`, `provision.assistant`,
-`provision.phone_linked` / `provision.phone_link_manual`). The phone-number link
-is the one soft step: if Telnyx does not expose a connection id for the
-assistant the number is left unlinked with a warning rather than aborting an
-otherwise-complete assistant.
+(`provision.integration_secret`, `provision.mcp_server`, `provision.insight_group_*`,
+`provision.insight_*`, `provision.assistant`, `provision.phone_linked` /
+`provision.phone_link_manual`). The phone-number link is the one soft step: if
+Telnyx does not expose a connection id for the assistant the number is left
+unlinked with a warning rather than aborting an otherwise-complete assistant.
+
+## Conversation insights (step 20)
+
+Telnyx keeps every assistant conversation and runs "insights" (LLM summaries
+derived from the transcript) automatically for ones whose assistant points at
+an insight group. Provisioning creates the "FlyTLV caller intent" group
+(`INSIGHT_GROUP_NAME`, default) with four insights — all stable identifiers
+reused by name on re-runs:
+
+| Insight (`_insight_definitions`) | Extracts |
+| --- | --- |
+| `flytlv_destinations` | the destination(s) the caller asked about |
+| `flytlv_dates_triptype` | travel dates and trip type (one_way / round_trip) |
+| `flytlv_deal_saved` | whether a deal was saved, with destination + price |
+| `flytlv_call_outcome` | one-phrase call outcome ("deal saved", "searched no save", …) |
+
+The group id is wired into `assistant_body().insight_settings.insight_group_id`
+and read back by `scripts/ops/history.py` via
+`client.ai.conversations.retrieve_conversations_insights(id)`. `--dry-run` emits
+the body with `insight_settings` (empty `insight_group_id` by default, or
+`INSIGHT_GROUP_ID` when set).

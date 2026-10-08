@@ -13,8 +13,8 @@ surface, so this service is the **thin TypeScript facade** the Python services
 
 | File | Purpose |
 | --- | --- |
-| `src/caller-session.ts` | `CallerSession extends StatefulActor<Env>` — `recordCall`, `getProfile`, `setLastResults`, `saveDeal`, `getSaved`, and the `alarm()` override that fires the follow-up SMS. Renders the mobile-friendly itinerary HTML page written into Cloud Storage on every save. Exports the `Deal`/`Profile`/`ActorInputError`/`SessionActorEnv`/`renderItinerary` types. |
-| `src/index.ts` | The Worker default export `worker.fetch(req, env)` — Bearer-guarded HTTP facade: `POST /actors/{caller}/{method}` (method allowlist) to `CallerSession`, and `POST /metrics/{add,snapshot,reset}` to the shared `MetricsCounter`; plus the public `GET /itineraries/<uuid>.html` route that streams the HTML page straight out of `env.ITINERARIES`. |
+| `src/caller-session.ts` | `CallerSession extends StatefulActor<Env>` — `recordCall`, `getProfile`, `setLastResults`, `saveDeal`, `getSaved`, `getHistory`, and the `alarm()` override that fires the follow-up SMS. Renders the mobile-friendly itinerary HTML page written into Cloud Storage on every save; appends search/save history + audit on `setLastResults`/`saveDeal`. Exports the `Deal`/`Profile`/`HistoryEntry`/`ActorInputError`/`SessionActorEnv`/`renderItinerary` types. |
+| `src/index.ts` | The Worker default export `worker.fetch(req, env)` — Bearer-guarded HTTP facade: `POST /actors/{caller}/{method}` (method allowlist: `recordCall`, `getProfile`, `setLastResults`, `saveDeal`, `getSaved`, `getHistory`) to `CallerSession`, and `POST /metrics/{add,snapshot,reset}` to the shared `MetricsCounter`; plus the public `GET /itineraries/<uuid>.html` route that streams the HTML page straight out of `env.ITINERARIES`. |
 | `src/metrics-counter.ts` | `MetricsCounter extends StatefulActor` — one `global` instance holding service counters and latency (`add`, `snapshot`, `reset`). |
 | `src/log.ts` | One structured JSON logger for the actor and facade: Israel-time `ts`, per-request `trace_id`, masked caller ids. |
 | `telnyx.toml` | Umbrella manifest — `[[actors]] CALLER_SESSION → CallerSession`, `[[actors]] METRICS → MetricsCounter`, `[telnyx] TELNYX` (Telnyx SDK client used by `alarm()`), `[storage.cloudstorage.ITINERARIES]` (itinerary bucket), a `[[secrets]]` binding for `INTERNAL_API_TOKEN`, the itinerary/reminder `[env_vars]`, and the `[edge_compute] func_id`. |
@@ -48,9 +48,10 @@ Caller id is the digits of the phone (matches `entity_id` in
 | --- | --- | --- |
 | `/actors/{callerId}/recordCall` | *(ignored)* | `{callCount, savedCount, lastSaved}` — full profile |
 | `/actors/{callerId}/getProfile` | *(ignored)* | `{callCount, savedCount, lastSaved}` |
-| `/actors/{callerId}/setLastResults` | `{deals: Deal[]}` | `{stored: number}`  — replaces last search results |
-| `/actors/{callerId}/saveDeal` | `{dealId: string, config?: SaveDealConfig}` | `{callCount, savedCount, lastSaved, itineraryUrl?}` |
+| `/actors/{callerId}/setLastResults` | `{deals: Deal[], query?, conversationId?}` | `{stored: number}`  — replaces last search results; appends a `search` history entry + audit |
+| `/actors/{callerId}/saveDeal` | `{dealId: string, config?: SaveDealConfig, conversationId?}` | `{callCount, savedCount, lastSaved, itineraryUrl?}` — also appends a `save` history entry + audit |
 | `/actors/{callerId}/getSaved` | *(ignored)* | `{savedCount: number, deals: Deal[]}` |
+| `/actors/{callerId}/getHistory` | *(ignored)* | `{history: HistoryEntry[]}` — the caller's bounded search/save timeline |
 | `GET /itineraries/<uuid>.html` | *(none)* | **no bearer** — random UUID is the capability; the HTML page from Cloud Storage (404 on bad id / missing object) |
 
 `recordCall` returns the **full profile** (callCount, savedCount, lastSaved) on
@@ -134,6 +135,35 @@ The id is validated with a strict UUID regex (404 otherwise). It streams the
 object straight out of `env.ITINERARIES` with its stored content type, so the
 bucket is the single source of truth the actor wrote.
 
+## Caller history + audit trail (step 20)
+
+`setLastResults` and `saveDeal` each append one entry to a bounded per-caller
+**history timeline** in actor storage (`searchHistory`, capped by
+`SEARCH_HISTORY_MAX`, default 50, oldest dropped) and write one **immutable
+audit JSON object** to the existing `ITINERARIES` Cloud Storage bucket.
+
+- `setLastResults(input: {deals, query?, conversationId?})` appends
+  `{ts, conversationId, type:"search", query, resultCount, topDealIds (max 3)}`
+  (the `query` is the `search_deals` args exactly as received).
+- `saveDeal(input: {dealId, config?, conversationId?})` appends
+  `{ts, conversationId, type:"save", dealId}` on every save (including
+  re-saves, so the timeline reflects every save attempt).
+
+`getHistory()` returns `{history: HistoryEntry[]}` over the HTTP facade (same
+bearer auth as the other routes). `scripts/ops/history.py` reads it (plus
+Telnyx conversations + their insight results) for a read-only report.
+
+**Audit** — one object per event, key `${AUDIT_PREFIX}<YYYY-MM-DD>/<conversationId>/<ts>-<type>.json`
+(prefix from `AUDIT_PREFIX`, default `audit/`; date in `LOG_TIMEZONE`).
+The object holds the event plus a **masked caller** (`***<last4>`, never the
+full number). A failed audit write logs `ERROR` with the stack and **never
+fails the tool call**; `alarm()` is untouched.
+
+The umbrella `telnyx.toml [env_vars]` (`AUDIT_PREFIX`, `SEARCH_HISTORY_MAX`)
+do not reach actor instances' `process.env` in production (live finding #28),
+so they default there (`audit/` / 50) — the bucket binding *does* reach the
+actor, so audit writes still happen. See `docs/design/DECISIONS.md` (#33).
+
 ### Errors
 
 | Status | When |
@@ -181,7 +211,7 @@ Errors carry an `error` and a `stack`:
 cd services/session-actor
 npm install
 npm test          # tests/test_session_actor.test.mts (existing tests, do not edit)
-npm run check     # tests/check_itinerary.mts — itinerary + alarm self-check
+npm run check     # tests/check_itinerary.mts + tests/check_history.mts (step 7 + step 20)
 npm run typecheck
 ```
 

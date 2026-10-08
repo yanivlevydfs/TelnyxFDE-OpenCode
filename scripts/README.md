@@ -21,12 +21,14 @@ python scripts/build/vendor_shared.py
 | [live_check.py](ops/live_check.py) | End-to-end PASS/FAIL check: security on all services, the 4 MCP tools, search by anywhere/weekend/country, save and list, hidden caller id, the SMS kill switch, concurrent actor updates, metrics. |
 | [metrics.py](ops/metrics.py) | Live metrics dashboard from the `MetricsCounter` actor: counters, degraded-call rate, cache hit rate, latency. `--reset` clears it before a demo. |
 | [actor_concurrency_check.py](ops/actor_concurrency_check.py) | Proof for the Stateful Actor: N concurrent `recordCall` requests, no lost updates. |
+| [history.py](ops/history.py) | Read-only caller history + audit report (step 20): Telnyx conversations for one caller (filtered on `telnyx_end_user_target`), their insight results when present (`retrieve_conversations_insights`), and the actor's `getHistory` timeline. `--date YYYY-MM-DD` narrows to that day (Israel time). |
 | [workflow_paths.py](ops/workflow_paths.py) | Walks every Conversation Workflow path over the Telnyx chat API on one throwaway assistant copy (greeting, FAQ, search, negatives, human, goodbye, degraded and deals-off fallbacks), then deletes the copy and its TeXML app. The timeout escalation needs a real call. |
 
 ```bash
 python scripts/ops/live_check.py
 python scripts/ops/metrics.py [--reset]
 python scripts/ops/actor_concurrency_check.py 20
+python scripts/ops/history.py --caller +972...
 python scripts/ops/workflow_paths.py
 ```
 

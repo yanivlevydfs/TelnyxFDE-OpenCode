@@ -36,10 +36,17 @@ export function localIso(d: Date = new Date()): string {
   return `${date}T${time}${sign}${pad(Math.trunc(offMin / 60))}:${pad(offMin % 60)}`;
 }
 
+/** Mask a caller/entity id: `***` + last 4 digits (empty for empty input).
+ * Shared by every log line and the audit trail (step 20) — the full phone
+ * number is never logged nor written to Cloud Storage. */
+export function mask(id: string): string {
+  return id ? `***${id.slice(-4)}` : "";
+}
+
 /** Emit one JSON log line if it passes the LOG_LEVEL gate. */
 export function log(level: Level, event: string, fields: Record<string, unknown> = {}): void {
   if (LEVELS[level] < LEVELS[logLevel]) return;
-  const entity = typeof fields.entity === "string" && fields.entity ? `***${fields.entity.slice(-4)}` : undefined;
+  const entity = typeof fields.entity === "string" ? mask(fields.entity) : undefined;
   const line = JSON.stringify({
     ts: localIso(),
     level,

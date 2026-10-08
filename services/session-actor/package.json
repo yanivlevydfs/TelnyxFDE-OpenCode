@@ -7,7 +7,7 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "tsx --test ../../tests/test_session_actor.test.mts",
-    "check": "tsx --test ../../tests/check_itinerary.mts",
+    "check": "tsx --test ../../tests/check_itinerary.mts ../../tests/check_history.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
