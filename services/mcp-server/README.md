@@ -59,8 +59,8 @@ client, so the two transports are interchangeable.
 
 | Tool | What it does | Actor method |
 | --- | --- | --- |
-| `search_deals` | Query flytlv (KV-cached), speak deals back, remember them | `setLastResults` |
-| `save_deal` | Save one of the last-shown deals (actor validates the choice) | `saveDeal` |
+| `search_deals` | Query flytlv (KV-cached), speak deals back, remember them | `setLastResults` (with `query` + `conversationId`) |
+| `save_deal` | Save one of the last-shown deals (actor validates the choice) | `saveDeal` (with `conversationId`) |
 | `list_saved_deals` | Read the deals saved on previous calls | `getSaved` |
 
 Tool failures return `{ content:[{type:"text",text:msg}], isError:true }` so the
@@ -72,6 +72,15 @@ URL or API key).
 `search_deals` stores the deals it read aloud on the caller's actor via
 `setLastResults`; `save_deal` may only save a deal the caller was actually
 offered — the model cannot invent a price or URL.
+
+### History + audit pass-through (step 20)
+
+`search_deals` forwards the search args as `query` and the Telnyx conversation
+id as `conversationId` on every `setLastResults` call; `save_deal` and
+`send_deal_sms` forward `conversationId` on every `saveDeal` call. The actor
+appends a bounded history entry per event and writes an immutable audit object
+to Cloud Storage (see the `services/session-actor` README). No new MCP tool —
+the conversation id already arrives in `params._meta.telnyx_conversation_id`.
 
 ## Itinerary + reminder config travels with the call (step 11)
 

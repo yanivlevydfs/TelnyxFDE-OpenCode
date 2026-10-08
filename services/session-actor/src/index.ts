@@ -61,6 +61,7 @@ const ALLOWED_METHODS = [
   "setLastResults",
   "saveDeal",
   "getSaved",
+  "getHistory",
 ] as const;
 type AllowedMethod = (typeof ALLOWED_METHODS)[number];
 
@@ -70,7 +71,12 @@ type AllowedMethod = (typeof ALLOWED_METHODS)[number];
  * instance, which is too — the methods resolve on the prototype. */
 type CallerSessionStub = Pick<
   CallerSession,
-  "recordCall" | "getProfile" | "setLastResults" | "saveDeal" | "getSaved"
+  | "recordCall"
+  | "getProfile"
+  | "setLastResults"
+  | "saveDeal"
+  | "getSaved"
+  | "getHistory"
 >;
 
 /** Bindings environment — declared by `telnyx.toml` (`[[actors]]`,
@@ -255,11 +261,15 @@ async function dispatch(
       return await stub.getProfile();
     case "getSaved":
       return await stub.getSaved();
+    case "getHistory":
+      return await stub.getHistory();
     case "setLastResults":
-      return await stub.setLastResults((body ?? {}) as { deals: unknown });
+      return await stub.setLastResults(
+        (body ?? {}) as { deals: unknown; query?: unknown; conversationId?: unknown },
+      );
     case "saveDeal":
       return await stub.saveDeal(
-        (body ?? {}) as { dealId?: string; config?: SaveDealConfig },
+        (body ?? {}) as { dealId?: string; config?: SaveDealConfig; conversationId?: unknown },
       );
   }
 }

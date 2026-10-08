@@ -439,3 +439,47 @@ PRESENTATION.md; leave those files unchanged). Then:
   was written by OpenCode (step 18).
 - Update the structure tree in AGENTS.md, docs/README.md and the README Documentation table.
 Change no code. Do not commit.
+
+## 20. Caller history and audit trail
+
+Goal: answer "what did this caller look for (destinations, dates, flights) and when?" for history
+and for auditing. Three layers; keep each small, reuse existing helpers, follow AGENTS.md rules
+(env-driven values, JSON logs, error handling, no hardcoding). Do not run provisioning or ship.
+
+1. Telnyx conversation insights (assistant/provision.py). Verified live on 2026-10-08: Telnyx keeps
+   every assistant conversation (`client.ai.conversations.list/retrieve`, messages via
+   `client.ai.conversations.messages.list(id)`, metadata has `telnyx_end_user_target` = caller and
+   `telnyx_conversation_id`); the assistant's `insight_settings.insight_group_id` points at the
+   "Default" group, which only has a "Summary" insight. In provision.py, create (or reuse by name)
+   an insight group "FlyTLV caller intent" with insights for: destinations asked about, travel
+   dates / trip type, deal saved (destination + price) and call outcome; set it in
+   `assistant_body()` as `insight_settings`. Use the Telnyx SDK (`client.ai.conversations.insight_groups`,
+   `client.ai.conversations.insights`); check the SDK signatures in .venv before writing. Group name
+   from env with that default. Keep `--dry-run` working and tests/test_assistant.py green.
+
+2. Per-caller search history in the CallerSession actor (services/session-actor). `setLastResults`
+   gets an optional `query` ({destination, country, category, trip_type, direct_only, dates, ...}
+   exactly as search_deals received them) and `conversationId`; the actor appends
+   `{ts, conversationId, query, resultCount, topDealIds (max 3)}` to `searchHistory`, capped by
+   SEARCH_HISTORY_MAX (default 50, oldest dropped). Saves already exist in savedDeals; also append a
+   `{ts, conversationId, type:"save", dealId}` entry. New read method `getHistory()` on the actor and
+   the HTTP facade (same auth as the other routes). The MCP server passes `query` and the
+   conversation id on its existing setLastResults call.
+
+3. Audit trail in Cloud Storage. In the same actor calls, write one immutable JSON object per event
+   to the existing bucket binding under `audit/<YYYY-MM-DD>/<conversationId>/<ts>-<type>.json`
+   (prefix from env AUDIT_PREFIX, default "audit/"). The object holds the event plus a masked caller
+   (reuse the existing masking helper; never the full number). A failed audit write logs ERROR with
+   the stack and never fails the tool call. Keep `alarm()` untouched.
+
+4. scripts/ops/history.py: read-only report for one caller (`--caller +972...`) or one date: Telnyx
+   conversations for that caller (filter on `telnyx_end_user_target`), their insights when present,
+   and the actor's `getHistory`. JSON log lines through shared/common.py like the other ops scripts.
+
+Tests: add tests/check_history.mts (actor: history append + cap, save entry, audit object written
+with masked caller, audit failure does not fail the call, getHistory route) and an `npm run check`
+entry if convenient; add a provision dry-run assertion for insight_settings only if it fits
+test_assistant.py without editing existing tests (else a new tests/check_insights.py). Run every
+test and self-check listed in tests/README.md and keep them all green. Update READMEs
+(session-actor, mcp-server, scripts, assistant) and docs/design/DECISIONS.md with one decision row
+("history in the actor, audit in Cloud Storage, insights in Telnyx; not KV"). Do not commit.

@@ -160,8 +160,12 @@ test("saveDeal writes one HTML object and returns its URL", async () => {
   assert.ok(
     profile.itineraryUrl!.startsWith("https://itinerary.test/itineraries/"),
   );
-  assert.equal(bucket.objects.size, 1, "exactly one HTML object in the bucket");
-  const key = [...bucket.objects.keys()][0];
+  assert.equal(
+    [...bucket.objects.keys()].filter((k) => k.startsWith("itineraries/")).length,
+    1,
+    "exactly one HTML object in the bucket",
+  );
+  const key = [...bucket.objects.keys()].find((k) => k.startsWith("itineraries/"))!;
   assert.equal(key, `itineraries/${uuid}.html`);
   const obj = bucket.objects.get(key)!;
   assert.equal(obj.contentType, "text/html; charset=utf-8");
@@ -188,7 +192,11 @@ test("re-save reuses the existing itinerary file (same key, no new object)", asy
     second.itineraryUrl,
     "re-save returns the same itinerary URL",
   );
-  assert.equal(bucket.objects.size, 1, "still one HTML object after re-save");
+  assert.equal(
+    [...bucket.objects.keys()].filter((k) => k.startsWith("itineraries/")).length,
+    1,
+    "still one HTML object after re-save",
+  );
 });
 
 test("alarm() sends exactly one SMS; a second alarm sends none", async () => {

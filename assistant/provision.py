@@ -7,10 +7,14 @@ official Telnyx Python SDK. In order it provisions:
 2. an **MCP server** (``/ai/mcp_servers``) pointing at the deployed MCP Edge
    Function, authenticated with the secret above so Telnyx sends the bearer
    token on every tool call,
-3. the **AI assistant** (``/ai/assistants``) with the conversation workflow,
-   dynamic variables webhook, MCP server reference and tools built by
-   ``assistant/flow.py``,
-4. links a **phone number** to the assistant so the line is callable.
+3. a **conversation insight group** (``/ai/conversations/insight-groups``)
+   "FlyTLV caller intent" with four insights (destinations, dates/trip type,
+   deal saved, call outcome) so Telnyx summarizes every conversation, reused by
+   name on re-runs,
+4. the **AI assistant** (``/ai/assistants``) with the conversation workflow,
+   dynamic variables webhook, MCP server reference, tools and
+   ``insight_settings`` built by ``assistant/flow.py``,
+5. links a **phone number** to the assistant so the line is callable.
 
 Every URL, id, model and voice comes from environment variables / Telnyx Edge
 secrets — nothing is hardcoded. ``--dry-run`` skips all API calls and prints
@@ -125,6 +129,11 @@ def assistant_body(env: dict[str, str], mcp_id: str,
     the assistant references it by id. Model, voice and the webhook URL are
     required and come from env vars; everything else has safe defaults so a
     ``--dry-run`` with just the required vars produces a complete body.
+
+    ``insight_settings.insight_group_id`` references the "FlyTLV caller intent"
+    insight group (created by ``_ensure_insight_group`` during provisioning).
+    During ``--dry-run`` the id is whatever ``INSIGHT_GROUP_ID`` carries (empty
+    by default) — the real provisioning step sets it before the body is built.
     """
     if conversation_timeout_secs is None:
         conversation_timeout_secs = _int(env, "CONVERSATION_TIMEOUT_SECS", 600)
@@ -134,6 +143,9 @@ def assistant_body(env: dict[str, str], mcp_id: str,
     transfer_to = _opt(env, "TRANSFER_TO_NUMBER", "")
 
     return {
+        "insight_settings": {
+            "insight_group_id": env.get("INSIGHT_GROUP_ID", ""),
+        },
         "name": _opt(env, "ASSISTANT_NAME", "FlyTLV Travel Line"),
         "description": _opt(
             env, "ASSISTANT_DESCRIPTION",
@@ -226,6 +238,143 @@ async def _hangup_tool(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> str:
     return tool.id
 
 
+# ------------------------------------------------------- conversation insights
+#
+# Telnyx keeps every assistant conversation and can run "insights" (LLM
+# summaries derived from the transcript) on them. An assistant points at one
+# "insight group"; the insights in that group run automatically for every
+# conversation. Verified live 2026-10-08: `client.ai.conversations.insight_groups`
+# and `client.ai.conversations.insights` (Telnyx SDK); the "Default" group only
+# has a "Summary" insight, so we create a dedicated group with four custom
+# caller-intent insights, reuse what already exists by name (re-runnable), and
+# set the group id on `assistant_body().insight_settings`.
+#
+# SDK notes (verified in .venv):
+#   - create group:  `insight_groups.insight_groups(*, name, ...)`  (yes, the
+#     method is named the same as the resource) -> InsightTemplateGroupDetail.data.id
+#   - list groups:    `insight_groups.retrieve_insight_groups(page_size=)` ->
+#     AsyncPaginator[InsightTemplateGroup] (iterate with `async for`)
+#   - create insight: `insights.create(*, name, instructions)` ->
+#     InsightTemplateDetail.data.id
+#   - list insights:  `insights.list(page_size=)` -> AsyncPaginator[InsightTemplate]
+#   - assign to group: `insight_groups.insights.assign(insight_id, *, group_id=)`
+
+def _insight_definitions() -> list[dict[str, str]]:
+    """The four caller-intent insights (name + instructions).
+
+    Each insight is an LLM prompt that runs against a conversation's transcript;
+    the result is stored on the conversation and readable via the SDK for history
+    (``scripts/ops/history.py``). Names are stable identifiers (not free text) so
+    re-runs reuse the same insight instead of duplicating it.
+    """
+    return [
+        {
+            "name": "flytlv_destinations",
+            "instructions": (
+                "Extract the destination(s) the caller asked about during this "
+                "conversation: the city and/or IATA code. Return 'none' if the "
+                "caller did not name a destination. For multiple, list them."
+            ),
+        },
+        {
+            "name": "flytlv_dates_triptype",
+            "instructions": (
+                "Extract the travel dates the caller asked for (departure and "
+                "return, or a one-way date) and the trip type (one_way or "
+                "round_trip). Return 'flexible' for dates if the caller did not "
+                "give a specific date."
+            ),
+        },
+        {
+            "name": "flytlv_deal_saved",
+            "instructions": (
+                "Did the caller save a deal? If so, return the destination (city), "
+                "the price with currency, and the deal_id. Return 'no' if no deal "
+                "was saved."
+            ),
+        },
+        {
+            "name": "flytlv_call_outcome",
+            "instructions": (
+                "Summarize the call outcome in one phrase: e.g. 'deal saved', "
+                "'searched no save', 'transferred to human', 'caller ended', "
+                "'no deals found'."
+            ),
+        },
+    ]
+
+
+async def _ensure_insight_group(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> str:
+    """Create (or reuse by name) the "FlyTLV caller intent" insight group with
+    its four insights, and return the group id.
+
+    Re-runnable: an existing group and insights are reused; an insight already
+    assigned to the group is left as-is. Failures are logged and re-raised so
+    an aborting provision is clear (same contract as the other steps).
+    """
+    group_name = _opt(env, "INSIGHT_GROUP_NAME", "FlyTLV caller intent")
+
+    # Find an existing group by name (reuse on re-runs).
+    group_id: str | None = None
+    try:
+        pager = client.ai.conversations.insight_groups.retrieve_insight_groups(
+            page_size=100,
+        )
+        async for g in pager:
+            if _get(g, "name") == group_name:
+                group_id = _get(g, "id")
+                break
+    except telnyx.APIError as exc:
+        c.error("provision.insight_group_list_failed", error=str(exc), exc_info=True)
+        raise
+
+    if group_id:
+        c.info("provision.insight_group_reused", id=group_id, name=group_name)
+    else:
+        created = await client.ai.conversations.insight_groups.insight_groups(
+            name=group_name,
+        )
+        group_id = _get(_get(created, "data"), "id")
+        c.info("provision.insight_group_created", id=group_id, name=group_name)
+
+    # Index existing insights by name so we reuse instead of duplicating.
+    existing: dict[str, str] = {}
+    try:
+        ipager = client.ai.conversations.insights.list(page_size=100)
+        async for ins in ipager:
+            name = _get(ins, "name")
+            if name:
+                existing[name] = _get(ins, "id")
+    except telnyx.APIError as exc:
+        c.error("provision.insight_list_failed", error=str(exc), exc_info=True)
+        raise
+
+    for defn in _insight_definitions():
+        ins_id = existing.get(defn["name"])
+        if ins_id:
+            c.info("provision.insight_reused", id=ins_id, name=defn["name"])
+        else:
+            created = await client.ai.conversations.insights.create(
+                name=defn["name"], instructions=defn["instructions"],
+            )
+            ins_id = _get(_get(created, "data"), "id")
+            c.info("provision.insight_created", id=ins_id, name=defn["name"])
+        # Assign the insight into the group. Idempotent on re-runs: Telnyx returns
+        # a 422 ("already assigned" style) when it is already a member — match the
+        # same pattern as _create_integration_secret's "already in use" guard.
+        try:
+            await client.ai.conversations.insight_groups.insights.assign(
+                ins_id, group_id=group_id,
+            )
+            c.info("provision.insight_assigned", insight=ins_id, group=group_id)
+        except telnyx.UnprocessableEntityError as exc:
+            if "already" not in str(exc).lower():
+                raise
+            c.warning("provision.insight_already_assigned", insight=ins_id, error=str(exc))
+
+    return group_id
+
+
 def _extract_connection_id(assistant: Any) -> str | None:
     """Best-effort read of a telephony connection id from an assistant record.
 
@@ -294,6 +443,9 @@ async def provision(client: telnyx.AsyncTelnyx, env: dict[str, str]) -> Any:
     # Re-running: reuse an already registered MCP server instead of adding another.
     mcp_id = env.get("MCP_SERVER_ID") or await _create_mcp_server(client, env, secret_ref)
     env.setdefault("HANGUP_TOOL_ID", await _hangup_tool(client, env))
+    # The conversation insight group ("FlyTLV caller intent") whose insights run
+    # for every conversation; its id is wired into assistant_body().insight_settings.
+    env.setdefault("INSIGHT_GROUP_ID", await _ensure_insight_group(client, env))
     body = assistant_body(env, mcp_id)
     if env.get("ASSISTANT_ID"):
         # Re-running: update the existing assistant (same id, same phone link).

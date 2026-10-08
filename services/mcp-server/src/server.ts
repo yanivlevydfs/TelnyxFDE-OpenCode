@@ -509,13 +509,23 @@ function saveDealConfig(): Record<string, unknown> {
 /**
  * Body for a `saveDeal` actor call: the chosen `dealId` plus the per-call
  * `config` (itinerary base URL, reminder delay, SMS sender / profile) the
- * actor cannot reliably read from its own `process.env` in production.
- * `config` is omitted entirely when no values are present (so unit-test
- * fakes that swallow the body keep working without a config field).
+ * actor cannot reliably read from its own `process.env` in production, and
+ * the `conversationId` so the actor's save history + audit (step 20) tie the
+ * save to a Telnyx conversation. `config` is omitted entirely when no values
+ * are present (so unit-test fakes that swallow the body keep working without
+ * a config field); `conversationId` is omitted when empty.
  */
-function saveDealBody(dealId: string): { dealId: string; config?: Record<string, unknown> } {
+function saveDealBody(
+  dealId: string,
+  conversationId?: string,
+): { dealId: string; config?: Record<string, unknown>; conversationId?: string } {
   const cfg = saveDealConfig();
-  return Object.keys(cfg).length ? { dealId, config: cfg } : { dealId };
+  const body: { dealId: string; config?: Record<string, unknown>; conversationId?: string } = {
+    dealId,
+  };
+  if (conversationId) body.conversationId = conversationId;
+  if (Object.keys(cfg).length) body.config = cfg;
+  return body;
 }
 
 /** The KV flag flags/assistant.sms_enabled (default on; KV failure = on). */
@@ -668,8 +678,16 @@ export function createServer(
 
       // Remember the deals on the caller's actor (decision #13). A hidden or
       // anonymous caller id has no session: still read the deals, but nothing
-      // can be saved or texted for them.
-      if (entityId) await callActor(actor, entityId, "setLastResults", { deals: slimmed });
+      // can be saved or texted for them. `query` (the args exactly as received)
+      // and `conversationId` travel with the call so the actor's history +
+      // audit (step 20) record what this caller searched for and when.
+      if (entityId) {
+        await callActor(actor, entityId, "setLastResults", {
+          deals: slimmed,
+          query: args as Record<string, unknown>,
+          conversationId: conv,
+        });
+      }
       info("mcp.search_deals", {
         caller: mask(entityId ?? ""),
         deals: slimmed.length,
@@ -700,8 +718,10 @@ export function createServer(
       const dealId = args.deal_id.trim();
       // Forward the itinerary/reminder config on the saveDeal body (live
       // finding, step 11): the actor's umbrella telnyx.toml [env_vars] do not
-      // reach actor instances' process.env, so we hand them over here.
-      const profile = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId))) as
+      // reach actor instances' process.env, so we hand them over here. The
+      // conversation id is passed too so the actor's save history + audit
+      // (step 20) tie the save to this Telnyx conversation.
+      const profile = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId, conv))) as
         | { itineraryUrl?: string }
         | undefined;
       info("mcp.save_deal", { caller: mask(entityId), deal: dealId });
@@ -763,7 +783,7 @@ export function createServer(
         // actor's umbrella telnyx.toml [env_vars] do not reach actor instances'
         // process.env, so it learns itineraryBaseUrl / smsFrom /
         // messagingProfileId from this call instead.
-        const saveResult = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId))) as
+        const saveResult = (await callActor(actor, entityId, "saveDeal", saveDealBody(dealId, conv))) as
           | { itineraryUrl?: string }
           | undefined;
         const saved = (await callActor(actor, entityId, "getSaved")) as { deals?: Deal[] };

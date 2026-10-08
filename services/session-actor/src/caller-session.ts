@@ -14,6 +14,10 @@
  *                     The webhook reads `savedDeals` (via `lastSaved`) to say
  *                     "welcome back, last time you saved Larnaca for 64 dollars".
  *
+ * Plus a bounded `searchHistory` timeline of search + save events (step 20),
+ * readable via `getHistory()`, with an immutable copy of each event written to
+ * Cloud Storage as an audit record.
+ *
  * Why an actor (not KV): all three are read-modify-write per caller; KV is
  * last-write-wins with no compare-and-set, so two concurrent calls from the
  * same caller would race and lose updates. Telnyx serializes each actor
@@ -30,7 +34,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { log } from "./log.js";
+import { log, localIso, mask } from "./log.js";
 import {
   StatefulActor,
   type AlarmInfo,
@@ -96,6 +100,32 @@ const K_SAVED_DEALS = "savedDeals";
 const K_ITINERARY_KEYS = "itineraryKeys";
 /** Pending follow-up reminder consumed by `alarm()`. */
 const K_PENDING_REMINDER = "pendingReminder";
+/** Per-caller timeline of search + save events (capped by SEARCH_HISTORY_MAX). */
+const K_SEARCH_HISTORY = "searchHistory";
+
+/**
+ * One entry in the caller's history timeline. `search` entries come from
+ * `setLastResults` (the query the model ran + result count + up to 3 deal ids);
+ * `save` entries come from `saveDeal`. Together they answer "what did this
+ * caller look for (destinations, dates, flights) and when?" — readable via
+ * `getHistory()` and audited to Cloud Storage by `_writeAudit`.
+ */
+export interface HistoryEntry {
+  /** Epoch millis when the event happened. */
+  ts: number;
+  /** Telnyx conversation id (empty when unknown). */
+  conversationId?: string;
+  /** `"search"` (setLastResults) or `"save"` (saveDeal). */
+  type: "search" | "save";
+  /** For "search": the query exactly as search_deals received it. */
+  query?: Record<string, unknown>;
+  /** For "search": how many deals came back. */
+  resultCount?: number;
+  /** For "search": up to 3 deal ids from the top of the results. */
+  topDealIds?: string[];
+  /** For "save": the saved deal id. */
+  dealId?: string;
+}
 
 /** Whether v looks structurally like a Deal. Only `dealId` is required to be a
  * string — it is the key we look up by and dedup on. Other fields are passed
@@ -160,6 +190,34 @@ function pickPositiveNumber(v: unknown, name: string, def: number): number {
     }
   }
   return def;
+}
+
+/** Map a caller id (actor id = digits) for the audit trail: `***` + last 4
+ * digits — reuses the shared `mask` helper from `log.ts` (the same mask used
+ * on every log line). The full phone number is never written to Cloud Storage. */
+function maskCaller(id: string): string {
+  return mask(id);
+}
+
+/** Audit Cloud Storage key prefix (env `AUDIT_PREFIX`, default "audit/").
+ * In production the actor's umbrella `[env_vars]` do not reach actor instances
+ * (live finding, step 11), so this defaults to "audit/" there; the bucket
+ * binding (`env.ITINERARIES`) does reach the actor, so writes still happen. */
+function auditPrefix(): string {
+  const v = process.env.AUDIT_PREFIX;
+  if (typeof v === "string" && v.trim()) return v.trim().replace(/\/?$/, "/");
+  return "audit/";
+}
+
+/** Max entries kept in `searchHistory` (env `SEARCH_HISTORY_MAX`, default 50).
+ * Bad-typed / non-positive values fall back to the default. */
+function searchHistoryMax(): number {
+  const v = process.env.SEARCH_HISTORY_MAX;
+  if (typeof v === "string") {
+    const n = Number(v.trim());
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return 50;
 }
 
 // ----------------------------------------------- actor Env binding types
@@ -243,8 +301,17 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    * entry whose `dealId` is not a string — the actor only trusts what it
    * stored, so a malformed upload fails loudly instead of letting
    * `save_deal` match against garbage.
+   *
+   * When `query` and `conversationId` are present, appends a `search` entry to
+   * the caller's history timeline (`searchHistory`, capped by
+   * `SEARCH_HISTORY_MAX`, default 50) and writes an immutable audit JSON
+   * object to Cloud Storage. Both are best-effort and never fail the call.
    */
-  async setLastResults(input: { deals: unknown }): Promise<{ stored: number }> {
+  async setLastResults(input: {
+    deals: unknown;
+    query?: unknown;
+    conversationId?: unknown;
+  }): Promise<{ stored: number }> {
     if (!input || !Array.isArray(input.deals)) {
       throw new ActorInputError("deals must be an array");
     }
@@ -254,6 +321,33 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
       }
     }
     await this.ctx.storage.put(K_LAST_RESULTS, input.deals);
+
+    // Per-caller search history + audit (step 20). `query` is the search_deals
+    // args exactly as received; `conversationId` ties the event to a Telnyx
+    // conversation (also the audit path segment). Bad types are ignored so they
+    // can never break a search.
+    const query = typeof input.query === "object" && input.query !== null &&
+      !Array.isArray(input.query)
+      ? (input.query as Record<string, unknown>)
+      : undefined;
+    const conversationId = typeof input.conversationId === "string" && input.conversationId.length > 0
+      ? input.conversationId
+      : undefined;
+    const topDealIds = input.deals
+      .slice(0, 3)
+      .map((d) => (d as Deal).dealId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const entry: HistoryEntry = {
+      ts: Date.now(),
+      type: "search",
+      ...(conversationId ? { conversationId } : {}),
+      ...(query ? { query } : {}),
+      resultCount: input.deals.length,
+      ...(topDealIds.length ? { topDealIds } : {}),
+    };
+    await this._appendHistory(entry);
+    await this._writeAudit(entry);
+
     log("INFO", "setLastResults", {
       entity: this.ctx.id,
       count: input.deals.length,
@@ -291,7 +385,11 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
    * `lastSaved` immediately; `itineraryUrl` is present when the side-effects
    * all succeeded.
    */
-  async saveDeal(input: { dealId?: string; config?: SaveDealConfig }): Promise<Profile> {
+  async saveDeal(input: {
+    dealId?: string;
+    config?: SaveDealConfig;
+    conversationId?: unknown;
+  }): Promise<Profile> {
     const dealId = input?.dealId;
     if (typeof dealId !== "string" || dealId.length === 0) {
       throw new ActorInputError("dealId is required");
@@ -319,6 +417,21 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
       found,
       input?.config,
     );
+
+    // Per-caller save history + audit (step 20). Appended on every saveDeal
+    // call (including re-saves) so the timeline reflects every save attempt;
+    // the conversation id ties it to a Telnyx conversation. Best-effort.
+    const conversationId = typeof input?.conversationId === "string" && input.conversationId.length > 0
+      ? input.conversationId
+      : undefined;
+    const saveEntry: HistoryEntry = {
+      ts: Date.now(),
+      type: "save",
+      ...(conversationId ? { conversationId } : {}),
+      dealId,
+    };
+    await this._appendHistory(saveEntry);
+    await this._writeAudit(saveEntry);
 
     log("INFO", "saveDeal", {
       entity: this.ctx.id,
@@ -439,6 +552,72 @@ export class CallerSession extends StatefulActor<SessionActorEnv> {
   async getSaved(): Promise<{ savedCount: number; deals: Deal[] }> {
     const saved = (await this.ctx.storage.get<Deal[]>(K_SAVED_DEALS)) ?? [];
     return { savedCount: saved.length, deals: saved };
+  }
+
+  /**
+   * Return the caller's history timeline (search + save events), newest last.
+   * Read by the HTTP facade's `getHistory` route and `scripts/ops/history.py`.
+   * The actor serializes turns, so this is a consistent snapshot.
+   */
+  async getHistory(): Promise<{ history: HistoryEntry[] }> {
+    const history = (await this.ctx.storage.get<HistoryEntry[]>(K_SEARCH_HISTORY)) ?? [];
+    return { history };
+  }
+
+  /**
+   * Append one entry to the caller's `searchHistory`, capped by
+   * `SEARCH_HISTORY_MAX` (default 50, oldest dropped). The cap keeps actor
+   * storage bounded — the full audit trail lives in Cloud Storage (see
+   * `_writeAudit`); `searchHistory` is the quick in-actor read for history.
+   */
+  private async _appendHistory(entry: HistoryEntry): Promise<void> {
+    const history = (await this.ctx.storage.get<HistoryEntry[]>(K_SEARCH_HISTORY)) ?? [];
+    history.push(entry);
+    await this.ctx.storage.put(K_SEARCH_HISTORY, history.slice(-searchHistoryMax()));
+  }
+
+  /**
+   * Write one immutable audit JSON object per event to the existing
+   * `env.ITINERARIES` Cloud Storage bucket under
+   * `${AUDIT_PREFIX}<YYYY-MM-DD>/<conversationId>/<ts>-<type>.json`. The
+   * object holds the event plus a **masked caller** (never the full number).
+   *
+   * Best-effort: a missing bucket logs a `WARNING` (audit skipped) and a
+   * failed write logs `ERROR` with the stack — neither ever fails the tool
+   * call. `alarm()` is untouched (per the step-20 spec).
+   */
+  private async _writeAudit(entry: HistoryEntry): Promise<void> {
+    const bucket = this.env.ITINERARIES;
+    if (!bucket) {
+      log("WARNING", "audit_skipped", {
+        entity: this.ctx.id,
+        type: entry.type,
+        reason: "noITINERARIES",
+      });
+      return;
+    }
+    try {
+      const date = localIso().slice(0, 10); // YYYY-MM-DD in LOG_TIMEZONE
+      const conv = entry.conversationId || "unknown";
+      const key = `${auditPrefix()}${date}/${conv}/${entry.ts}-${entry.type}.json`;
+      const body = JSON.stringify({ ...entry, caller: maskCaller(this.ctx.id) });
+      await bucket.put(key, body, {
+        httpMetadata: { contentType: "application/json" },
+      });
+      log("INFO", "audit_written", {
+        entity: this.ctx.id,
+        type: entry.type,
+        key,
+      });
+    } catch (e) {
+      // A failed audit write must never fail the tool call.
+      log("ERROR", "audit_write_failed", {
+        entity: this.ctx.id,
+        type: entry.type,
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      });
+    }
   }
 
   /**
