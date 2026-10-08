@@ -503,7 +503,7 @@ Deploys run from Linux in GitHub Actions
 ([.github/workflows/ship.yml](.github/workflows/ship.yml)), because
 `telnyx-edge` on Windows zips paths with backslashes and breaks multi-folder
 functions (see "What broke during development" above). The workflow vendors
-`shared/common.py`, installs `telnyx-edge` v0.5.9, logs in with the repo secret
+`shared/common.py`, installs `telnyx-edge` v0.5.10, logs in with the repo secret
 `TELNYX_API_KEY` and runs `telnyx-edge ship` for each service.
 
 - **Automatic:** a push to `master` that changes `services/` or `shared/` ships

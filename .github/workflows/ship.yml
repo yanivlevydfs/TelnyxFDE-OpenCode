@@ -22,7 +22,7 @@ on:
     paths: ["services/**", "shared/**"]
 
 env:
-  TELNYX_EDGE_VERSION: v0.5.9
+  TELNYX_EDGE_VERSION: v0.5.10
 
 jobs:
   ship:
