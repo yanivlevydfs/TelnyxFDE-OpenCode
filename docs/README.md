@@ -11,6 +11,7 @@
 | `guides/` | [HOW_TO_CALL.md](guides/HOW_TO_CALL.md) | For callers: what to say to the phone agent and what you get back |
 |  | [INTEGRATION.md](guides/INTEGRATION.md) | Every integration point, config reference, deploy, testing, troubleshooting (audience: engineers) |
 |  | [DEMO_SCRIPT.md](guides/DEMO_SCRIPT.md) | The 8–10 minute demo-day walkthrough |
+|  | [PRESENTATION.md](guides/PRESENTATION.md) | Slide text for the 7–10 min "Live Walkthrough & Decision Review" deck |
 | `build/` | [PROMPTS.md](build/PROMPTS.md) | The OpenCode (Telnyx Inference) build prompts, one per component |
 |  | [DOGFOODING.md](build/DOGFOODING.md) | What worked and what did not with OpenCode + Telnyx Inference |
 

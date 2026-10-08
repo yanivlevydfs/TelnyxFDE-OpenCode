@@ -27,6 +27,7 @@ Every Markdown file in the repo, grouped by area, each with a one-line purpose t
 | Design | [docs/design/PRODUCT.md](docs/design/PRODUCT.md) | Product brief for Telnyx reviewers and product people |
 | Guides | [docs/guides/HOW_TO_CALL.md](docs/guides/HOW_TO_CALL.md) | How a caller talks to the FlyTLV Travel Line |
 | Guides | [docs/guides/DEMO_SCRIPT.md](docs/guides/DEMO_SCRIPT.md) | Demo script for the live 8–10 min demo |
+| Guides | [docs/guides/PRESENTATION.md](docs/guides/PRESENTATION.md) | Slide text for the 7–10 min Live Walkthrough & Decision Review deck |
 | Guides | [docs/guides/INTEGRATION.md](docs/guides/INTEGRATION.md) | Integration & operations guide for engineers |
 | Build | [docs/build/PROMPTS.md](docs/build/PROMPTS.md) | Build prompts and step status for OpenCode |
 | Build | [docs/build/DOGFOODING.md](docs/build/DOGFOODING.md) | Dogfooding notes: OpenCode + Telnyx Inference |
