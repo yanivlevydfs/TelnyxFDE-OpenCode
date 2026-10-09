@@ -585,3 +585,55 @@ storage_check.py gets `S3 ListObjectsV2 returned 301` because the default STORAG
 works. Default the endpoint to `https://{STORAGE_S3_REGION}.telnyxcloudstorage.com` when
 STORAGE_S3_ENDPOINT is empty, and set the .env.example line to empty with that comment.
 Change nothing else. Keep check_env green. Do not commit.
+
+## 23. Align the demo-day deck with what is built and live
+
+The deck source is docs/presentation/deck/ (deck.json + slides/*.html, 19 slides) and its slide
+text is docs/presentation/PRESENTATION.md. Both predate steps 20-22. Audit EVERY slide claim and
+speaker note (`<aside>`) against the code, docs and live facts below, and fix what is wrong or
+missing. Keep claims sourced; invent nothing; `TODO(Yaniv): ...` for anything you cannot verify.
+
+Facts since the deck was made (verified live 2026-10-08/09):
+- Step 20: per-caller `searchHistory` in CallerSession (last 50 searches + saves, `getHistory`);
+  Telnyx insight group "FlyTLV caller intent" (destinations, dates/trip type, deal saved, call
+  outcome) created by provision.py and set on the assistant; scripts/ops/history.py report.
+- Step 21: every setting the code reads is in .env.example; services declare their own;
+  local scripts load .env; tests/check_env.py guards it.
+- Step 22/22b: Cloud Storage bucket is HARD-capped at 5 objects (live error
+  `TooManyObjects`, found from the actor logs: itinerary_write_failed / audit_write_failed while
+  live_check still passed). Now only fixed keys, always overwritten: 4 itinerary slots
+  `itineraries/slot-<n>.html` (caller hashed to a slot, ONE token per caller, public link
+  `/itineraries/<slot>-<token>.html`, 404 when another caller took the slot) + ONE audit object
+  `audit/latest.json` written by a singleton AuditLog actor keeping the last 200 events.
+  storage_check.py verifies the bucket. So "one JSON per event" (slide `history`) is now WRONG.
+- live_check.py now has 23 checks (adds itinerary link 200 and fake-token 404) and uses one fixed
+  test caller; 23/23 live after deploy. workflow_paths 15/15.
+- Three actor classes now: CallerSession, MetricsCounter, AuditLog.
+- Phone +972 76 567 1113: still not approved by Telnyx (requirement-info-exception); keep the
+  cover's "regulatory approval pending" and say the Portal browser test call is the fallback.
+- Telnyx Edge CLI v0.5.10 in CI.
+
+Slides most likely affected: history, saveflow, state, stretch, observe, trace, deploy, bug
+(consider adding the TooManyObjects finding as a second, short evidence story in the notes or on
+the bug slide), opencode, next (history/audit is done, not "next"), arch and sequence (actors).
+
+Slide format rules (the deck renderer is strict): one `<section id="<file name>">` per file, all
+styles inline, only the tags already used in these files (h2, h3, p, ul/ol/li, div, table/tr/th/td,
+span, b, x-connector, x-icon, aside), no new CSS properties, no font size below 24px, keep each
+section inside the 1920x1080 canvas (content above y=920, footer row unchanged). Prefer changing
+words over layout; if a box needs more text, shorten the text instead of growing the box. If you
+add or remove a slide, update deck.json "order" and renumber every footer "N / total".
+Update PRESENTATION.md to match the slides. Do not touch any other file. Do not commit.
+
+### 23b. Layout fixes from review of step 23
+
+1. bug.html: the new orange box uses `margin-top:24px`; margin is not in the deck's CSS subset
+   (only margin 0 is accepted). Remove it; the section's `gap` already spaces the box.
+2. observe.html: the slide now overflows its 824 px content height (5 two-line bullets plus an
+   extra line). Remove the new 5th bullet and merge its fact into the new bottom line, kept to ONE
+   line of at most 100 characters at 24px, e.g. "Also: AuditLog keeps audit/latest.json (last 200);
+   live_check 23 checks; storage_check guards the cap." (shorten as needed).
+3. state.html: the table now has 10 rows and slightly overflows. Set the table font-size to 25px
+   (from 27px). Keep every row.
+4. Delete the stray empty file `nul` in the repo root (created by mistake).
+Do not touch other files. Do not commit.

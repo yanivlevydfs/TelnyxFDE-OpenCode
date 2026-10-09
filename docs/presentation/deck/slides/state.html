@@ -3,15 +3,16 @@
 <p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Actor vs KV vs plain function logic</p>
 <h2 style="font-size:56px;font-weight:600;line-height:1.15">The cheapest primitive that is still correct</h2>
 </div>
-<table style="font-family:'IBM Plex Sans', Arial, sans-serif;font-size:27px;color:#14213D">
+<table style="font-family:'IBM Plex Sans', Arial, sans-serif;font-size:25px;color:#14213D">
 <tr style="background:#0F1B2D"><th style="width:30%;color:#F5F6F2">State</th><th style="width:22%;color:#F5F6F2">Primitive</th><th style="width:48%;color:#F5F6F2">Why</th></tr>
 <tr style="background:#FCFCFA"><td>Feature flags</td><td>KV</td><td>Read-mostly, operator-set; no redeploy</td></tr>
 <tr style="background:#F5F6F2"><td>Deal search cache</td><td>KV + TTL</td><td>Skip repeat flytlv calls; seconds-stale is fine</td></tr>
 <tr style="background:#FCFCFA"><td>Conversation → caller</td><td>KV + TTL</td><td>One write by webhook, read by MCP</td></tr>
-<tr style="background:#E3F1EA"><td>Calls, results, saved deals</td><td>Stateful Actor</td><td>Atomic read-modify-write; KV has no CAS</td></tr>
+<tr style="background:#E3F1EA"><td>Calls, results, saved, history</td><td>Stateful Actor</td><td>Atomic read-modify-write; KV has no CAS</td></tr>
 <tr style="background:#E3F1EA"><td>Service counters, latency</td><td>MetricsCounter Actor</td><td>Concurrent increments; KV would lose some</td></tr>
 <tr style="background:#E3F1EA"><td>Pending reminder</td><td>Actor storage + alarm</td><td>One alarm per caller instance</td></tr>
-<tr style="background:#FCFCFA"><td>Itinerary page</td><td>Cloud Storage</td><td>A file to serve at /itineraries/&lt;uuid&gt;.html</td></tr>
+<tr style="background:#E3F1EA"><td>Audit trail</td><td>AuditLog Actor</td><td>Singleton; audit/latest.json, last 200 events</td></tr>
+<tr style="background:#FCFCFA"><td>Itinerary page</td><td>Cloud Storage</td><td>Slot key, /itineraries/&lt;slot&gt;-&lt;token&gt;.html; ≤5 keys</td></tr>
 <tr style="background:#F5F6F2"><td>Auth, slim deals, trace id</td><td>Function logic</td><td>Lives one request; nothing to persist</td></tr>
 </table>
 <p style="font-size:26px;color:#3D4A5C">Proof: 20 concurrent recordCall requests return counts 1 to 20, none lost (live, today).</p>
@@ -19,5 +20,5 @@
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">11 / 19</p>
 </div>
-<aside>The rule is: pick the cheapest primitive that is correct. KV wins for read-mostly flags, caches and the one-write session map — and the session map keeps the phone number out of the LLM's arguments. The actor wins for per-caller read-modify-write, because KV has no compare-and-set and concurrent calls would lose updates. That is proven by 20 concurrent recordCalls returning counts 1 to 20 with none lost. The itinerary lives in Cloud Storage because it is a file to serve, and the reminder lives in actor storage because the alarm is per actor instance.</aside>
+<aside>The rule is: pick the cheapest primitive that is correct. KV wins for read-mostly flags, caches and the one-write session map — and the session map keeps the phone number out of the LLM's arguments. The actor wins for per-caller read-modify-write, including search history, because KV has no compare-and-set and concurrent calls would lose updates — proven by 20 concurrent recordCalls returning counts 1 to 20 with none lost. The itinerary lives in Cloud Storage, overwritten at a fixed slot key because the bucket is hard-capped at 5 objects; a separate AuditLog actor holds the last 200 audit events and writes one audit/latest.json. The reminder lives in actor storage because the alarm is per actor instance.</aside>
 </section>

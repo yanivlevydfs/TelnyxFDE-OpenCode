@@ -46,5 +46,5 @@
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">3 / 19</p>
 </div>
-<aside>At call start the workflow fires the webhook once, which reads flags from KV and records the call on the caller's actor. Mid-conversation, the prompt nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches the same caller actor directly through the shared SESSIONS binding. The Python webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP server skips that hop. The actor writes the itinerary page to Cloud Storage.</aside>
+<aside>At call start the workflow fires the webhook once, which reads flags from KV and records the call on the caller's actor. Mid-conversation, the prompt nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches the same caller actor directly through the shared SESSIONS binding. The Python webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP server skips that hop. The session-actor service hosts three actor classes — CallerSession, MetricsCounter and AuditLog — sharing one Cloud Storage bucket hard-capped at 5 objects: the caller actor writes itinerary slot pages, and AuditLog writes one audit/latest.json.</aside>
 </section>
