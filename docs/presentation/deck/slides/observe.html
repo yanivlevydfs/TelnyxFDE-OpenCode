@@ -23,9 +23,10 @@
 </div>
 </div>
 <p style="font-size:28px;color:#00A36C">The webhook is the canary: every call hits it first.</p>
+<p style="font-size:24px;color:#8C99AB">Also: AuditLog audit/latest.json (last 200); live_check 23 checks; storage_check guards the cap.</p>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#8C99AB">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#8C99AB">13 / 19</p>
 </div>
-<aside>Within a minute I look at telnyx-edge metrics fde-webhook first: rising 4xx/5xx or p95 toward the timeout is the first sign a call is broken. Then I filter logs for outcome != ok — rejected means a signature problem, degraded means KV or the actor is down, and the degraded array names which dependency. Finally I follow one trace_id into the other two services to reconstruct the whole call. backend_degraded also flows back to the assistant, so a broken backend is partly self-protecting.</aside>
+<aside>Within a minute I look at telnyx-edge metrics fde-webhook first: rising 4xx/5xx or p95 toward the timeout is the first sign a call is broken. Then I filter logs for outcome != ok — rejected means a signature problem, degraded means KV or the actor is down, and the degraded array names which dependency. Finally I follow one trace_id into the other two services to reconstruct the whole call. backend_degraded also flows back to the assistant, so a broken backend is partly self-protecting. For silent failures (a TooManyObjects write failure passed live_check), live_check.py now runs 23 checks including the itinerary link 200 and a fake-token 404, and storage_check.py lists the bucket to guard the 5-object cap.</aside>
 </section>

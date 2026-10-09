@@ -42,5 +42,5 @@
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">4 / 19</p>
 </div>
-<aside>Read it top to bottom. At call start, Telnyx calls the webhook once. The webhook reads the flags from KV and calls recordCall on the caller's actor, which returns the full profile, and it answers with the dynamic variables. During the conversation the assistant calls MCP tools: search_deals checks the KV cache, calls flytlv only on a miss, and stores the results on the same actor. save_deal calls saveDeal on the actor and passes the config with it.</aside>
+<aside>Read it top to bottom. At call start, Telnyx calls the webhook once. The webhook reads the flags from KV and calls recordCall on the caller's actor, which returns the full profile, and it answers with the dynamic variables. During the conversation the assistant calls MCP tools: search_deals checks the KV cache, calls flytlv only on a miss, and stores the results on the same actor. save_deal calls saveDeal on the actor and passes the config with it. Both search and save also send a masked audit event to a singleton AuditLog actor on the same service.</aside>
 </section>

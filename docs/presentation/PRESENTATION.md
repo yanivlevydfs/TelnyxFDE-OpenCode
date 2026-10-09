@@ -21,8 +21,8 @@ A caller dials the line, asks for cheap flights from Tel Aviv, hears the best
 deals from the live flytlv.app feed, can save one, and on the next call hears
 "welcome back, last time you saved Larnaca, 64 dollars." The phone number is
 bought and linked but Telnyx regulatory approval is still pending, so the live
-demo may use the Portal call tester. Three Edge services are live: the webhook,
-the MCP server, and the session actor.
+demo uses the Portal browser test call as the fallback. Three Edge services
+are live: the webhook, the MCP server, and the session actor.
 
 ## Slide 2 - Why this use case
 
@@ -69,7 +69,10 @@ and records the call on the caller's actor. Mid-conversation, the prompt tool
 nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches
 the same caller actor directly through the shared SESSIONS binding. The Python
 webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP
-server skips that hop.
+server skips that hop. The session-actor service hosts three actor classes —
+CallerSession, MetricsCounter and AuditLog — sharing one Cloud Storage bucket
+hard-capped at 5 objects: the caller actor writes itinerary slot pages, and
+AuditLog writes one audit/latest.json.
 
 ## Slide 4 - Conversation Workflow
 
@@ -144,19 +147,24 @@ call to a scripted notice instead of reading placeholders on air.
 | Feature flags (toggle paths) | **KV** `flags/assistant` | Read-mostly, operator-set; eventual consistency is fine. |
 | Cached flytlv deal searches | **KV** + `ttl_secs` `cache/deals/<sig>` | Avoid repeat upstream calls; stale-for-seconds is ok. |
 | Conversation → caller map | **KV** + `ttl_secs` `session/<conv>` | Written once by webhook, read-only by MCP; not an LLM arg (security). |
-| Per-caller count / results / saved | **Stateful Actor** (one per caller) | Atomic read-modify-write; KV has no CAS, so concurrent calls lose updates. |
+| Per-caller count / results / saved / history | **Stateful Actor** (one per caller) | Atomic read-modify-write; KV has no CAS, so concurrent calls lose updates. |
+| Audit trail (masked caller; last 200) | **AuditLog Actor** + Cloud Storage | Singleton actor keeping one audit/latest.json; bucket hard-capped at 5 objects. |
 | Per-request data (auth, slimmed deals, trace) | **Plain function logic** | Lives for one request; nothing to persist. |
 | Service counters + latency | **MetricsCounter Actor** | Edge scales to zero; KV loses concurrent increments. |
-| Itinerary HTML page | **Cloud Storage** `flytlv-itineraries` | Served at GET /itineraries/<uuid>.html; runtime has no signed URLs. |
+| Itinerary HTML page | **Cloud Storage** `flytlv-itineraries` | Slot key at GET /itineraries/<slot>-<token>.html; bucket hard-capped at 5 objects. |
 | Pending reminder + alarm | **Actor storage + alarm** | One alarm per caller; sender captured so alarm() needs no process.env. |
 
 Notes:
 The rule is: pick the cheapest primitive that is correct. KV wins for
-read-mostly flags, caches and the one-write session map. The actor wins for
-per-caller read-modify-write — proven by 20 concurrent recordCalls returning
-counts 1..20 with none lost. The itinerary lives in Cloud Storage because it
-is a file to serve, and the reminder lives in actor storage because the alarm
-is per actor instance.
+read-mostly flags, caches and the one-write session map — and the session map
+keeps the phone number out of the LLM's arguments. The actor wins for
+per-caller read-modify-write, including search history, because KV has no
+compare-and-set and concurrent calls would lose updates. That is proven by
+20 concurrent recordCalls returning counts 1 to 20 with none lost. The
+itinerary lives in Cloud Storage, overwritten at a fixed slot key because
+the bucket is hard-capped at 5 objects; a separate AuditLog actor holds the
+last 200 audit events and writes one audit/latest.json. The reminder lives
+in actor storage because the alarm is per actor instance.
 
 ## Slide 9 - Stretch goals done
 
@@ -178,9 +186,12 @@ it as a stretch.
 
 - JSON log line per event; one latency span per request (duration_ms).
 - MetricsCounter actor: counters + latency; `scripts/ops/metrics.py` snapshot.
+- AuditLog actor: one audit/latest.json, last 200 events.
 - Platform metrics: `telnyx-edge metrics <fn>` — 2xx/4xx/5xx, p95.
 - trace_id = conversation id, across webhook, actor and MCP.
 - The webhook is the canary — every call hits it first.
+- live_check.py runs 23 checks (incl. itinerary link 200 + fake-token 404);
+  storage_check.py guards the bucket's 5-object cap.
 
 Notes:
 Within a minute I look at `telnyx-edge metrics fde-webhook` first: rising
@@ -189,7 +200,10 @@ filter logs for outcome != ok — rejected means a signature problem, degraded
 means KV or the actor is down, and the degraded array names which dependency.
 Finally I follow one trace_id into the other two services to reconstruct the
 whole call. backend_degraded also flows back to the assistant, so a broken
-backend is partly self-protecting.
+backend is partly self-protecting. For silent failures (a TooManyObjects write
+failure passed live_check), live_check.py now runs 23 checks including the
+itinerary link 200 and a fake-token 404, and storage_check.py lists the bucket
+to guard the 5-object cap.
 
 ## Slide 11 - The hardest bug
 
@@ -198,6 +212,10 @@ backend is partly self-protecting.
 - Root cause: umbrella telnyx.toml [env_vars] miss actor process.env.
 - Fix: MCP forwards config on saveDeal; actor reads `config ?? process.env`.
 - Evidence: itineraryUrl now returns; reminder_scheduled fires; check passes.
+- Second bug (silent): bucket's 5-object limit (`TooManyObjects`) hit during
+  writes while live_check stayed green; signal was `itinerary_write_failed`
+  and `audit_write_failed` in actor logs; fixed by only writing 4 slot keys
+  + one `audit/latest.json`; `storage_check.py` guards the limit.
 
 Notes:
 The value was set in the actor's umbrella telnyx.toml, but the logs proved the
@@ -206,7 +224,10 @@ the MCP function's own env did. So the MCP server now forwards the four values
 on every saveDeal call and the actor resolves config first, with process.env
 as a fallback. I also captured the SMS sender into the pending reminder so the
 alarm turn does not depend on process.env either. A check_itinerary.mts case
-with no process.env proves the passed config works end to end.
+with no process.env proves the passed config works end to end. A second
+silent failure: the same bucket is hard-capped at 5 objects, and writes failed
+with TooManyObjects while live_check stayed green — fixed by only writing 4
+slot keys and one audit/latest.json, with storage_check.py guarding the cap.
 
 ## Slide 12 - Building with Telnyx Inference via OpenCode
 
@@ -214,7 +235,8 @@ with no process.env proves the passed config works end to end.
 - Assistant talks on zai-org/GLM-5.3-Flash on Telnyx Inference.
 - Worked: test-first prompts passed the tests in few iterations.
 - Hard: credit stops (error 20015); token cost from global context.
-- Edge gaps surfaced only on deploy: Python 3.9, /health probes.
+- Edge gaps surfaced only on deploy: Python 3.9, /health probes, Cloud
+  Storage's 5-object bucket cap (found via actor logs).
 
 Notes:
 Test-first prompts against the acceptance tests plus the short rules file
@@ -222,8 +244,9 @@ produced passing code in a few iterations, and GLM-5.2 handled multi-file work
 well, including the MCP port from Python to TypeScript. What hurt: a negative
 balance stops inference mid-step with error 20015, so two steps were rerun,
 and global context blew tokens to 215k until a clean config dir cut it to 8.7k.
-Platform specifics like the 3.9 build and the health probes only appeared on
-deploy and were fixed from logs, not from the model.
+Platform specifics — the Python 3.9 build, the health probes, and the Cloud
+Storage 5-object bucket cap — only surfaced on deploy and were fixed there,
+from actor logs, not from the model.
 
 ## Slide 13 - Tradeoffs and what I would do next
 
@@ -255,7 +278,8 @@ Per slide, the files the facts come from:
 - **Slide 3 (Architecture):** docs/design/ARCHITECTURE.md, README.md,
   services/webhook/function/func.py, services/mcp-server/func.toml,
   services/mcp-server/src/actor.ts, services/session-actor/telnyx.toml,
-  services/session-actor/src/index.ts.
+  services/session-actor/src/index.ts, services/session-actor/src/audit-log.ts
+  (`AuditLog`), docs/design/DECISIONS.md (#34).
 - **Slide 4 (Conversation Workflow):** assistant/flow.py (`build_flow`,
   `_NODE_IDS`), README.md.
 - **Slide 5 (Edges):** assistant/flow.py (`build_flow`, `validate`,
@@ -270,11 +294,12 @@ Per slide, the files the facts come from:
   (`WEBHOOK_TIMEOUT_MS`), docs/design/DECISIONS.md (#6, #19, #20),
   docs/challenge/code_challenge.md (1.5 s default), AGENTS.md.
 - **Slide 8 (Actor vs KV vs plain function):** README.md, docs/design/
-  ARCHITECTURE.md, docs/design/DECISIONS.md (#9, #11, #13, #21, #30, #31),
-  shared/common.py (`Kv`, `ActorClient`, `save_session`), services/session-actor/
-  src/caller-session.ts (`CallerSession`), scripts/ops/live_check.py
-  (20 concurrent recordCalls), services/session-actor/src/index.ts
-  (`serveItinerary`).
+  ARCHITECTURE.md, docs/design/DECISIONS.md (#9, #11, #13, #21, #30, #31, #33,
+  #34, #35), shared/common.py (`Kv`, `ActorClient`, `save_session`),
+  services/session-actor/src/caller-session.ts (`CallerSession`,
+  `searchHistory`, `getHistory`), services/session-actor/src/audit-log.ts
+  (`AuditLog`), services/session-actor/src/index.ts (`serveItinerary`,
+  slot-token route), scripts/ops/live_check.py (20 concurrent recordCalls).
 - **Slide 9 (Stretch goals done):** services/session-actor/src/caller-session.ts
   (`alarm`, `_writeItineraryAndScheduleReminder`), services/session-actor/telnyx.toml
   (`[storage.cloudstorage.ITINERARIES]`), services/mcp-server/func.toml
@@ -283,16 +308,20 @@ Per slide, the files the facts come from:
 - **Slide 10 (Observability):** docs/design/OBSERVABILITY.md, README.md
   ("How I'd know within a minute"), scripts/ops/metrics.py, shared/common.py
   (`logger`, `timed`, `set_trace_id`), services/session-actor/src/index.ts
-  (`actor.request` span), services/mcp-server/src/server.ts (`mcp.request` span).
-- **Slide 11 (Hardest bug):** docs/design/DECISIONS.md (#28, #29),
+  (`actor.request` span), services/mcp-server/src/server.ts (`mcp.request`
+  span), services/session-actor/src/audit-log.ts (`AuditLog`), scripts/ops/
+  live_check.py (23 checks), scripts/ops/storage_check.py.
+- **Slide 11 (Hardest bug):** docs/design/DECISIONS.md (#28, #29, #34),
   docs/build/DOGFOODING.md ("The live bug"), services/session-actor/telnyx.toml
   (live-finding comment), services/mcp-server/src/server.ts (`saveDealConfig`,
   `saveDealBody`), services/session-actor/src/caller-session.ts (`saveDeal`,
-  `pickString`, `pickPositiveNumber`, `alarm`), tests/README.md
+  `pickString`, `pickPositiveNumber`, `alarm`), services/session-actor/src/
+  audit-log.ts, docs/design/OBSERVABILITY.md (`itinerary_write_failed`,
+  `audit_write_failed`), scripts/ops/storage_check.py, tests/README.md
   (`check_itinerary.mts`), README.md.
 - **Slide 12 (Building with Telnyx Inference via OpenCode):** docs/build/PROMPTS.md
   (status + model list), docs/build/DOGFOODING.md, README.md (status table,
-  "Tool comparison", OpenCode config), docs/design/DECISIONS.md (#15, #27).
+  "Tool comparison", OpenCode config), docs/design/DECISIONS.md (#15, #27, #34).
 - **Slide 13 (Tradeoffs and next):** docs/design/DECISIONS.md (#12, #9, #21,
   #31, #32; "Pending decisions"), README.md, docs/challenge/code_challenge.md
   (stretch goals), assistant/flow.py (`instructions_mode` append/replace).

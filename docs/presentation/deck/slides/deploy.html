@@ -51,9 +51,10 @@
 <p style="font-size:26px;font-weight:600">Phone number</p>
 <p style="font-size:24px;line-height:1.3;color:#3D4A5C">linked to the assistant</p>
 </div>
+<p style="position:absolute;left:128px;top:776px;width:1664px;font-size:24px;color:#3D4A5C">After deploy: live_check.py 23/23 (incl. itinerary link 200 and fake-token 404); workflow_paths 15/15; storage_check.py guards the 5-object cap.</p>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">17 / 19</p>
 </div>
-<aside>Two pipelines. Code: OpenCode with Telnyx GLM-5.2 writes the code against the acceptance tests; once they pass it is pushed, and GitHub Actions ships each changed service with telnyx-edge v0.5.10 from Linux, because the Windows CLI zipped paths with backslashes. Assistant: provision.py uses the Telnyx Python SDK to store the MCP key as an integration secret, register the MCP server and the hangup tool, create or update the assistant with its workflow, webhook URL and model, and link the phone number. Nothing is hardcoded; every value comes from the environment.</aside>
+<aside>Two pipelines. Code: OpenCode with Telnyx GLM-5.2 writes the code against the acceptance tests; once they pass it is pushed, and GitHub Actions ships each changed service with telnyx-edge v0.5.10 from Linux, because the Windows CLI zipped paths with backslashes. Assistant: provision.py uses the Telnyx Python SDK to store the MCP key as an integration secret, register the MCP server and the hangup tool, create or update the assistant with its workflow, webhook URL and model, and link the phone number. Nothing is hardcoded; every value comes from the environment. After deploy, scripts/ops/live_check.py runs 23 checks (incl. itinerary link 200 and fake-token 404) and scripts/ops/workflow_paths.py runs 15/15; storage_check.py lists the bucket to verify the 5-object cap.</aside>
 </section>

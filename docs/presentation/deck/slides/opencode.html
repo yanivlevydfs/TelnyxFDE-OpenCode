@@ -30,7 +30,7 @@
 <ul style="font-size:27px;line-height:1.45;color:#3D4A5C;display:flex;flex-direction:column;gap:10px">
 <li>Negative balance stopped inference mid-step (error 20015).</li>
 <li>Global context made requests 215k tokens; a clean config cut it to 8.7k.</li>
-<li>Edge specifics (Python 3.9 build, health probes) only showed on deploy.</li>
+<li>Edge specifics on deploy: Python 3.9 build, health probes, Cloud Storage 5-object cap.</li>
 </ul>
 </div>
 </div>
@@ -38,5 +38,5 @@
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">18 / 19</p>
 </div>
-<aside>Test-first prompts against the acceptance tests plus the short rules file produced passing code in a few iterations, and GLM-5.2 handled multi-file work well, including the MCP port from Python to TypeScript. What hurt: a negative balance stops inference mid-step with error 20015, so two steps were rerun, and global context blew requests up to 215k tokens until a clean config dir cut it to 8.7k. Platform specifics like the Python 3.9 build and the health probes only appeared on deploy and were fixed from logs, not from the model. Show the OpenCode config with the Telnyx plugin active here.</aside>
+<aside>Test-first prompts against the acceptance tests plus the short rules file produced passing code in a few iterations, and GLM-5.2 handled multi-file work well, including the MCP port from Python to TypeScript. What hurt: a negative balance stops inference mid-step with error 20015, so two steps were rerun, and global context blew requests up to 215k tokens until a clean config dir cut it to 8.7k. Platform specifics — the Python 3.9 build, the health probes, and the Cloud Storage 5-object bucket cap — only surfaced on deploy and were fixed there, from actor logs, not from the model. Show the OpenCode config with the Telnyx plugin active here.</aside>
 </section>
