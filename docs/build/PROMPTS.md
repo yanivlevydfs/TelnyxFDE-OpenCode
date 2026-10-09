@@ -637,3 +637,42 @@ Update PRESENTATION.md to match the slides. Do not touch any other file. Do not 
    (from 27px). Keep every row.
 4. Delete the stray empty file `nul` in the repo root (created by mistake).
 Do not touch other files. Do not commit.
+
+## 24. A short version of the demo-day deck
+
+The full deck (docs/presentation/deck/, 19 slides) is too long for the 7-10 minute "Live
+Walkthrough & Decision Review" in docs/challenge/code_challenge.md (Demo Day, part 2). Make a
+SHORT version next to it. Leave the full deck and PRESENTATION.md unchanged.
+
+Create docs/presentation/deck-short/ with deck.json and slides/*.html: 9 slides, about one minute
+each, one per question the brief asks, built by reusing and condensing the existing slides (copy
+facts and wording from them; invent nothing):
+1. cover — product, phone, three live Edge URLs, plus ONE line on why this use case (from why.html).
+2. arch — architecture (from arch.html; drop detail, keep the three services + KV + flytlv API).
+3. workflow — nodes AND edge conditions on one slide (merge workflow.html + edges.html; keep the
+   LLM-condition vs expression tradeoff in one line).
+4. mcp — the 4 tools and the server shape (from mcp.html).
+5. dynvars — dynamic webhook variables (from dynvars.html).
+6. state — Actor vs KV vs plain function logic (from state.html; at most 6 table rows, keep the
+   most important pieces of state).
+7. bug — the hardest bug and the signal that found it (from bug.html).
+8. opencode — Telnyx Inference via OpenCode and the models used (from opencode.html).
+9. next — tradeoffs, edge cases/errors, what I would do next (from next.html + stretch.html;
+   at most 5 bullets).
+Dropped on purpose (they belong in the live demo or Q&A): sequence, flowgraph, edges (merged),
+saveflow, stretch (merged), observe, trace, history, deploy. Speaker notes (`<aside>`): at most
+3 sentences per slide. Each slide: at most 5 bullets or one small table/diagram; fewer words than
+the original.
+
+deck.json: same format as docs/presentation/deck/deck.json (same faces, "v", "lists"), title
+"FlyTLV Travel Line — Walkthrough (short)", "order" with the 9 ids, 3 sections. Footers "N / 9".
+
+Slide format rules (the deck renderer is strict): one `<section id="<file name>">` per file, all
+styles inline, only the tags and CSS properties already used in the existing slides, no margin
+other than 0, no font size below 24px, every section inside the 1920x1080 canvas (content above
+y=920, same footer row as the existing slides).
+
+Also write docs/presentation/PRESENTATION_SHORT.md: the slide text + short speaker notes for the
+9 slides, with a one-line timing plan (total about 8 minutes). Add one line to
+docs/presentation/README.md pointing to deck-short/ and PRESENTATION_SHORT.md (written by OpenCode,
+build step 24). Do not touch any other file. Do not commit.

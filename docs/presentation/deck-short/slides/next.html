@@ -1,0 +1,19 @@
+<section id="next" data-transition="fade" style="background:#0F1B2D;color:#F5F6F2;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:16px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#00A36C">Tradeoffs, edge cases and next steps</p>
+<h2 style="font-size:56px;font-weight:600;line-height:1.15;color:#F5F6F2">What I gave up, what edge cases I handle, what comes next</h2>
+</div>
+<ul style="font-size:30px;line-height:1.5;color:#BFC8D4;display:flex;flex-direction:column;gap:20px">
+<li><span style="color:#00A36C">Tradeoff:</span> Expression edges for facts (safer, less flexible); actor for read-modify-write, KV for read-mostly.</li>
+<li><span style="color:#00A36C">Tradeoff:</span> Shared actor skips HTTP; the facade stays for Python and for metrics.</li>
+<li><span style="color:#00A36C">Edge cases:</span> Degraded backend routes to a scripted notice; bucket capped at 5 keys; config forwards to the actor.</li>
+<li><span style="color:#00A36C">Next:</span> Link the human transfer number; add a flight-status branch.</li>
+<li><span style="color:#00A36C">Next:</span> Per-deal reminders via a CronTick actor · today's one-alarm-per-caller limit means one reminder per caller, not per deal.</li>
+</ul>
+<p style="font-size:32px;color:#BFC8D4">Questions?</p>
+<div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
+<p style="font-size:24px;color:#8C99AB">FlyTLV Travel Line · walkthrough</p>
+<p style="font-size:24px;color:#8C99AB">9 / 9</p>
+</div>
+<aside>Expression edges for facts are safer but less flexible; the actor wins for read-modify-write, KV for read-mostly data; the shared actor skips HTTP while the facade stays for Python and metrics. Edge cases are handled safe by design: a degraded backend routes to a scripted notice, the bucket is capped at 5 keys, and config now forwards to the actor. Next I would link the human transfer number, add a flight-status branch, and move reminders to a CronTick actor for per-deal scheduling.</aside>
+</section>

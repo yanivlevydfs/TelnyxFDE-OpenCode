@@ -15,6 +15,7 @@ deck source:
 - **[deck/](deck/)** — the **rendered slide deck source** (`deck.json` plus
   `slides/*.html`, one HTML file per slide), laid out by **Claude Code** from
   `PRESENTATION.md`. These files are left unchanged.
+- **[deck-short/](deck-short/)** + **[PRESENTATION_SHORT.md](PRESENTATION_SHORT.md)** — a condensed 9-slide short deck (~8 min), written by OpenCode as build step 24; the long `deck/` and `PRESENTATION.md` are unchanged.
 
 ## The live deck
 
