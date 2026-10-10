@@ -1,41 +1,30 @@
-<section id="opencode" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:36px">
-<div style="display:flex;flex-direction:column;gap:16px">
+<section id="opencode" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-direction:column;gap:14px">
 <p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Telnyx Inference via OpenCode</p>
-<h2 style="font-size:56px;font-weight:600;line-height:1.15">Built by Telnyx-hosted models, tested first</h2>
+<h2 style="font-size:50px;font-weight:600;line-height:1.15">Built by Telnyx-hosted models, tested first</h2>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
-<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">GLM-5.2</p>
-<p style="font-size:24px;line-height:1.4;color:#BFC8D4">Wrote most of the code and docs.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.6;color:#14213D">opencode run --model 'telnyx/zai-org/GLM-5.2' "&lt;prompt&gt;"<br>OPENCODE_DISABLE_EXTERNAL_SKILLS=1 OPENCODE_DISABLE_CLAUDE_CODE=1<br>(clean XDG config dir) → 215k → 8.7k tokens/req</p>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+<div style="display:flex;flex-direction:column;gap:6px;background:#0F1B2D;border-radius:16px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#00A36C">GLM-5.2</p>
+<p style="font-size:24px;line-height:1.35;color:#BFC8D4">Shared, MCP server, assistant, session actor, docs.</p>
 </div>
-<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">Kimi-K3</p>
-<p style="font-size:24px;line-height:1.4;color:#BFC8D4">Built the first webhook version.</p>
+<div style="display:flex;flex-direction:column;gap:6px;background:#0F1B2D;border-radius:16px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#00A36C">Kimi-K3</p>
+<p style="font-size:24px;line-height:1.35;color:#BFC8D4">Webhook v1.</p>
 </div>
-<div style="display:flex;flex-direction:column;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:28px;font-weight:600;color:#00A36C">GLM-5.3-Flash</p>
-<p style="font-size:24px;line-height:1.4;color:#BFC8D4">The assistant's voice on calls.</p>
+<div style="display:flex;flex-direction:column;gap:6px;background:#0F1B2D;border-radius:16px;padding:20px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;font-weight:600;color:#00A36C">GLM-5.3-Flash</p>
+<p style="font-size:24px;line-height:1.35;color:#BFC8D4">ASSISTANT_MODEL — LLM on calls.</p>
 </div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px">
-<div style="display:flex;flex-direction:column;gap:14px">
-<h3 style="font-size:32px;font-weight:600;color:#0B7A55">Worked</h3>
-<ul style="font-size:26px;line-height:1.45;color:#3D4A5C;display:flex;flex-direction:column;gap:10px">
-<li>Test-first prompts passed the acceptance tests in few iterations.</li>
-<li>Multi-file work, including the MCP port from Python to TypeScript.</li>
-</ul>
-</div>
-<div style="display:flex;flex-direction:column;gap:14px">
-<h3 style="font-size:32px;font-weight:600;color:#C2561A">Hurt</h3>
-<ul style="font-size:26px;line-height:1.45;color:#3D4A5C;display:flex;flex-direction:column;gap:10px">
-<li>Credit stops mid-step (error 20015); global context blew requests to 215k, cut to 8.7k.</li>
-<li>Edge specifics surfaced only on deploy: Python 3.9 build, health probes, bucket 5-object cap.</li>
-</ul>
-</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<p style="font-size:25px;line-height:1.35;color:#3D4A5C"><b>Step loop:</b> prompt in PROMPTS.md → OpenCode → tests → review → commit.</p>
+<p style="font-size:24px;line-height:1.35;color:#3D4A5C">OpenCode with Telnyx models built the first version of every service (GLM-5.2; Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code; since 7 Oct every change is an OpenCode build step (<span style="font-family:'JetBrains Mono', 'Courier New', monospace">docs/build/PROMPTS.md</span>).</p>
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">8 / 9</p>
 </div>
-<aside>Test-first prompts against the acceptance tests plus the short rules file produced passing code in a few iterations, and GLM-5.2 handled multi-file work well, including the MCP port from Python to TypeScript. What hurt: a negative balance stops inference mid-step with error 20015, and global context blew requests up to 215k tokens until a clean config dir cut it to 8.7k. Platform specifics · the Python 3.9 build, the health probes, and the Cloud Storage 5-object cap · only surfaced on deploy and were fixed there, from actor logs.</aside>
+<aside>opencode run --model telnyx/zai-org/GLM-5.2 runs each build step. Global context blew requests to ~215k tokens until OPENCODE_DISABLE_EXTERNAL_SKILLS=1 and OPENCODE_DISABLE_CLAUDE_CODE=1 with a clean XDG config dir cut it to ~8.7k. Models per part: GLM-5.2 for shared code, MCP server, assistant flow, session actor and docs; Kimi-K3 for webhook v1; GLM-5.3-Flash as ASSISTANT_MODEL (the assistant's LLM on calls). Each step follows the loop in PROMPTS.md: write the prompt, run OpenCode, run tests, review, commit.</aside>
 </section>

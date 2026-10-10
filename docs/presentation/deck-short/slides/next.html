@@ -1,19 +1,18 @@
-<section id="next" data-transition="fade" style="background:#0F1B2D;color:#F5F6F2;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
-<div style="display:flex;flex-direction:column;gap:16px">
-<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#00A36C">Tradeoffs, edge cases and next steps</p>
-<h2 style="font-size:56px;font-weight:600;line-height:1.15;color:#F5F6F2">What I gave up, what edge cases I handle, what comes next</h2>
+<section id="next" data-transition="fade" style="background:#0F1B2D;color:#F5F6F2;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#00A36C">Edge cases and next steps</p>
+<h2 style="font-size:48px;font-weight:600;line-height:1.15;color:#F5F6F2">Edge cases handled; shipped extras; what comes next</h2>
 </div>
-<ul style="font-size:30px;line-height:1.5;color:#BFC8D4;display:flex;flex-direction:column;gap:20px">
-<li><span style="color:#00A36C">Tradeoff:</span> Expression edges for facts (safer, less flexible); actor for read-modify-write, KV for read-mostly.</li>
-<li><span style="color:#00A36C">Tradeoff:</span> Shared actor skips HTTP; the facade stays for Python and for metrics.</li>
-<li><span style="color:#00A36C">Edge cases:</span> Degraded backend routes to a scripted notice; bucket capped at 5 keys; config forwards to the actor.</li>
-<li><span style="color:#00A36C">Next:</span> Link the human transfer number; add a flight-status branch.</li>
-<li><span style="color:#00A36C">Next:</span> Per-deal reminders via a CronTick actor · today's one-alarm-per-caller limit means one reminder per caller, not per deal.</li>
-</ul>
-<p style="font-size:32px;color:#BFC8D4">Questions?</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.6;color:#F5F6F2">bad sig → 401 · bad JSON → 400<br>KV/actor fail → backend_degraded="true" → degraded_notice<br>flytlv 3000 ms + 1 retry (TimeoutError only)<br>flag_deals_enabled="false" → deals_disabled<br>MCP fail → {isError: true} with caller-friendly msg<br>send_deal_sms → +&lt;digits&gt; (own number); deal ∈ lastResults</p>
+<div style="display:flex;flex-direction:column;gap:10px">
+<p style="font-size:24px;line-height:1.35;color:#BFC8D4"><span style="color:#00A36C"><b>Shipped:</b></span> transfer tool (TRANSFER_TO_NAME), 23-entry FAQ, SMS deal link, KV read retry, live_check 23 checks, storage_check, metrics.py, CI per service, Israel logs.</p>
+<p style="font-size:24px;line-height:1.35;color:#BFC8D4"><span style="color:#00A36C"><b>Stretch:</b></span> actor alarms, Cloud Storage itinerary, KV flags, shared actors, trace_id, variable edges; caller history (searchHistory, insights, history.py).</p>
+<p style="font-size:24px;line-height:1.35;color:#F5F6F2"><span style="color:#00A36C"><b>Next:</b></span> per-deal reminders via CronTick actor (today: one alarm/caller); flight-status branch.</p>
+</div>
+<p style="font-size:28px;color:#BFC8D4">Questions?</p>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#8C99AB">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#8C99AB">9 / 9</p>
 </div>
-<aside>Expression edges for facts are safer but less flexible; the actor wins for read-modify-write, KV for read-mostly data; the shared actor skips HTTP while the facade stays for Python and metrics. Edge cases are handled safe by design: a degraded backend routes to a scripted notice, the bucket is capped at 5 keys, and config now forwards to the actor. Next I would link the human transfer number, add a flight-status branch, and move reminders to a CronTick actor for per-deal scheduling.</aside>
+<aside>Edge cases handled by the code: a bad webhook signature returns 401 before JSON is parsed, bad JSON returns 400, and any KV or actor failure sets backend_degraded="true" which routes to a scripted degraded_notice. flytlv times out at 3000 ms with one retry on TimeoutError; the deals_enabled=false flag routes to deals_disabled; MCP tool failures return isError:true with a caller-friendly message; send_deal_sms only texts the caller's own number and only for a deal in lastResults. Shipped extras include the transfer tool (live), a 23-entry FAQ with no invented baggage or booking facts, KV read retry, live_check with 23 checks, storage_check, and Israel-time logs. Two true next items: per-deal reminders via a CronTick actor (currently one alarm per caller) and a flight-status branch.</aside>
 </section>

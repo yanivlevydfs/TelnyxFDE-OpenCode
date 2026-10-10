@@ -1,36 +1,32 @@
-<section id="bug" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:32px">
-<div style="display:flex;flex-direction:column;gap:16px">
+<section id="bug" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-direction:column;gap:14px">
 <p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#C2561A">The hardest bug</p>
-<h2 style="font-size:56px;font-weight:600;line-height:1.15">The actor never saw its own config</h2>
+<h2 style="font-size:48px;font-weight:600;line-height:1.15">Actor config, bucket cap, slow KV</h2>
 </div>
 <div style="display:flex;flex-direction:column;gap:0px">
-<div style="display:grid;grid-template-columns:280px 1fr;gap:32px;padding:18px 0px;border-top:2px solid #DDE1DA">
-<p style="font-size:28px;font-weight:600;color:#C2561A">Symptom</p>
-<p style="font-size:28px;line-height:1.35">On save, the itinerary URL and the SMS reminder never appeared.</p>
+<div style="display:grid;grid-template-columns:200px 1fr;gap:24px;padding:16px 0px;border-top:2px solid #DDE1DA">
+<p style="font-size:25px;font-weight:600;color:#C2561A">Signal</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.35">{"level":"WARNING","event":"itinerary_skipped","reason":"noITINERARY_BASE_URL"}</p>
 </div>
-<div style="display:grid;grid-template-columns:280px 1fr;gap:32px;padding:18px 0px;border-top:2px solid #DDE1DA">
-<p style="font-size:28px;font-weight:600;color:#C2561A">Signal</p>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;line-height:1.35">itinerary_skipped reason=noITINERARY_BASE_URL</p>
+<div style="display:grid;grid-template-columns:200px 1fr;gap:24px;padding:16px 0px;border-top:2px solid #DDE1DA">
+<p style="font-size:25px;font-weight:600;color:#C2561A">Root cause</p>
+<p style="font-size:25px;line-height:1.35">Umbrella <span style="font-family:'JetBrains Mono', 'Courier New', monospace">telnyx.toml [env_vars]</span> never reach actor <span style="font-family:'JetBrains Mono', 'Courier New', monospace">process.env</span> (step 11). Cloud Storage binding does.</p>
 </div>
-<div style="display:grid;grid-template-columns:280px 1fr;gap:32px;padding:18px 0px;border-top:2px solid #DDE1DA">
-<p style="font-size:28px;font-weight:600;color:#C2561A">Root cause</p>
-<p style="font-size:28px;line-height:1.35">Umbrella telnyx.toml [env_vars] never reach actor process.env. The Cloud Storage bucket binding does.</p>
+<div style="display:grid;grid-template-columns:200px 1fr;gap:24px;padding:16px 0px;border-top:2px solid #DDE1DA">
+<p style="font-size:25px;font-weight:600;color:#C2561A">Fix</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.35">config.X ?? process.env.X  — MCP forwards config on saveDeal</p>
 </div>
-<div style="display:grid;grid-template-columns:280px 1fr;gap:32px;padding:18px 0px;border-top:2px solid #DDE1DA">
-<p style="font-size:28px;font-weight:600;color:#C2561A">Fix</p>
-<p style="font-size:28px;line-height:1.35">MCP forwards config on saveDeal; the actor reads config first, process.env as fallback.</p>
-</div>
-<div style="display:grid;grid-template-columns:280px 1fr;gap:32px;padding:18px 0px;border-top:2px solid #DDE1DA;border-bottom:2px solid #DDE1DA">
-<p style="font-size:28px;font-weight:600;color:#C2561A">Evidence</p>
-<p style="font-size:28px;line-height:1.35">itineraryUrl returns, reminder_scheduled fires, a check with no process.env passes.</p>
+<div style="display:grid;grid-template-columns:200px 1fr;gap:24px;padding:16px 0px;border-top:2px solid #DDE1DA;border-bottom:2px solid #DDE1DA">
+<p style="font-size:25px;font-weight:600;color:#C2561A">Evidence</p>
+<p style="font-size:25px;line-height:1.35"><span style="font-family:'JetBrains Mono', 'Courier New', monospace">itineraryUrl</span> returns, <span style="font-family:'JetBrains Mono', 'Courier New', monospace">reminder_scheduled</span> fires; check_itinerary with no <span style="font-family:'JetBrains Mono', 'Courier New', monospace">process.env</span> passes.</p>
 </div>
 </div>
-<div style="display:flex;flex-direction:row;gap:20px;align-items:center;background:#FBEFE6;border:1px solid #E8C9B3;border-radius:12px;padding:20px 28px">
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C"><span style="color:#C2561A"><b>Second silent failure: </b></span>bucket's 5-object cap (<span style="font-family:'JetBrains Mono', 'Courier New', monospace">TooManyObjects</span>) hit while live_check stayed green; found in actor logs; fixed with 4 slot keys + one <span style="font-family:'JetBrains Mono', 'Courier New', monospace">audit/latest.json</span>; <span style="font-family:'JetBrains Mono', 'Courier New', monospace">storage_check.py</span> guards the limit.</p>
+<div style="background:#FBEFE6;border:1px solid #E8C9B3;border-radius:12px;padding:18px 28px">
+<p style="font-size:24px;line-height:1.35;color:#3D4A5C"><span style="color:#C2561A"><b>TooManyObjects: </b></span>bucket 5-object cap hit while <span style="font-family:'JetBrains Mono', 'Courier New', monospace">live_check</span> stayed green → 4 slot keys + <span style="font-family:'JetBrains Mono', 'Courier New', monospace">audit/latest.json</span>; <span style="font-family:'JetBrains Mono', 'Courier New', monospace">storage_check</span> guards it.</p>
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">7 / 9</p>
 </div>
-<aside>The value was set in the actor's umbrella telnyx.toml but the actor instance never saw it · while the Cloud Storage bucket binding did, and the MCP function's own env did. So the MCP server now forwards the values on every saveDeal call and the actor resolves config first with process.env as a fallback. A second silent failure: the same bucket is hard-capped at 5 objects, writes failed with TooManyObjects while live_check stayed green · fixed by writing only 4 slot keys and one audit/latest.json.</aside>
+<aside>The signal was one JSON log line — itinerary_skipped with reason noITINERARY_BASE_URL. Root cause: the actor's umbrella telnyx.toml [env_vars] do not reach actor instances' process.env while the Cloud Storage binding does (step 11). Fix: the MCP server forwards config on every saveDeal call and the actor resolves config.X ?? process.env.X. A second silent failure (TooManyObjects) hit the bucket's 5-object cap while live_check stayed green; fixed by only writing 4 slot keys plus one audit/latest.json. A third bug (commit 11bff7e) was every call degraded by slow KV (1.2-3.7 s per REST read); fixed by caching flags, running the session write after the response, and raising the webhook budget to 2500 ms.</aside>
 </section>

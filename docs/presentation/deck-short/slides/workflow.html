@@ -1,50 +1,18 @@
-<section id="workflow" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:32px">
-<div style="display:flex;flex-direction:column;gap:16px">
-<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Workflow &amp; Edges</p>
-<h2 style="font-size:56px;font-weight:600;line-height:1.15">12 nodes, 26 edges. Each type does one job.</h2>
+<section id="workflow" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Workflow & Edges</p>
+<h2 style="font-size:50px;font-weight:600;line-height:1.15">12 nodes, 26 edges; expression edges route before the model turn</h2>
 </div>
-<div style="display:flex;flex-direction:column;gap:24px">
-<p style="font-size:28px;font-weight:600;color:#3D4A5C">Nodes</p>
-<div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:24px">
-<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-top:6px solid #0B7A55;border-radius:16px;padding:28px">
-<h3 style="font-size:32px;font-weight:600">4 speak</h3>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.5">greeting · degraded · deals_disabled · farewell</p>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Verbatim. No model turn.</p>
-</div>
-<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-top:6px solid #14213D;border-radius:16px;padding:28px">
-<h3 style="font-size:32px;font-weight:600">7 prompt</h3>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.5">identify · search · save · list · FAQ · escalate · transfer</p>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Every LLM-driven step.</p>
-</div>
-<div style="display:flex;flex-direction:column;gap:12px;background:#FCFCFA;border:1px solid #DDE1DA;border-top:6px solid #C2561A;border-radius:16px;padding:28px">
-<h3 style="font-size:32px;font-weight:600">1 tool</h3>
-<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.5">hangup_call</p>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Deterministic end. No prompt node hangs up.</p>
-</div>
-</div>
-<p style="font-size:28px;font-weight:600;color:#3D4A5C">Edges</p>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
-<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:24px">
-<p style="font-size:64px;font-weight:700;line-height:1.1;color:#0B7A55">3</p>
-<h3 style="font-size:28px;font-weight:600">expression</h3>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Deterministic facts, checked before the model turn.</p>
-</div>
-<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:24px">
-<p style="font-size:64px;font-weight:700;line-height:1.1;color:#14213D">19</p>
-<h3 style="font-size:28px;font-weight:600">LLM</h3>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Intent routing, where the caller's words vary.</p>
-</div>
-<div style="display:flex;flex-direction:column;gap:8px;background:#FCFCFA;border:1px solid #DDE1DA;border-radius:16px;padding:24px">
-<p style="font-size:64px;font-weight:700;line-height:1.1;color:#6B7685">4</p>
-<h3 style="font-size:28px;font-weight:600">default</h3>
-<p style="font-size:24px;line-height:1.35;color:#3D4A5C">One per speak node, enforced by validate().</p>
-</div>
-</div>
-<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Tradeoff: expression edges route on facts before the model turn (safer, less flexible); LLM edges route on intent where words vary.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.6;color:#14213D">speak(4):  greeting, degraded_notice, deals_disabled, farewell<br>prompt(7): identify_intent, search_flights, save_deal, list_saved,<br>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; answer_faq, transfer_call, timeout_escalate<br>tool(1):&#160;&#160;&#160; hangup_call</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;line-height:1.6;color:#0B7A55">backend_degraded &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;== "true" &#160;&#160; &#160;→ degraded_notice<br>flag_deals_enabled &#160;&#160;&#160;&#160;&#160; == "false" &#160;&#160; → deals_disabled<br>telnyx_conversation_duration_secs >= 600 → timeout_escalate</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:26px;line-height:1.35;color:#3D4A5C"><b>instructions_mode:</b> append (default); replace on timeout_escalate + hangup_call.</p>
+<p style="font-size:26px;line-height:1.35;color:#3D4A5C"><b>validate():</b> start node exists; no duplicate ids; edge targets known; condition ∈ {llm, expression, default}; each speak node = exactly 1 default edge.</p>
+<p style="font-size:24px;line-height:1.35;color:#3D4A5C">Edge counts: 3 expression, 19 LLM, 4 default. Declaration order is priority — expression wins over LLM at identify_intent.</p>
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">3 / 9</p>
 </div>
-<aside>Speak nodes are verbatim with no model turn; prompt nodes are every LLM-driven step; the one tool node ends the call deterministically. Expression edges are deterministic facts checked before the model turn; LLM edges handle intent where the caller's words vary. Declaration order is priority order, so expression edges win over LLM edges at the identify_intent hub.</aside>
+<aside>The three expression edges are variable comparisons written in flow.py: backend_degraded == "true", flag_deals_enabled == "false", and telnyx_conversation_duration_secs >= 600. Declaration order is priority order, so expression edges win over LLM edges at the identify_intent hub. instructions_mode defaults to append (base instructions stay in force); only timeout_escalate and hangup_call use replace to keep the model tightly on task. validate() checks the graph statically: start node exists, no duplicate ids, all edge targets are known, the condition type is valid, and every speak node has exactly one default edge.</aside>
 </section>

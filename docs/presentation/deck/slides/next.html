@@ -16,7 +16,6 @@
 <div style="display:flex;flex-direction:column;gap:20px;background:#1A2A40;border-radius:16px;padding:40px">
 <h3 style="font-size:32px;font-weight:600;color:#00A36C">Next</h3>
 <ul style="font-size:28px;line-height:1.45;color:#F5F6F2;display:flex;flex-direction:column;gap:12px">
-<li>Link the human transfer number.</li>
 <li>A flight-status branch.</li>
 <li>Per-deal reminders via a CronTick actor.</li>
 </ul>
@@ -27,5 +26,5 @@
 <p style="font-size:24px;color:#8C99AB">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#8C99AB">19 / 19</p>
 </div>
-<aside>I chose expression edges for deterministic facts so a degraded backend never depends on the model noticing it, at the cost of less flexible routing. The actor wins for read-modify-write and KV wins for read-mostly caches and flags; MetricsCounter would shard by hour if throughput grows. The one-alarm-per-actor limit means a newer save replaces the reminder, so today there is one reminder per caller, not per deal. Next I would link the human transfer number, add a flight-status branch, and move reminders to a CronTick actor for per-deal scheduling.</aside>
+<aside>I chose expression edges for deterministic facts so a degraded backend never depends on the model noticing it, at the cost of less flexible routing. The actor wins for read-modify-write and KV wins for read-mostly caches and flags; MetricsCounter would shard by hour if throughput grows. The one-alarm-per-actor limit means a newer save replaces the reminder, so today there is one reminder per caller, not per deal. Human transfer is shipped (transfer tool, plus timeout escalation at 600 s); next I would add a flight-status branch and move reminders to a CronTick actor for per-deal scheduling.</aside>
 </section>

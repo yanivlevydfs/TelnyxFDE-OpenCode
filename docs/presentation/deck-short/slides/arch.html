@@ -1,46 +1,17 @@
-<section id="arch" data-section="How the call is built: architecture, workflow, MCP, webhook" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:36px">
-<div style="display:flex;flex-direction:column;gap:16px">
+<section id="arch" data-section="How the call is built: architecture, workflow, MCP, webhook" data-transition="fade" style="background:#F5F6F2;color:#14213D;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;flex-direction:column;gap:14px">
 <p style="font-size:24px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#0B7A55">Architecture</p>
-<h2 style="font-size:56px;font-weight:600;line-height:1.15">Caller → Assistant → three Edge services, KV and the flytlv API</h2>
+<h2 style="font-size:50px;font-weight:600;line-height:1.15">Bindings and hops: webhook → HTTP facade, MCP → RPC shared actor</h2>
 </div>
-<div style="display:flex;flex-direction:column;gap:24px">
-<div style="display:grid;grid-template-columns:0.8fr 1.2fr 1fr 1fr;gap:24px">
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #C9CFC6;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">Caller</p>
-<p style="font-size:24px;color:#3D4A5C">phone</p>
-</div>
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#0F1B2D;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600;color:#F5F6F2">AI Assistant</p>
-<p style="font-size:24px;color:#BFC8D4">Conversation Workflow, 12 nodes</p>
-</div>
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">webhook</p>
-<p style="font-size:24px;color:#3D4A5C">Edge Fn · Python · call start</p>
-</div>
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px solid #0B7A55;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">mcp-server</p>
-<p style="font-size:24px;color:#3D4A5C">Edge Fn · TS · 4 tools · mid-call</p>
-</div>
-</div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">session-actor</p>
-<p style="font-size:24px;color:#3D4A5C">Stateful Actor · TS</p>
-</div>
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#E3F1EA;border:2px solid #0B7A55;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">Telnyx KV</p>
-<p style="font-size:24px;color:#3D4A5C">flags · cache · session</p>
-</div>
-<div style="display:flex;flex-direction:column;justify-content:center;gap:8px;background:#FCFCFA;border:2px dashed #C9CFC6;border-radius:16px;padding:28px">
-<p style="font-size:30px;font-weight:600">flytlv deals API</p>
-<p style="font-size:24px;color:#3D4A5C">external</p>
-</div>
-</div>
-<p style="font-size:26px;line-height:1.4;color:#3D4A5C">Call start: webhook runs once (KV flags + recordCall). Mid-call: MCP tool calls reach the same actor directly via shared SESSIONS — no HTTP hop.</p>
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:25px;line-height:1.6;color:#14213D">webhook (Python 3.9)  → KV     client.storage.kvs.keys.* (REST)<br>webhook (Python 3.9)  → actor  HTTP facade: POST /actors/{digits}/{method}<br>mcp-server (TS)       → KV     env.KV binding (cache + session)<br>mcp-server (TS)       → actor  RPC: env.SESSIONS.idFromName(digits)<br>session-actor (TS)    → env.ITINERARIES: flytlv-itineraries (5-object cap)</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<p style="font-size:26px;line-height:1.35;color:#3D4A5C"><b>Three actor classes:</b> CallerSession, MetricsCounter, AuditLog — all hosted by session-actor.</p>
+<p style="font-size:26px;line-height:1.35;color:#3D4A5C"><b>Cloud Storage:</b> one bucket, 5 keys max — 4 <span style="font-family:'JetBrains Mono', 'Courier New', monospace">itineraries/slot-&lt;n&gt;.html</span> + one <span style="font-family:'JetBrains Mono', 'Courier New', monospace">audit/latest.json</span>.</p>
+<p style="font-size:26px;line-height:1.35;color:#3D4A5C">Python webhook cannot bind actors → HTTP facade. TypeScript MCP ships no actor code → RPC via <span style="font-family:'JetBrains Mono', 'Courier New', monospace">SESSIONS</span>.</p>
 </div>
 <div style="position:absolute;left:128px;bottom:64px;width:1664px;height:36px;display:flex;flex-direction:row;justify-content:space-between">
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">2 / 9</p>
 </div>
-<aside>At call start the workflow fires the webhook once, which reads flags from KV and records the call on the caller's actor. Mid-conversation, the prompt nodes call the MCP server, which reads the KV cache, calls flytlv, and reaches the same actor directly through the shared SESSIONS binding. The Python webhook cannot bind actors, so it uses the HTTP facade; the TypeScript MCP server skips that hop.</aside>
+<aside>The Python webhook cannot bind actors, so it reaches the session-actor through its HTTP facade (POST /actors/{digits}/{method} with a Bearer token). The TypeScript MCP server skips that hop: it binds CallerSession directly via the env.SESSIONS shared-actor binding (no class code shipped; the runtime forwards over RPC). The session-actor service hosts three actor classes — CallerSession, MetricsCounter, AuditLog — and writes to one Cloud Storage bucket hard-capped at 5 objects: four itinerary slot keys plus one audit/latest.json.</aside>
 </section>

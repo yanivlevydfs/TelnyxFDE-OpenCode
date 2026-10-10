@@ -676,3 +676,100 @@ Also write docs/presentation/PRESENTATION_SHORT.md: the slide text + short speak
 9 slides, with a one-line timing plan (total about 8 minutes). Add one line to
 docs/presentation/README.md pointing to deck-short/ and PRESENTATION_SHORT.md (written by OpenCode,
 build step 24). Do not touch any other file. Do not commit.
+
+### 24b. Fix factual errors in the decks (review of step 24)
+
+Verified against the code and the live assistant (2026-10-09). Fix these in
+docs/presentation/deck-short/ AND, where the same text exists, in docs/presentation/deck/,
+PRESENTATION.md and PRESENTATION_SHORT.md:
+
+1. Human transfer is DONE and LIVE, not "next". The live assistant has a `transfer` tool to
+   the human agent (TRANSFER_TO_NAME, TRANSFER_TO_NUMBER set; assistant/flow.py build_tools(),
+   assistant/provision.py). The workflow routes to transfer_call on request and after
+   CONVERSATION_TIMEOUT_SECS (600 s) via timeout_escalate. Remove "Link the human transfer
+   number" from every "next" list and note; show transfer as shipped. Never print the number.
+2. GLM-5.3-Flash (ASSISTANT_MODEL) is the assistant's LLM on calls, not its "voice".
+   Fix "The assistant's voice on calls" in both opencode slides.
+3. Attribution must be honest (owner rule). "GLM-5.2 wrote most of the code and docs" is not
+   proven. Use: OpenCode with Telnyx models built the first version of every service (GLM-5.2;
+   Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code; since 7 Oct every
+   change is an OpenCode build step (docs/build/PROMPTS.md).
+4. Short arch slide dropped Cloud Storage and the actor classes. Add, as in deck/slides/arch.html:
+   session-actor hosts CallerSession, MetricsCounter and AuditLog; one Cloud Storage bucket
+   (5-object cap) for itinerary slots and audit/latest.json. Shorten other text to fit.
+5. Short state slide: add the reminder (actor alarm) and the audit log (AuditLog actor ->
+   audit/latest.json) to the table or its proof line; keep at most 7 rows, table font-size 25px.
+6. Short next slide: "config forwards to the actor" is not an edge case. List real edge cases
+   from the code: bad webhook signature -> 401, bad JSON -> 400; KV/actor failure ->
+   backend_degraded="true" -> scripted degraded notice; flytlv timeout 3000 ms with one retry;
+   deals_enabled=false -> deals_disabled notice; MCP failures -> isError with a caller-friendly
+   message; send_deal_sms only to the caller's own number and only for an offered deal. Check
+   each one in the code before writing it.
+7. The short deck lost the stretch goals and the caller history. Add ONE line to the short next
+   slide (or its notes): stretch goals shipped = actor alarms (SMS reminder), Cloud Storage
+   itinerary, KV feature flags, shared actors, distributed tracing (trace_id), variable edges;
+   plus caller history (searchHistory, Telnyx insights, history.py). Keep within the canvas;
+   shorten other bullets.
+
+Same slide format rules as step 24 (no margin, >=24px, inside the canvas, footers unchanged).
+Do not touch any other file. Do not commit.
+(The first run of 24b was stopped before any edit; the owner asked for more. Do 24b together
+with 24c, which extends it.)
+
+### 24c. The short deck must be TECHNICAL and complete
+
+The audience is Telnyx engineers. Rewrite every slide of docs/presentation/deck-short/ (keep 9
+slides, same ids and order, same look) so each one shows HOW it works, with real identifiers
+copied from the code, not prose. Use a monospace `<p>` (JetBrains Mono, >=24px) for short code
+or config excerpts (at most 6 lines per slide). Every identifier, number and code excerpt must
+be copied from the repo; if you cannot find it, leave it out. Per slide, at least:
+
+- cover: the three live hostnames, runtimes (Python 3.9 Edge Function, TypeScript Edge Function,
+  TypeScript Stateful Actors), ASSISTANT_MODEL, and the one-line why.
+- arch: binding names (env.KV, SESSIONS shared actor, CALLER_SESSION + HTTP facade for the Python
+  webhook, the Cloud Storage binding), the three actor classes, which hop is HTTP and which is RPC.
+- workflow: the 12 node ids by type, the 3 expression edges as written in flow.py (variable,
+  operator, value), instructions_mode append vs replace, validate() rules.
+- mcp: the 4 tool names with their input fields, StreamableHTTPServerTransport with JSON
+  responses per request, Bearer MCP_API_KEY, conversation id from
+  params._meta.telnyx_conversation_id -> KV session -> caller (phone never in tool args),
+  flytlv call (X-API-Key, params, 3000 ms timeout + one retry, hides flights leaving < 3 h),
+  search by weekend / country.
+- dynvars: the request -> response shape `{"dynamic_variables": {...}}` with the real keys,
+  signature check (client.webhooks.unwrap) BEFORE JSON parse, parallel KV + actor under
+  WEBHOOK_BUDGET_MS 2500 vs WEBHOOK_TIMEOUT_MS 8000, safe defaults + backend_degraded.
+- state: KV keys and TTLs as in the code, actor idFromName(digits) and its storage keys,
+  setAlarm reminder, AuditLog singleton -> audit/latest.json (200), itinerary slots (4 + 1 = 5
+  objects), the 20-concurrent recordCall proof.
+- bug: the actual log line (JSON) that gave the signal and the fix as code
+  (`config.X ?? process.env.X`); the TooManyObjects finding; also the "every call degraded by
+  slow KV" fix (commit 11bff7e) in the notes if it fits.
+- opencode: the exact `opencode run --model telnyx/...` command and the cost env
+  (OPENCODE_DISABLE_EXTERNAL_SKILLS etc., 215k -> 8.7k tokens per request), models per part,
+  the step loop (prompt in PROMPTS.md -> OpenCode -> tests -> review -> commit), honest
+  attribution as in 24b item 3.
+- next: real edge cases with status codes / behaviour (24b item 6), shipped extras on one line
+  (transfer to a human, 23-entry FAQ with no invented baggage/booking facts, SMS deal link,
+  KV read retry, live_check 23 checks, storage_check, metrics.py, CI ship queue per service,
+  logs in Israel time), stretch goals + caller history (24b item 7), then at most 2 true "next"
+  items that are NOT already built (check the code first).
+
+Speaker notes: at most 4 sentences, technical. Same slide format rules as step 24. Update
+PRESENTATION_SHORT.md to match. Apply 24b items 1-3 to the full deck and PRESENTATION.md too.
+Do not touch any other file. Do not commit.
+
+### 24d. Fixes from review of 24c
+
+1. deck-short/slides/mcp.html: `leaving < 3 h` has a raw `<`, which breaks the HTML (the line
+   renders cut off). Write it as `&lt;` (check every slide file for any raw `<` in text).
+2. Model credit is wrong. Per the OpenCode session DB: the GLM-5.3 session-actor attempt FAILED;
+   GLM-5.2 built the session actor (and shared code, MCP server, assistant, docs); Kimi-K3 built
+   webhook v1. Fix deck-short/slides/opencode.html (card "Kimi-K3 · GLM-5.3" -> "Kimi-K3",
+   "Webhook v1."; GLM-5.2 card lists the session actor too) and its notes, and
+   PRESENTATION_SHORT.md.
+3. "project-only XDG dir" is wrong: it is a clean XDG config dir (XDG_CONFIG_HOME holding only
+   telnyx-models.json). Fix on the slide, notes and PRESENTATION_SHORT.md.
+4. deck/slides/opencode.html (full deck): 24c added a long 24px paragraph to the body; the slide
+   was already full. Remove that paragraph from the body (the attribution is already in the
+   card text and the notes). Revert the indentation-only change in deck/slides/next.html list.
+Change nothing else. Do not commit.

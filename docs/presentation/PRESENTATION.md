@@ -231,22 +231,28 @@ slot keys and one audit/latest.json, with storage_check.py guarding the cap.
 
 ## Slide 12 - Building with Telnyx Inference via OpenCode
 
-- Built with GLM-5.2; the webhook v1 on Kimi-K3.
-- Assistant talks on zai-org/GLM-5.3-Flash on Telnyx Inference.
+- OpenCode with Telnyx models built the first version of every service (GLM-5.2;
+  Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code;
+  since 7 Oct every change is an OpenCode build step (docs/build/PROMPTS.md).
+- zai-org/GLM-5.3-Flash (ASSISTANT_MODEL) is the assistant's LLM on calls, on
+  Telnyx Inference.
 - Worked: test-first prompts passed the tests in few iterations.
 - Hard: credit stops (error 20015); token cost from global context.
 - Edge gaps surfaced only on deploy: Python 3.9, /health probes, Cloud
   Storage's 5-object bucket cap (found via actor logs).
 
 Notes:
-Test-first prompts against the acceptance tests plus the short rules file
-produced passing code in a few iterations, and GLM-5.2 handled multi-file work
-well, including the MCP port from Python to TypeScript. What hurt: a negative
-balance stops inference mid-step with error 20015, so two steps were rerun,
-and global context blew tokens to 215k until a clean config dir cut it to 8.7k.
-Platform specifics — the Python 3.9 build, the health probes, and the Cloud
-Storage 5-object bucket cap — only surfaced on deploy and were fixed there,
-from actor logs, not from the model.
+OpenCode with Telnyx models built the first version of every service (GLM-5.2;
+Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code;
+since 7 Oct every change is an OpenCode build step (docs/build/PROMPTS.md).
+Test-first prompts against the acceptance tests produced passing code in a few
+iterations, and GLM-5.2 handled multi-file work well, including the MCP port
+from Python to TypeScript. What hurt: a negative balance stops inference
+mid-step with error 20015, so two steps were rerun, and global context blew
+tokens to 215k until a clean config dir cut it to 8.7k. Platform specifics —
+the Python 3.9 build, the health probes, and the Cloud Storage 5-object bucket
+cap — only surfaced on deploy and were fixed there, from actor logs, not from
+the model.
 
 ## Slide 13 - Tradeoffs and what I would do next
 
@@ -254,7 +260,8 @@ from actor logs, not from the model.
 - Actor for read-modify-write (20 concurrent, none lost); KV for reads.
 - Shared actor skips HTTP; facade stays for Python and for metrics.
 - One alarm per caller — last save wins, not a reminder per deal.
-- Next: link the human transfer; flight status; per-deal reminders.
+- Shipped: human transfer (transfer tool + 600 s timeout escalation).
+- Next: flight status; per-deal reminders via a CronTick actor.
 
 Notes:
 I chose expression edges for deterministic facts so a degraded backend never
@@ -262,9 +269,9 @@ depends on the model noticing it, at the cost of less flexible routing. The
 actor wins for read-modify-write and KV wins for read-mostly caches and flags;
 MetricsCounter would shard by hour if throughput grows. The one-alarm-per-actor
 limit means a newer save replaces the reminder, so today there is one reminder
-per caller, not per deal. Next I would link the human transfer number, add a
-flight-status branch, and move reminders to a CronTick actor for per-deal
-scheduling.
+per caller, not per deal. Human transfer is shipped (the transfer tool, plus
+timeout escalation at 600 s); next I would add a flight-status branch and move
+reminders to a CronTick actor for per-deal scheduling.
 
 ## Sources
 
