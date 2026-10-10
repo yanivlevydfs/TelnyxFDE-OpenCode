@@ -202,21 +202,20 @@ the session write after the response, and raising the webhook budget to 2500 ms.
 
 - Command: `opencode run --model 'telnyx/zai-org/GLM-5.2' "<prompt>"`
 - Cost env: `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`
-  `OPENCODE_DISABLE_CLAUDE_CODE=1` (clean XDG config dir) → 215k → 8.7k tokens/req.
+  (clean XDG config dir) → 215k → 8.7k tokens/req.
 - Models per part:
   - **GLM-5.2**: shared, MCP server, assistant flow, session actor, docs.
   - **Kimi-K3**: webhook v1.
   - **GLM-5.3-Flash**: `ASSISTANT_MODEL` — LLM on calls.
 - Step loop: prompt in PROMPTS.md → OpenCode → tests → review → commit.
 - Attribution: OpenCode with Telnyx models built the first version of every
-  service (GLM-5.2; Kimi-K3 for the webhook); some fixes on 6-7 Oct were made
-  with Claude Code; since 7 Oct every change is an OpenCode build step
-  (`docs/build/PROMPTS.md`).
+  service (GLM-5.2; Kimi-K3 for the webhook); since 7 Oct every change is an
+  OpenCode build step (`docs/build/PROMPTS.md`).
 
 Notes:
 opencode run --model telnyx/zai-org/GLM-5.2 runs each build step. Global context
-blew requests to ~215k tokens until OPENCODE_DISABLE_EXTERNAL_SKILLS=1 and
-OPENCODE_DISABLE_CLAUDE_CODE=1 with a clean XDG config dir cut it to ~8.7k.
+blew requests to ~215k tokens until OPENCODE_DISABLE_EXTERNAL_SKILLS=1 with a
+clean XDG config dir cut it to ~8.7k.
 Models per part: GLM-5.2 for shared code, MCP server, assistant flow, session actor and docs;
 Kimi-K3 for webhook v1; GLM-5.3-Flash as ASSISTANT_MODEL
 (the assistant's LLM on calls). Each step follows the loop in PROMPTS.md: write

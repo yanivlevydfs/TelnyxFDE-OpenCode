@@ -773,3 +773,17 @@ Do not touch any other file. Do not commit.
    was already full. Remove that paragraph from the body (the attribution is already in the
    card text and the notes). Revert the indentation-only change in deck/slides/next.html list.
 Change nothing else. Do not commit.
+
+## 25. No "Claude" name in the presentation
+
+Owner's rule: the word "Claude" must not appear in the slides or the slide text. Edit ONLY
+docs/presentation/deck/slides/opencode.html, docs/presentation/deck-short/slides/opencode.html,
+docs/presentation/PRESENTATION.md and docs/presentation/PRESENTATION_SHORT.md:
+1. Replace the attribution sentence with: "OpenCode with Telnyx models built the first version of
+   every service (GLM-5.2; Kimi-K3 for the webhook); since 7 Oct every change is an OpenCode
+   build step (docs/build/PROMPTS.md)." Do not claim anything beyond that.
+2. In the opencode command / cost lines (slide, notes, PRESENTATION_SHORT.md), drop the
+   `OPENCODE_DISABLE_CLAUDE_CODE=1` flag and keep `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` with the
+   clean XDG config dir and the 215k -> 8.7k numbers.
+After the edit, `grep -i claude` on those four files must return nothing. Keep the slide format
+rules of step 24. Change nothing else. Do not commit.

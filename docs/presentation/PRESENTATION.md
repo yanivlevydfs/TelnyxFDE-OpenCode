@@ -232,8 +232,8 @@ slot keys and one audit/latest.json, with storage_check.py guarding the cap.
 ## Slide 12 - Building with Telnyx Inference via OpenCode
 
 - OpenCode with Telnyx models built the first version of every service (GLM-5.2;
-  Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code;
-  since 7 Oct every change is an OpenCode build step (docs/build/PROMPTS.md).
+  Kimi-K3 for the webhook); since 7 Oct every change is an OpenCode build step
+  (docs/build/PROMPTS.md).
 - zai-org/GLM-5.3-Flash (ASSISTANT_MODEL) is the assistant's LLM on calls, on
   Telnyx Inference.
 - Worked: test-first prompts passed the tests in few iterations.
@@ -243,8 +243,8 @@ slot keys and one audit/latest.json, with storage_check.py guarding the cap.
 
 Notes:
 OpenCode with Telnyx models built the first version of every service (GLM-5.2;
-Kimi-K3 for the webhook); some fixes on 6-7 Oct were made with Claude Code;
-since 7 Oct every change is an OpenCode build step (docs/build/PROMPTS.md).
+Kimi-K3 for the webhook); since 7 Oct every change is an OpenCode build step
+(docs/build/PROMPTS.md).
 Test-first prompts against the acceptance tests produced passing code in a few
 iterations, and GLM-5.2 handled multi-file work well, including the MCP port
 from Python to TypeScript. What hurt: a negative balance stops inference
