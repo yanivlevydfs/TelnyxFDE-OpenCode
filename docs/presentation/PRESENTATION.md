@@ -6,23 +6,24 @@ part 2). Audience: the Telnyx FDE team. The live demo itself follows
 [DEMO_SCRIPT.md](DEMO_SCRIPT.md) and is not part of this deck.
 
 Every fact below comes from the repository. No number, cost, model name or bug
-detail is invented; where a fact was missing I wrote `TODO(Yaniv): …`.
+detail is invented.
 
 ## Slide 1 - FlyTLV Travel Line
 
 - Cheap flights from Tel Aviv by phone, round trip or one way.
-- Phone: **+972765671113** — bought and linked; regulatory approval pending.
+- Phone: **+972 76 567 1113** — bought and linked; regulatory approval pending.
 - Webhook: https://fde-webhook-e5907143-e.telnyxcompute.com
 - MCP server: https://fde-mcp-bc3393fa-a.telnyxcompute.com
 - Session actor: https://fde-session-actor-94b99eb9-4.telnyxcompute.com
 
 Notes:
 A caller dials the line, asks for cheap flights from Tel Aviv, hears the best
-deals from the live flytlv.app feed, can save one, and on the next call hears
+deals from the live flytlv.app feed, saves one, and on the next call hears
 "welcome back, last time you saved Larnaca, 64 dollars." The phone number is
 bought and linked but Telnyx regulatory approval is still pending, so the live
-demo uses the Portal browser test call as the fallback. Three Edge services
-are live: the webhook, the MCP server, and the session actor.
+demo runs through the Portal browser test call (same assistant, workflow, MCP
+server and webhook). Three Edge services are live: the webhook, the MCP
+server, and the session actor.
 
 ## Slide 2 - Why this use case
 

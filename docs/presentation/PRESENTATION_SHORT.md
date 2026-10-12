@@ -30,7 +30,7 @@ deals from the live flytlv.app feed, saves one, and on the next call hears
 3.9), the MCP server (TypeScript), and the session actor (TypeScript Stateful
 Actors). The assistant talks on zai-org/GLM-5.3-Flash (ASSISTANT_MODEL) over
 Telnyx Inference. The phone number is bought and linked but Telnyx regulatory
-approval is pending; the Portal browser test call is the fallback.
+approval is pending; the Portal browser test call is the demo call path.
 
 ## Slide 2 - Architecture
 

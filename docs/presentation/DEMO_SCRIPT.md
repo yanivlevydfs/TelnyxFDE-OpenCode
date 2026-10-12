@@ -14,8 +14,11 @@ buffer for live conversation.
 
 ## Two screens, side by side
 
-- **Left:** a phone dialling the assistant (or the Telnyx portal call tester)
-  plus a scratchpad of `curl` snippets for the flag-flip beat.
+- **Left:** the Telnyx Portal browser test call (the phone number
+  +972 76 567 1113 is still pending regulatory approval, so the Portal test
+  call is THE demo call path — same assistant, workflow, MCP server and
+  webhook as a real dialer) plus a scratchpad of `curl` snippets for the
+  flag-flip beat.
 - **Right:** a live log tail in one terminal, so the audience sees every request
   flow through the stack:
 
@@ -27,11 +30,24 @@ done
 
 ## Pre-flight (before you're on)
 
+> Number status: +972 76 567 1113 was ordered 6 Oct; documents submitted; still
+> pending Telnyx regulatory approval (`requirement-info-exception`). The demo
+> call path during the panel is the Telnyx Portal browser test call — same
+> assistant, workflow, MCP server and webhook as a real dialer.
+
 - [ ] Env secrets set on Edge (`TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`,
       `KV_NAMESPACE_ID`, `ACTOR_SERVICE_URL`, `INTERNAL_API_TOKEN`,
       `MCP_API_KEY`, `FLYTLV_API_KEY`).
+- [ ] Account balance positive; `telnyx-edge bindings validate <id>` returns
+      OK for `fde-webhook` (`e5907143-e572-4e86-8880-0de76f057561`) and
+      `fde-mcp` (`bc3393fa-a5f2-4470-b7af-137f3d9c831d`); Edge binding
+      `TELNYX` validated.
 - [ ] The three services are shipped (GitHub Actions → *Ship Edge Functions*, or a
-      push to `master`) and `python scripts/ops/live_check.py` shows 20/20 PASS.
+      push to `master`) and `python scripts/ops/live_check.py` shows 23/23 PASS
+      (incl. itinerary link 200 and fake-token 404);
+      `python scripts/ops/workflow_paths.py` shows 15/15 PASS (real chat through
+      every workflow path incl. fallbacks);
+      `python scripts/ops/storage_check.py` shows 2/2 PASS (bucket 2 of 5 objects).
 - [ ] `python scripts/ops/metrics.py --reset` so the metrics start at zero.
 - [ ] `python assistant/provision.py` (assistant + workflow + MCP server + phone number) is provisioned
       and a phone number is linked.
@@ -54,7 +70,10 @@ Show the [architecture diagram](../../README.md#architecture): the chain
 
 ### 0:30–1:15 — First call: greeting = speak node + dynamic webhook
 
-**Dial the number.** The assistant speaks the verbatim greeting:
+**Start the call from the Telnyx Portal browser test call** (the phone number
++972 76 567 1113 is still pending regulatory approval, so the Portal test call
+is THE call path — it drives the same assistant, workflow, MCP server and
+webhook as a real dialer). The assistant speaks the verbatim greeting:
 "Welcome to the FlyTLV Travel Line. I'm an AI assistant. I can find you cheap
 flights from Tel Aviv, round trip or one way, and remember the ones you save.
 This call may be recorded for quality."
@@ -124,21 +143,26 @@ Say: **"Save the first one."**
   `[env_vars]` do not reach actor instances; see DECISIONS #28); an
   `reminder_scheduled` INFO with `delay_ms: 600000` is the alarm arming.
 - Optional: **"Text me that one."** (`send_deal_sms`, to the caller's own number
-  only). On this account the alphanumeric sender is blocked at the account level,
-  so the agent says it could not send; the deal is still saved. When SMS works,
-  the body ends with `Itinerary: https://fde-session-actor-<id>.telnyxcompute.com/itineraries/<uuid>.html`
+  only). On this account `send_deal_sms` has never reached a real phone — it is
+  gated by the KV flag `sms_enabled` and the account's SMS sender — so the
+  agent says it could not send; the deal is still saved. The tool's success
+  path would end the body with `Itinerary: https://fde-session-actor-<id>.telnyxcompute.com/itineraries/<uuid>.html`
   — open it on screen: a mobile-friendly page with city, dates, airline, direct
   vs stops, price and a "Book this flight" button.
 
 "Saved. Next time you call, I'll remind you." Hang up.
 
 **Off-screen beat (after the demo):** note that because `REMINDER_DELAY_SECONDS`
-default is 600, the reminder SMS does not arrive during the 10-minute demo:
-it lands ~10 minutes after the save. Point at where it will show up:
+default is 600, the reminder does not arrive during the 10-minute demo: it
+fires ~10 minutes after the save. Note: on this account `send_deal_sms` has
+never reached a real phone, so `alarm.sms_sent` is the would-be event —
+`reminder_scheduled` is what actually logs today, and `alarm.failed` would
+log on any send error (the actor never re-throws from `alarm()`). Point at
+where the would-be events show up:
 
 ```
 {"event":"reminder_scheduled","entity":"***0100","dealId":"tlv-lca-1","delay_ms":600000}
-... (10 minutes later) ...
+... (10 minutes later, only when the SMS send succeeds) ...
 {"event":"alarm.sms_sent","entity":"***0100","dealId":"tlv-lca-1"}
 ```
 
@@ -152,7 +176,8 @@ If you want the reminder live in the demo, set `REMINDER_DELAY_SECONDS=60` in
 
 ### 4:30–6:00 — Second call: "Welcome back" = the whole chain, personalized
 
-**Redial from the same number.** The greeting + identify step now says:
+**Start a new conversation in the Portal test call from the same test number.**
+The greeting + identify step now says:
 "Welcome back — last time you saved Larnaca for 64 dollars."
 
 Show on the right screen how that one sentence is built:
@@ -212,13 +237,14 @@ Flip the deals feature flag (no redeploy — KV feature-flag stretch):
 telnyx-edge storage kv put flags/assistant '{"deals_enabled":false}'
 ```
 
-Redial. The webhook reads the new flag and returns `flag_deals_enabled="false"`;
+Start a new conversation in the Portal test call. The webhook reads the new
+flag and returns `flag_deals_enabled="false"`,
 the assistant routes via the **expression edge** to `deals_disabled` (speak
 node): "Flight deal search is temporarily turned off. Please call back later."
 
 Explain: that edge is deterministic and evaluated *before* the model turn — a
 broken/disabled backend never depends on the model noticing it (decision #12).
-Flip the flag back to `true` and a redial returns to the happy path.
+Flip the flag back to `true` and a fresh conversation returns to the happy path.
 *Fallback path + KV feature flag: requirements 5 (happy + fallback) & a
 stretch goal.*
 
@@ -226,7 +252,8 @@ Escalation path: say **"Can I speak to a person?"** The assistant offers Ofek an
 transfers the call with the transfer tool (target named in the tool; the hangup
 is a separate tool node, so the model cannot end the call by mistake).
 
-Every other path is also walked over chat by `python scripts/ops/workflow_paths.py`.
+Every other path is also walked over chat by `python scripts/ops/workflow_paths.py`
+(15/15 PASS, incl. fallbacks and the transfer offer — over the live assistant).
 
 ### 9:30–10:00 — Close
 
@@ -249,8 +276,8 @@ into the walkthrough.
 | `search_deals` MCP tool on screen | 2 (MCP, ≥3 tools available) |
 | KV cache read/write + flytlv call | 4b (KV) |
 | `save_deal` → actor `saveDeal` (itinerary HTML in Cloud Storage + reminder alarm) | 4c (Actor read-modify-write) + Actor-alarm stretch |
-| Reminder SMS after `REMINDER_DELAY_SECONDS` (`alarm.sms_sent`) | 5 (observability + the alarm stretch lands) |
-| Redial → "Welcome back, you saved Larnaca for 64 dollars" | 3 (dynamic vars personalize) |
+| Reminder alarm after `REMINDER_DELAY_SECONDS` (`reminder_scheduled` fires; `alarm.sms_sent` only on real SMS send) | 5 (observability + the alarm stretch lands) |
+| Second conversation from the same test number → "Welcome back, you saved Larnaca for 64 dollars" | 3 (dynamic vars personalize) |
 | Three deployed Edge Functions + metrics | 4a, 4b, 4c (deployed, public) |
 | One `trace_id` across webhook/mcp/actor + the debugging beat | 5 (observability + evidence) |
 | KV flag flip → `deals_disabled` speak node | 5 (fallback path) + KV-flag stretch |
@@ -260,7 +287,7 @@ to explain (per `docs/challenge/code_challenge.md`):
 - The use case and why it fits workflows + a Stateful Actor.
 - Node design & edge conditions (speak for verbatim; `expression` for facts
   before the model turn; `llm` for intent; `append` vs `replace` instructions).
-- MCP server structure (3 tools, stateless Streamable HTTP per request, bearer
+- MCP server structure (4 tools, stateless Streamable HTTP per request, bearer
   auth before the manager, `ToolError` to the LLM).
 - Why Actor vs KV vs function logic for each piece of state (see
   [README.md](../../README.md#why-stateful-actor-vs-kv-vs-plain-function-logic)).

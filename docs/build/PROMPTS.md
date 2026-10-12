@@ -796,3 +796,57 @@ for a job interview for the **Forward Deployed Engineer (FDE)** role at **Telnyx
 Yaniv Levy; the brief is docs/challenge/code_challenge.md. Then adjust the existing sentence
 "Built for the Telnyx FDE coding challenge (...)" so it does not repeat the note. Change
 nothing else in README.md and no other file. Do not commit.
+
+## 27. Demo-day pack: update every presentation file + a spoken talk track
+
+Context: this is a job interview for the Telnyx Forward Deployed Engineer role. The audience
+is Telnyx engineers. Tone: confident, technical, positive; never complain about Telnyx.
+
+Verified facts as of 2026-10-12 (use these; never invent):
+- live_check.py 23/23 PASS; workflow_paths.py 15/15 PASS (real text conversations with the
+  live assistant, workflow, MCP and webhook, including fallbacks); storage_check.py 2/2 PASS
+  (bucket 2 of 5 objects); Edge binding TELNYX valid; account balance positive.
+- Phone +972 76 567 1113: ordered 6 Oct, documents submitted, still pending regulatory
+  approval (requirement-info-exception). The demo call runs through the Telnyx Portal browser
+  test call (same assistant, workflow, MCP and webhook). Say it neutrally.
+- Transfer to a human (TRANSFER_TO_NAME) is LIVE. send_deal_sms exists but has never reached a
+  real phone; it is gated by the KV flag sms_enabled. Do not claim SMS delivery works.
+- Telnyx account used for everything: flytelaviv@gmail.com.
+
+1. docs/presentation/DEMO_SCRIPT.md (8-10 min live demo): update every stale fact (live_check
+   is 23/23 not 20/20; add workflow_paths 15/15 and storage_check to pre-flight; Portal browser
+   test call is THE call path while the number is pending; KV flag line matches the real flag
+   keys; add a pre-flight line: balance > 0 and `telnyx-edge bindings validate <id>`). Keep the
+   requirement-mapping checklist correct. Keep its structure.
+2. docs/presentation/deck/ (full deck, 19 slides) and PRESENTATION.md: fix any claim that
+   contradicts the facts above or the code (cover phone line, live_check counts, transfer,
+   SMS wording). Remove any leftover `TODO(Yaniv)` you can now resolve from the code. Slide
+   format rules of step 24 apply (no margin, >=24px, inside the canvas, footers unchanged).
+3. docs/presentation/deck-short/ and PRESENTATION_SHORT.md: same fact pass (cover phone line,
+   check counts). Keep the technical content of step 24c.
+4. NEW docs/presentation/TALK_TRACK.md: what Yaniv SAYS, in first person, ready to read aloud:
+   - Opening (30 s): who I am, the role, what FlyTLV is, and one neutral line on the phone status
+     and the Portal test call.
+   - Live demo (8-10 min): numbered beats; for each, the exact caller line to speak, what to say
+     to the panel while it runs, and what to point at on screen (log event / metric / KV / actor
+     state), matching DEMO_SCRIPT.md.
+   - Walkthrough (7-10 min): one short spoken paragraph per short-deck slide (9 slides), using
+     the real identifiers on the slide.
+   - Q&A prep: the 12 most likely questions from the brief's list (actor vs KV, OpenCode models,
+     hardest bug signal, LLM vs expression edges, edge cases, scaling, multi-assistant routing
+     not done, security of the webhook/MCP, cost, what I'd do next, production readiness,
+     testing strategy), each with a 2-4 sentence answer grounded in the code.
+   - Closing (20 s).
+   Every fact must come from the code or the facts above.
+5. docs/presentation/README.md: list TALK_TRACK.md; fix "13 slides" if wrong.
+Do not touch any other file. Do not commit.
+
+### 27b. Speaker notes = the talk track
+
+The owner presents from the slide deck, not from Markdown. For each of the 9 slides in
+docs/presentation/deck-short/slides/, replace the `<aside>` speaker notes with the spoken text
+of the matching "Slide N" section of docs/presentation/TALK_TRACK.md (first person, ready to
+read aloud; plain text only, no Markdown symbols such as `>`, `**` or backticks; escape `<`,
+`>` and `&` as HTML entities; at most 3500 characters per aside). On the cover slide's notes,
+prepend the Opening paragraph. On the last slide's notes, append the Closing paragraph.
+Change only the `<aside>` elements. Do not touch any other file. Do not commit.

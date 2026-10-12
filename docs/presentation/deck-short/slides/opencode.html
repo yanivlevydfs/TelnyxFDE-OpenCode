@@ -26,5 +26,5 @@
 <p style="font-size:24px;color:#6B7685">FlyTLV Travel Line · walkthrough</p>
 <p style="font-size:24px;color:#6B7685">8 / 9</p>
 </div>
-<aside>opencode run --model telnyx/zai-org/GLM-5.2 runs each build step. Global context blew requests to ~215k tokens until OPENCODE_DISABLE_EXTERNAL_SKILLS=1 with a clean XDG config dir cut it to ~8.7k. Models per part: GLM-5.2 for shared code, MCP server, assistant flow, session actor and docs; Kimi-K3 for webhook v1; GLM-5.3-Flash as ASSISTANT_MODEL (the assistant's LLM on calls). Each step follows the loop in PROMPTS.md: write the prompt, run OpenCode, run tests, review, commit.</aside>
+<aside>Command: opencode run --model 'telnyx/zai-org/GLM-5.2' "&lt;prompt&gt;". Cost env: OPENCODE_DISABLE_EXTERNAL_SKILLS=1 with a clean XDG config dir cut requests from ~215k to ~8.7k tokens. Models per part: GLM-5.2 built the shared code, the MCP server, the assistant flow, the session actor and the docs; Kimi-K3 built webhook v1; GLM-5.3-Flash is ASSISTANT_MODEL — the LLM on the calls themselves. Step loop: write the prompt in docs/build/PROMPTS.md → run OpenCode → run tests → review → commit. Honest attribution: OpenCode with Telnyx models built the first version of every service; since 7 Oct every change is an OpenCode build step.</aside>
 </section>
