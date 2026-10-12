@@ -1,15 +1,19 @@
 # FlyTLV Travel Line
 
+> This project is a take-home coding challenge for the **Forward Deployed
+> Engineer (FDE)** role at **Telnyx**, built by Yaniv Levy. The brief is in
+> [`docs/challenge/code_challenge.md`](docs/challenge/code_challenge.md).
+
 A phone line for cheap flights from Tel Aviv, round trip or one way. You call a Telnyx AI
 Assistant and ask for a deal ("something cheap to Cyprus in November"). It
 reads back the 2–3 cheapest deals from the live `flytlv.app` deals API, can
 save one, and on your next call says "Welcome back, last time you saved Larnaca
 for 64 dollars."
 
-Built for the Telnyx FDE coding challenge ([docs/challenge/code_challenge.md](docs/challenge/code_challenge.md)).
-Requirement 6: the first version of every component was built by **OpenCode
-powered by Telnyx Inference** from the spec and the acceptance tests. See
-[Tool comparison](#tool-comparison) for what each AI coding tool built.
+Requirement 6 of the challenge: the first version of every component was
+built by **OpenCode powered by Telnyx Inference** from the spec and the
+acceptance tests. See [Tool comparison](#tool-comparison) for what each AI
+coding tool built.
 
 ## Documentation
 

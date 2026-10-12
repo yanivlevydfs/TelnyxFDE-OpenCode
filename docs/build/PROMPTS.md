@@ -787,3 +787,12 @@ docs/presentation/PRESENTATION.md and docs/presentation/PRESENTATION_SHORT.md:
    clean XDG config dir and the 215k -> 8.7k numbers.
 After the edit, `grep -i claude` on those four files must return nothing. Keep the slide format
 rules of step 24. Change nothing else. Do not commit.
+
+## 26. README: state that this is a job-interview project
+
+At the very top of README.md, directly under the `# FlyTLV Travel Line` title, add a short
+note (2-3 lines, a Markdown blockquote) saying: this project is a take-home coding challenge
+for a job interview for the **Forward Deployed Engineer (FDE)** role at **Telnyx**, built by
+Yaniv Levy; the brief is docs/challenge/code_challenge.md. Then adjust the existing sentence
+"Built for the Telnyx FDE coding challenge (...)" so it does not repeat the note. Change
+nothing else in README.md and no other file. Do not commit.
