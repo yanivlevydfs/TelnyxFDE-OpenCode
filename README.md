@@ -486,6 +486,7 @@ cd services/session-actor && npm run check      # itinerary + alarm self-check (
 cd services/mcp-server && npm test               # MCP server (11 tests)
 .venv/Scripts/python -m pytest tests/check_flow_capabilities.py -q   # step 9 capability self-check
 .venv/Scripts/python -m pytest tests/check_env.py -q                   # step 21 env-var guard (owner rule 3)
+bash scripts/ops/run_all_checks.sh              # every test + live ops checks in one go (--full adds workflow paths, ~3 min)
 ```
 
 ## Deploy

@@ -850,3 +850,20 @@ read aloud; plain text only, no Markdown symbols such as `>`, `**` or backticks;
 `>` and `&` as HTML entities; at most 3500 characters per aside). On the cover slide's notes,
 prepend the Opening paragraph. On the last slide's notes, append the Closing paragraph.
 Change only the `<aside>` elements. Do not touch any other file. Do not commit.
+
+## 28. One demo script that runs every test
+
+Create scripts/ops/run_all_checks.sh (bash, Git Bash on Windows and Linux) that runs, with a
+clear "===== N. title =====" header per step, and prints a final PASS/FAIL line per step:
+1. `$PY -m pytest tests -q` (PY = .venv/Scripts/python if it exists, else .venv/bin/python)
+2. `npm test --silent` in services/session-actor
+3. `$PY scripts/ops/live_check.py`, filtered to one readable line per check: "PASS <check>" /
+   "FAIL <check> - <detail>" and the summary "live_check: X / Y passed" (parse the JSON lines
+   with $PY -c, not sed)
+4. `$PY scripts/ops/workflow_paths.py`, same readable format ("PASS <path>"), only when the
+   script is run with `--full` (it takes ~3 minutes)
+5. `$PY scripts/ops/storage_check.py`, same format
+6. `$PY scripts/ops/metrics.py`
+Keep going when a step fails; exit 1 at the end if any step failed. Header comment explaining
+usage (`bash scripts/ops/run_all_checks.sh [--full]`). Short and readable. Add one line for it in
+the README's Test section. Touch no other file. Do not commit.
