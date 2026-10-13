@@ -894,3 +894,13 @@ Fix in services/mcp-server (TypeScript), keep it small:
    within KV_TIMEOUT_MS + flytlv time, and a rejecting session read must still return deals.
 Run the MCP server tests and every test/self-check in tests/README.md; all green, typecheck
 clean. Do not commit.
+
+### 29b. KV_TIMEOUT_MS 1500 is below Telnyx KV's healthy latency
+
+Live after step 29 (13 Oct 15:20 IL): search_deals is now 1.8-3.0 s (was 9.6-18.2 s), but the
+`timings` show session_ms/cache_ms pinned at ~1500 (the timeout), and live_check fails
+"metrics: KV cache hit recorded" (hit None) and "sms_enabled=false blocks SMS in code" (the
+flags read times out and SMS defaults to on). Healthy Telnyx KV reads measured 1.2-2.7 s today.
+Set the KV_TIMEOUT_MS default to 2500 everywhere it appears (services/mcp-server/src code
+defaults, func.toml [env_vars], .env.example, README/OBSERVABILITY lines from step 29). Change
+nothing else. Run the MCP tests and check_env. Do not commit.

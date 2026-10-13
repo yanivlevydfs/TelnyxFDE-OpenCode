@@ -204,7 +204,7 @@ while `flytlv.search` averaged 1687 ms, with `mcp.cache_read_failed` /
 with no time limit stacked up. Log signature now: `mcp.search_deals` carries a
 `timings` object (`session_ms`, `cache_ms`, `flytlv_ms`, `actor_ms`);
 `mcp.session_read_failed` is a WARNING (caller degrades to anonymous) and KV
-get/put race the `KV_TIMEOUT_MS` budget (default 1500 ms) before throwing
+get/put race the `KV_TIMEOUT_MS` budget (default 2500 ms) before throwing
 `KvError("…: timeout after N ms")`. Fix: parallel reads (`Promise.allSettled`),
 per-call timeout, fire-and-forget cache write.
 

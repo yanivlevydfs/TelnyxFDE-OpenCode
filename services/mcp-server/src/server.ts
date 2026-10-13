@@ -476,7 +476,7 @@ async function readCaller(kv: Kv, conv: string): Promise<string | undefined> {
   if (!conv) return undefined;
   const prefix = config.optional("SESSION_KEY_PREFIX", "session/");
   const key = `${prefix}${conv}`;
-  const ms = config.integer("KV_TIMEOUT_MS", 1500);
+  const ms = config.integer("KV_TIMEOUT_MS", 2500);
   // One retry inside the budget: a transient KV 503 should not turn a whole
   // search anonymous (the caller would lose "welcome back"). The timeout
   // wraps both attempts, so a slow KV cannot double the latency either.
@@ -688,7 +688,7 @@ export function createServer(
       // Racing them keeps a search bounded; a session-read failure now degrades
       // to an anonymous caller (deals still returned, nothing remembered) and
       // the cache write no longer blocks the reply.
-      const kvMs = config.integer("KV_TIMEOUT_MS", 1500);
+      const kvMs = config.integer("KV_TIMEOUT_MS", 2500);
       // readCaller is internally bounded by KV_TIMEOUT_MS (one retry inside the
       // budget); the cache read is bounded here. Both race in parallel so a
       // sick KV cannot stack up. `timed` records each one's wall-clock ms for

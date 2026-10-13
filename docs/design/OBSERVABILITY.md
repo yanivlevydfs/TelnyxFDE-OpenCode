@@ -139,7 +139,7 @@ sick KV (~1.2-2.7 s per healthy read, 500s when degraded) and the assistant's
 tool call timed out. Log signature of the bug: `mcp.cache_read_failed` /
 `mcp.cache_write_failed` (KV 500 / slow) and caller `""` (session lookup
 failed), on `fde-mcp`. Fix: KV get/put race the `KV_TIMEOUT_MS` budget
-(default 1500 ms) before throwing `KvError("kv get <key>: timeout after N ms")`
+(default 2500 ms) before throwing `KvError("kv get <key>: timeout after N ms")`
 (`EdgeKv`); `search_deals` runs the session read and the cache read in
 parallel (`Promise.allSettled`), degrades to an anonymous caller on a session-
 read failure (WARNING `mcp.session_read_failed` — deals still returned, nothing

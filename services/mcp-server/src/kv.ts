@@ -38,7 +38,7 @@ const KV = (env as unknown as { KV: EdgeKvNamespace }).KV;
 export class EdgeKv implements Kv {
   /** Return the JSON value at `key`, or `undefined` when missing. */
   async getJson(key: string): Promise<unknown> {
-    const ms = config.integer("KV_TIMEOUT_MS", 1500);
+    const ms = config.integer("KV_TIMEOUT_MS", 2500);
     try {
       // Race the binding call against KV_TIMEOUT_MS so a sick/slow KV (live
       // incident, step 29: ~1.2-2.7 s per healthy read, 500s when degraded)
@@ -57,7 +57,7 @@ export class EdgeKv implements Kv {
 
   /** Store a JSON value at `key`, optionally with a TTL in seconds. */
   async putJson(key: string, value: unknown, ttlSecs?: number): Promise<void> {
-    const ms = config.integer("KV_TIMEOUT_MS", 1500);
+    const ms = config.integer("KV_TIMEOUT_MS", 2500);
     try {
       await withTimeoutMs(
         KV.put(
