@@ -128,3 +128,24 @@ bucket over S3 (sigv4; the Telnyx API key is used as both the access and
 secret key by default, `STORAGE_S3_*` are optional overrides) and fails on
 any key outside `{itineraries/slot-<n>.html, audit/latest.json}` or on a
 count > `STORAGE_MAX_OBJECTS`.
+
+## Step 29 log events — slow KV budget
+
+Symptom (live, 13 Oct 14:12 IL, trace `7e65be1b-2ee8-40f7-a197-47950fb49939`):
+`search_deals` took 16739 / 18186 / 11588 ms (metrics avg 11516 ms) while
+`flytlv.search` averaged 1687 ms — three serial KV calls (session read + one
+retry, cache read, cache write) with no time limit stacked up against a
+sick KV (~1.2-2.7 s per healthy read, 500s when degraded) and the assistant's
+tool call timed out. Log signature of the bug: `mcp.cache_read_failed` /
+`mcp.cache_write_failed` (KV 500 / slow) and caller `""` (session lookup
+failed), on `fde-mcp`. Fix: KV get/put race the `KV_TIMEOUT_MS` budget
+(default 1500 ms) before throwing `KvError("kv get <key>: timeout after N ms")`
+(`EdgeKv`); `search_deals` runs the session read and the cache read in
+parallel (`Promise.allSettled`), degrades to an anonymous caller on a session-
+read failure (WARNING `mcp.session_read_failed` — deals still returned, nothing
+remembered), and starts the cache write without awaiting (`.catch` → WARNING
+`mcp.cache_write_failed`). The `mcp.search_deals` span now carries a `timings`
+object (`session_ms`, `cache_ms`, `flytlv_ms`, `actor_ms`) so a stacked KV is
+visible at a glance. `save_deal` / `list_saved_deals` / `send_deal_sms` still
+fail with the friendly ToolError (`requireCaller` logs `mcp.session_read_failed`
+at ERROR).

@@ -248,16 +248,58 @@ test("search_deals flytlv 404 is a tool error", async () => {
   assert.match(out.text, /unavailable/);
 });
 
-test("search_deals with KV down is a tool error", async () => {
-  // KV down: flytlv still answers, but the caller can't be resolved -> error.
+test("search_deals with KV rejecting returns deals anonymously (step 29)", async () => {
+  // KV rejecting/failing: flytlv still answers. The session read fails so the
+  // caller is anonymous — deals are STILL returned and nothing is remembered
+  // (step 29: a rejecting session read must not fail the whole tool; save /
+  // list / SMS still fail via requireCaller).
+  const actor = new FakeActor();
   const resp = await rpc(
     new FakeKv(true, true),
-    new FakeActor(),
+    actor,
     flytlvFetch(),
     "tools/call",
     toolCall("search_deals"),
   );
-  assert.equal(result(resp).error, true);
+  const out = result(resp);
+  assert.equal(out.error, false, `expected deals, got: ${out.text}`);
+  const deals = JSON.parse(out.text).deals;
+  assert.ok(Array.isArray(deals) && deals.length > 0, `expected deals, got: ${out.text}`);
+  assert.equal(actor.calls.length, 0); // anonymous caller: nothing remembered
+});
+
+test("search_deals returns deals within the KV budget when KV never resolves (step 29)", async () => {
+  // A sick/slow KV whose getJson/putJson NEVER resolve must not hang the tool
+  // call: the KV_TIMEOUT_MS budget bounds the parallel reads, flytlv still
+  // answers, and the caller stays anonymous (step 29, live trace 7e65be1b —
+  // the bug stacked serial KV calls up to ~15 s).
+  process.env.KV_TIMEOUT_MS = "50";
+  try {
+    class SlowKv implements Kv {
+      async getJson(_key: string): Promise<unknown> { return new Promise(() => {}); }
+      async putJson(_key: string, _value: unknown): Promise<void> { return new Promise(() => {}); }
+    }
+    const actor = new FakeActor();
+    const t0 = Date.now();
+    const resp = await rpc(
+      new SlowKv(),
+      actor,
+      flytlvFetch(),
+      "tools/call",
+      toolCall("search_deals"),
+    );
+    const elapsed = Date.now() - t0;
+    const out = result(resp);
+    assert.equal(out.error, false, `expected deals, got: ${JSON.stringify(resp.body)}`);
+    const deals = JSON.parse(out.text).deals;
+    assert.ok(Array.isArray(deals) && deals.length > 0, `expected deals, got: ${out.text}`);
+    assert.equal(actor.calls.length, 0); // anonymous caller
+    // Bounded by KV_TIMEOUT_MS + flytlv time (≈0 for the fake) + slack — never
+    // the old ~15 s stack-up.
+    assert.ok(elapsed < 1000, `search_deals took ${elapsed}ms (KV_TIMEOUT_MS=50)`);
+  } finally {
+    delete process.env.KV_TIMEOUT_MS;
+  }
 });
 
 test("save_deal success and rejection", async () => {

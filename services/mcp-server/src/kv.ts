@@ -17,7 +17,8 @@
 
 import { env } from "@telnyx/edge-runtime";
 
-import { type Kv, KvError } from "./server.js";
+import { config } from "./config.js";
+import { type Kv, KvError, withTimeoutMs } from "./server.js";
 
 /**
  * Minimal hand-written type for the KV binding. The runtime-generated
@@ -37,8 +38,16 @@ const KV = (env as unknown as { KV: EdgeKvNamespace }).KV;
 export class EdgeKv implements Kv {
   /** Return the JSON value at `key`, or `undefined` when missing. */
   async getJson(key: string): Promise<unknown> {
+    const ms = config.integer("KV_TIMEOUT_MS", 1500);
     try {
-      return await KV.get(key, { type: "json" });
+      // Race the binding call against KV_TIMEOUT_MS so a sick/slow KV (live
+      // incident, step 29: ~1.2-2.7 s per healthy read, 500s when degraded)
+      // cannot stack serial calls and time out the assistant's tool call.
+      return await withTimeoutMs(
+        KV.get(key, { type: "json" }),
+        ms,
+        `kv get ${JSON.stringify(key)}`,
+      );
     } catch (e) {
       throw new KvError(
         `kv get ${JSON.stringify(key)}: ${e instanceof Error ? e.message : String(e)}`,
@@ -48,11 +57,16 @@ export class EdgeKv implements Kv {
 
   /** Store a JSON value at `key`, optionally with a TTL in seconds. */
   async putJson(key: string, value: unknown, ttlSecs?: number): Promise<void> {
+    const ms = config.integer("KV_TIMEOUT_MS", 1500);
     try {
-      await KV.put(
-        key,
-        JSON.stringify(value),
-        ttlSecs ? { expirationTtl: ttlSecs } : {},
+      await withTimeoutMs(
+        KV.put(
+          key,
+          JSON.stringify(value),
+          ttlSecs ? { expirationTtl: ttlSecs } : {},
+        ),
+        ms,
+        `kv put ${JSON.stringify(key)}`,
       );
     } catch (e) {
       throw new KvError(

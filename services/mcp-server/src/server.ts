@@ -429,29 +429,77 @@ function cacheKey(params: Record<string, string>): string {
   return prefix + sig;
 }
 
-/** The caller entity for a conversation, from `session/<conversation_id>`
+/**
+ * Race `p` against a `ms` timeout. If the timeout wins, reject with
+ * `KvError("<label>: timeout after <ms> ms")`; otherwise settle with `p`.
+ * The pending timer is cleared once the race settles, so a fast `p` never
+ * leaks a timer. Used by `EdgeKv` (every get/put), by `readCaller` (the
+ * session read) and by `search_deals` (the cache read) so a sick/slow KV can
+ * never stack serial calls up to the assistant's tool-call timeout (step 29).
+ */
+export function withTimeoutMs<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new KvError(`${label}: timeout after ${ms} ms`)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Wrap `p` so its wall-clock duration (ms) is recorded whether it fulfills or
+ * rejects — the `timings` object on `mcp.search_deals` (step 29) reads these.
+ * `ms()` returns 0 until the wrapped promise settles.
+ */
+function timed<T>(p: Promise<T>): { p: Promise<T>; ms: () => number } {
+  const start = Date.now();
+  let end = start;
+  const wrapped = p.then(
+    (v) => { end = Date.now(); return v; },
+    (e) => { end = Date.now(); throw e; },
+  );
+  return { p: wrapped, ms: () => end - start };
+}
+
+/**
+ * The caller entity for a conversation, from `session/<conversation_id>`
  * (written by the webhook). `undefined` = no session: an anonymous or hidden
- * caller id, so nothing can be saved for them. KV failure raises ToolError. */
+ * caller id, so nothing can be saved for them. A KV failure (or a timeout
+ * under `KV_TIMEOUT_MS`) is raised as a `KvError` — the caller decides the
+ * severity: `search_deals` degrades to an anonymous caller (WARNING +
+ * continue), `requireCaller` (save / list / SMS) logs ERROR and fails with a
+ * friendly ToolError. Reads once with one retry, the whole attempt bounded
+ * by the timeout so a slow KV cannot stack up.
+ */
 async function readCaller(kv: Kv, conv: string): Promise<string | undefined> {
   if (!conv) return undefined;
   const prefix = config.optional("SESSION_KEY_PREFIX", "session/");
-  let session: unknown;
-  try {
-    // One retry: Telnyx KV occasionally answers a transient 503.
-    session = await kv.getJson(`${prefix}${conv}`).catch(() => kv.getJson(`${prefix}${conv}`));
-  } catch (e) {
-    error("mcp.session_read_failed", { conversation: conv, error: e instanceof Error ? e.message : String(e) }, e);
-    throw new ToolError("The session service is unavailable; please try again later.");
-  }
+  const key = `${prefix}${conv}`;
+  const ms = config.integer("KV_TIMEOUT_MS", 1500);
+  // One retry inside the budget: a transient KV 503 should not turn a whole
+  // search anonymous (the caller would lose "welcome back"). The timeout
+  // wraps both attempts, so a slow KV cannot double the latency either.
+  const read = kv.getJson(key).catch(() => kv.getJson(key));
+  const session = await withTimeoutMs(read, ms, `kv get ${JSON.stringify(key)}`);
   const id = session && typeof session === "object" && !Array.isArray(session)
     ? (session as { entity_id?: unknown }).entity_id
     : undefined;
   return id ? String(id) : undefined;
 }
 
-/** Like readCaller, for tools that need a known caller (save / list / SMS). */
+/** Like readCaller, for tools that need a known caller (save / list / SMS).
+ * A KV failure becomes a caller-friendly ToolError (the tool fails); a missing
+ * session becomes "I can't identify this call". Both are logged here so the
+ * failure site is unambiguous. */
 async function requireCaller(kv: Kv, conv: string): Promise<string> {
-  const entityId = await readCaller(kv, conv);
+  let entityId: string | undefined;
+  try {
+    entityId = await readCaller(kv, conv);
+  } catch (e) {
+    error("mcp.session_read_failed", { conversation: conv, error: e instanceof Error ? e.message : String(e) }, e);
+    throw new ToolError("The session service is unavailable; please try again later.");
+  }
   if (!entityId) throw new ToolError("I can't identify this call; please hang up and try again.");
   return entityId;
 }
@@ -626,28 +674,64 @@ export function createServer(
     (args, extra) => guard("search_deals", async () => {
       const conv = conversationId(extra);
       setTraceId(conv || undefined); // trace follows the conversation
-      // No conversation id (e.g. the chat channel) behaves like a hidden caller id:
-      // the deals are read, nothing is remembered.
-      const entityId = await readCaller(kv, conv);
 
       const dates = args.weekend ? weekendDates(args.weekend).join(",") : (args.departure_date ?? "");
       const oneWay = args.trip_type === "one_way";
       const params = buildParams(args, dates);
       const key = cacheKey(oneWay ? { ...params, trip: "one_way" } : params); // trip only keys the cache
 
-      // Cache lookup — failure is non-fatal: fall through to flytlv.
-      let payload: FlytlvPayload | undefined;
-      try {
-        payload = (await kv.getJson(key)) as FlytlvPayload | undefined;
-      } catch (e) {
-        warning("mcp.cache_read_failed", { key, error: e instanceof Error ? e.message : String(e) });
+      // Run the session read and the cache read IN PARALLEL, each under the
+      // KV_TIMEOUT_MS budget. A sick/slow Telnyx KV used to stack three serial
+      // KV calls (session read + retry, cache read, cache write) up to ~15 s
+      // and time out the assistant's tool call (live incident, step 29: trace
+      // 7e65be1b, 13 Oct 14:12 IL — search_deals 16739 / 18186 / 11588 ms).
+      // Racing them keeps a search bounded; a session-read failure now degrades
+      // to an anonymous caller (deals still returned, nothing remembered) and
+      // the cache write no longer blocks the reply.
+      const kvMs = config.integer("KV_TIMEOUT_MS", 1500);
+      // readCaller is internally bounded by KV_TIMEOUT_MS (one retry inside the
+      // budget); the cache read is bounded here. Both race in parallel so a
+      // sick KV cannot stack up. `timed` records each one's wall-clock ms for
+      // the `timings` object on the mcp.search_deals span.
+      const session = timed(readCaller(kv, conv));
+      const cache = timed(withTimeoutMs(kv.getJson(key), kvMs, `kv get ${JSON.stringify(key)}`));
+      const [sessionRes, cacheRes] = await Promise.allSettled([session.p, cache.p]);
+      const sessionMs = session.ms();
+      const cacheMs = cache.ms();
+
+      // Session read: a failure (timeout / rejection) degrades to an anonymous
+      // caller — deals are still returned, nothing is remembered. Only
+      // search_deals is lenient; save / list / SMS keep failing via
+      // requireCaller. A hidden caller id (no conversation id, or no session
+      // row) is the same outcome, just not a failure to log.
+      let entityId: string | undefined;
+      if (sessionRes.status === "fulfilled") {
+        entityId = sessionRes.value;
+      } else {
+        warning("mcp.session_read_failed", {
+          conversation: conv,
+          error: sessionRes.reason instanceof Error ? sessionRes.reason.message : String(sessionRes.reason),
+        });
       }
+
+      // Cache read: a failure or timeout is non-fatal — fall through to flytlv.
+      let payload: FlytlvPayload | undefined;
+      if (cacheRes.status === "fulfilled") {
+        payload = cacheRes.value as FlytlvPayload | undefined;
+      } else {
+        warning("mcp.cache_read_failed", {
+          key,
+          error: cacheRes.reason instanceof Error ? cacheRes.reason.message : String(cacheRes.reason),
+        });
+      }
+
+      let flytlvMs = 0;
       if (payload) {
         debug("mcp.cache_hit", { key });
         m.bump("cache.hit");
       } else {
         m.bump("cache.miss");
-        const t0 = Date.now();
+        const tFly = Date.now();
         try {
           payload = oneWay ? await flytlv.searchOneWay(params) : await flytlv.search(params);
         } catch (e) {
@@ -656,12 +740,15 @@ export function createServer(
           throw e;
         }
         m.bump("flytlv.calls");
-        m.latency["flytlv.search"] = Date.now() - t0;
-        try {
-          await kv.putJson(key, payload, config.integer("DEALS_CACHE_TTL", 300)); // best-effort
-        } catch (e) {
-          warning("mcp.cache_write_failed", { key, error: e instanceof Error ? e.message : String(e) });
-        }
+        flytlvMs = Date.now() - tFly;
+        m.latency["flytlv.search"] = flytlvMs;
+        // Cache write must NOT block the reply (step 29): start it without
+        // awaiting and swallow any error as a WARNING. Bounded by the same
+        // KV_TIMEOUT_MS budget so a never-resolving write is abandoned (and
+        // logged) instead of floating — a slow KV can no longer hold the
+        // response hostage, and a rejecting write just logs.
+        withTimeoutMs(kv.putJson(key, payload, config.integer("DEALS_CACHE_TTL", 300)), kvMs, `kv put ${JSON.stringify(key)}`)
+          .catch((e) => warning("mcp.cache_write_failed", { key, error: e instanceof Error ? e.message : String(e) }));
       }
 
       const currency = payload.currency ?? "";
@@ -685,12 +772,15 @@ export function createServer(
       // can be saved or texted for them. `query` (the args exactly as received)
       // and `conversationId` travel with the call so the actor's history +
       // audit (step 20) record what this caller searched for and when.
+      let actorMs = 0;
       if (entityId) {
+        const tActor = Date.now();
         await callActor(actor, entityId, "setLastResults", {
           deals: slimmed,
           query: args as Record<string, unknown>,
           conversationId: conv,
         });
+        actorMs = Date.now() - tActor;
       }
       info("mcp.search_deals", {
         caller: mask(entityId ?? ""),
@@ -700,6 +790,7 @@ export function createServer(
         category: args.category ?? "",
         trip: args.trip_type ?? "round_trip",
         direct: args.direct_only ?? false,
+        timings: { session_ms: sessionMs, cache_ms: cacheMs, flytlv_ms: flytlvMs, actor_ms: actorMs },
       });
       return toolOk(entityId
         ? { deals: slimmed }

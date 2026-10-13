@@ -168,6 +168,7 @@ Everything from env vars / Edge secrets — nothing hardcoded:
 `FLYTLV_API_BASE`, `FLYTLV_DEALS_PATH`, `FLYTLV_API_KEY_HEADER`,
 `FLYTLV_TIMEOUT_MS`, `DEALS_FETCH_LIMIT`, `DEALS_RESULT_LIMIT`,
 `DEALS_CACHE_TTL`, `DEALS_CACHE_PREFIX`, `SESSION_KEY_PREFIX`,
+`KV_TIMEOUT_MS` (per-KV-op timeout; `search_deals` degrades to anonymous on it),
 `HTTP_TIMEOUT_MS`, `TRACE_HEADER`, `LOG_LEVEL` (`func.toml` `[env_vars]`).
 
 Itinerary + reminder config — `SMS_FROM`, `MESSAGING_PROFILE_ID`,
@@ -195,6 +196,17 @@ Structured JSON logs (`src/log.ts`): `mcp.search_deals` / `mcp.save_deal` /
 plus `flytlv.feed_off` ERROR (once per instance) and `mcp.session_read_failed`
 / `mcp.remember_failed` ERROR (with stack). A WARNING `mcp.actor.http_fallback`
 is emitted on boot when `USE_SHARED_ACTOR=false`.
+
+**Step 29 — slow KV no longer times out the tool call.** Symptom (live, 13 Oct
+14:12 IL, trace `7e65be1b…`): `search_deals` took 16739 / 18186 / 11588 ms
+while `flytlv.search` averaged 1687 ms, with `mcp.cache_read_failed` /
+`mcp.cache_write_failed` and session-lookup failures — three serial KV calls
+with no time limit stacked up. Log signature now: `mcp.search_deals` carries a
+`timings` object (`session_ms`, `cache_ms`, `flytlv_ms`, `actor_ms`);
+`mcp.session_read_failed` is a WARNING (caller degrades to anonymous) and KV
+get/put race the `KV_TIMEOUT_MS` budget (default 1500 ms) before throwing
+`KvError("…: timeout after N ms")`. Fix: parallel reads (`Promise.allSettled`),
+per-call timeout, fire-and-forget cache write.
 
 ## Test & deploy
 

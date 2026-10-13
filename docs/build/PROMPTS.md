@@ -867,3 +867,30 @@ clear "===== N. title =====" header per step, and prints a final PASS/FAIL line 
 Keep going when a step fails; exit 1 at the end if any step failed. Header comment explaining
 usage (`bash scripts/ops/run_all_checks.sh [--full]`). Short and readable. Add one line for it in
 the README's Test section. Touch no other file. Do not commit.
+
+## 29. Fix: search_deals timed out when Telnyx KV was slow (live demo, 13 Oct)
+
+Evidence (fde-mcp logs, trace 7e65be1b-2ee8-40f7-a197-47950fb49939, 2026-10-13 14:12 IL):
+search_deals took 16739 / 18186 / 11588 ms (metrics: avg 11516 ms) while flytlv.search averaged
+1687 ms. The logs show mcp.cache_read_failed and mcp.cache_write_failed (Telnyx KV 500 / very
+slow, ~1.2-2.7 s per healthy read) and caller "" (session lookup failed). The MCP server runs
+three KV calls in series (session read with one retry, cache read, cache write) with NO time
+limit, so a sick KV stacked up to ~15 s and the assistant's tool call timed out.
+
+Fix in services/mcp-server (TypeScript), keep it small:
+1. src/kv.ts EdgeKv: race every get/put against a timeout `KV_TIMEOUT_MS` (config.integer,
+   default 1500); on timeout throw KvError("kv get <key>: timeout after N ms").
+2. search_deals: run readCaller and the cache read IN PARALLEL (Promise.allSettled). If the
+   session read fails, log WARNING mcp.session_read_failed and continue as an anonymous caller
+   (deals are still returned; nothing remembered) instead of failing the whole tool.
+   save_deal / list_saved_deals / send_deal_sms keep failing with the friendly ToolError.
+3. The cache write must not block the reply: start it without awaiting, `.catch` -> WARNING
+   mcp.cache_write_failed.
+4. Log `mcp.search_deals` with a `timings` object (session_ms, cache_ms, flytlv_ms, actor_ms).
+5. Add KV_TIMEOUT_MS to .env.example and services/mcp-server/func.toml [env_vars] (check_env
+   must stay green); one line in services/mcp-server/README.md and docs/design/OBSERVABILITY.md
+   (the symptom, the log signature, the fix).
+6. Tests: a slow fake KV (getJson/putJson never resolve) must make search_deals return deals
+   within KV_TIMEOUT_MS + flytlv time, and a rejecting session read must still return deals.
+Run the MCP server tests and every test/self-check in tests/README.md; all green, typecheck
+clean. Do not commit.
